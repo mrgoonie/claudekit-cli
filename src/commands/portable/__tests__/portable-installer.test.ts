@@ -1,4 +1,4 @@
-import { afterAll, beforeEach, describe, expect, mock, test } from "bun:test";
+import { beforeEach, describe, expect, mock, test } from "bun:test";
 import { existsSync } from "node:fs";
 import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { homedir, tmpdir } from "node:os";
@@ -17,10 +17,7 @@ mock.module("../portable-registry.js", () => ({
 }));
 
 const { installPortableItems } = await import("../portable-installer.js");
-
-afterAll(() => {
-	mock.restore();
-});
+mock.restore();
 
 function makePortableItem(overrides: Partial<PortableItem> = {}): PortableItem {
 	return {

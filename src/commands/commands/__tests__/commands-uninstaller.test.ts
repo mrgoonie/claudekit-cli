@@ -1,4 +1,4 @@
-import { afterAll, afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 import { existsSync } from "node:fs";
 import { mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -20,6 +20,7 @@ const { forceUninstallCommandFromProvider, uninstallCommandFromProvider } = awai
 	"../commands-uninstaller.js"
 );
 const { providers } = await import("../../portable/provider-registry.js");
+mock.restore();
 
 const codexCommandPaths = providers.codex.commands;
 if (!codexCommandPaths) {
@@ -47,10 +48,6 @@ afterEach(async () => {
 		await rm(tempDir, { recursive: true, force: true });
 		tempDir = null;
 	}
-});
-
-afterAll(() => {
-	mock.restore();
 });
 
 describe("forceUninstallCommandFromProvider", () => {

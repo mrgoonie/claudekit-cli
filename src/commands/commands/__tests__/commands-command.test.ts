@@ -1,4 +1,4 @@
-import { afterAll, afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 import { existsSync } from "node:fs";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -42,10 +42,7 @@ mock.module("../../portable/portable-registry.js", () => ({
 
 const { commandsCommand } = await import("../commands-command.js");
 const { providers } = await import("../../portable/provider-registry.js");
-
-afterAll(() => {
-	mock.restore();
-});
+mock.restore();
 
 describe("commandsCommand force uninstall", () => {
 	const codexCommandPaths = providers.codex.commands;
