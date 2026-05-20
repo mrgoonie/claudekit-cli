@@ -39,21 +39,7 @@ export async function doctorCommand(options: DoctorOptions = {}): Promise<void> 
 		intro("ClaudeKit Health Check");
 	}
 
-	// Create and configure runner
-	const runner = new CheckRunner(runnerOptions);
-
-	// Register checkers
-	runner.registerChecker(new SystemChecker());
-	runner.registerChecker(new ClaudekitChecker());
-	runner.registerChecker(new AuthChecker());
-	runner.registerChecker(new PlatformChecker());
-	runner.registerChecker(new NetworkChecker());
-	// Always-on layered GitHub reachability probe (DNS → TCP → TLS → Auth)
-	// TODO(#766-followup): The auth layer overlaps with AuthChecker.checkRepositoryAccess
-	// — both call repos.get for the engineer kit. Consider deprecating AuthChecker's
-	// repo-access call in favour of this layered version, or making the reachability
-	// checker skip the auth layer when AuthChecker is also registered.
-	runner.registerChecker(new GitHubReachabilityChecker());
+	const runner = createDoctorRunner(runnerOptions);
 
 	// Run all checks
 	const summary = await runner.run();
@@ -80,9 +66,7 @@ export async function doctorCommand(options: DoctorOptions = {}): Promise<void> 
 		return;
 	}
 
-	// Display interactive results (pass verbose flag for enhanced output)
 	const renderer = new DoctorUIRenderer({ verbose: runnerOptions.verbose });
-	renderer.renderResults(summary);
 
 	// Handle --fix flag
 	if (fix) {
@@ -91,15 +75,31 @@ export async function doctorCommand(options: DoctorOptions = {}): Promise<void> 
 			const healSummary = await healer.healAll(summary.checks);
 			renderer.renderHealingSummary(healSummary);
 
-			if (healSummary.failed === 0 && healSummary.succeeded > 0) {
-				outro("All fixable issues resolved!");
-				return;
+			const finalSummary =
+				healSummary.succeeded > 0 ? await createDoctorRunner(runnerOptions).run() : summary;
+			renderer.renderResults(finalSummary);
+
+			if (checkOnly && finalSummary.failed > 0) {
+				process.exitCode = 1;
 			}
+
+			if (healSummary.failed > 0) {
+				process.exitCode = 1;
+				outro(`${healSummary.failed} auto-fix attempt(s) failed`);
+			} else if (finalSummary.failed === 0) {
+				outro(healSummary.succeeded > 0 ? "All fixable issues resolved!" : "All checks passed!");
+			} else {
+				outro(`${finalSummary.failed} issue(s) remain after auto-heal`);
+			}
+			return;
 		} catch (error) {
 			logger.error(`Auto-fix failed: ${error instanceof Error ? error.message : "Unknown error"}`);
 			process.exitCode = 1;
 		}
 	}
+
+	// Display interactive results (pass verbose flag for enhanced output)
+	renderer.renderResults(summary);
 
 	// Handle --check-only mode exit code
 	if (checkOnly && summary.failed > 0) {
@@ -130,4 +130,17 @@ export async function doctorCommand(options: DoctorOptions = {}): Promise<void> 
 	} else {
 		outro(`${summary.failed} issue(s) found`);
 	}
+}
+
+function createDoctorRunner(options: CheckRunnerOptions): CheckRunner {
+	const runner = new CheckRunner(options);
+	runner.registerChecker(new SystemChecker());
+	runner.registerChecker(new ClaudekitChecker());
+	runner.registerChecker(new AuthChecker());
+	runner.registerChecker(new PlatformChecker());
+	runner.registerChecker(new NetworkChecker());
+	// Always-on layered GitHub reachability probe (DNS -> TCP -> TLS -> Auth)
+	// TODO(#766-followup): The auth layer overlaps with AuthChecker.checkRepositoryAccess.
+	runner.registerChecker(new GitHubReachabilityChecker());
+	return runner;
 }

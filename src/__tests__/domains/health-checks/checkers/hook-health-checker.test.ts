@@ -12,6 +12,7 @@ import {
 	checkHookRuntime,
 	checkHookSyntax,
 	checkPythonVenv,
+	parseDoctorCliVersionOutput,
 	repairMissingHookFileReferences,
 	resolveDoctorCkExecutable,
 } from "@/domains/health-checks/checkers/hook-health-checker.js";
@@ -24,6 +25,26 @@ describe("resolveDoctorCkExecutable", () => {
 	test("uses ck directly on POSIX platforms", () => {
 		expect(resolveDoctorCkExecutable("darwin")).toBe("ck");
 		expect(resolveDoctorCkExecutable("linux")).toBe("ck");
+	});
+});
+
+describe("parseDoctorCliVersionOutput", () => {
+	test("extracts the version from current ck -V output", () => {
+		expect(
+			parseDoctorCliVersionOutput(
+				"CLI Version: 4.3.1-dev.8\nGlobal Kit Version: engineer@v2.19.1-beta.9\n",
+			),
+		).toBe("4.3.1-dev.8");
+	});
+
+	test("extracts bare semantic version output", () => {
+		expect(parseDoctorCliVersionOutput("v4.3.1\n")).toBe("4.3.1");
+		expect(parseDoctorCliVersionOutput("4.3.1-dev.8\n")).toBe("4.3.1-dev.8");
+	});
+
+	test("returns null for unrecognized output", () => {
+		expect(parseDoctorCliVersionOutput("Global Kit Version: engineer@v2.19.1-beta.9")).toBeNull();
+		expect(parseDoctorCliVersionOutput("")).toBeNull();
 	});
 });
 

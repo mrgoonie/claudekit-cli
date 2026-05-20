@@ -21,6 +21,20 @@ export function resolveDoctorCkExecutable(
 	return platformName === "win32" ? "ck.cmd" : "ck";
 }
 
+export function parseDoctorCliVersionOutput(output: string): string | null {
+	if (!output.trim()) {
+		return null;
+	}
+
+	const labeledMatch = output.match(/CLI Version:\s*v?(\d+\.\d+\.\d+(?:-[^\s]+)?)/);
+	if (labeledMatch?.[1]) {
+		return labeledMatch[1];
+	}
+
+	const bareMatch = output.trim().match(/^v?(\d+\.\d+\.\d+(?:-[^\s]+)?)/);
+	return bareMatch?.[1] ?? null;
+}
+
 export interface ClaudeSettingsFile {
 	path: string;
 	label: string;
@@ -1359,12 +1373,12 @@ export async function checkCliVersion(): Promise<CheckResult> {
 			encoding: "utf-8",
 		});
 
-		let installedVersion = "unknown";
+		let installedVersion: string | null = null;
 		if (versionResult.status === 0 && versionResult.stdout) {
-			installedVersion = versionResult.stdout.trim();
+			installedVersion = parseDoctorCliVersionOutput(versionResult.stdout);
 		}
 
-		if (installedVersion === "unknown") {
+		if (!installedVersion) {
 			return {
 				id: "cli-version",
 				name: "CLI Version",
