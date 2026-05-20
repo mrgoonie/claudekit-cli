@@ -1005,6 +1005,21 @@ export async function checkHookFileReferences(projectDir: string): Promise<Check
 	};
 }
 
+export async function repairMissingHookFileReferences(projectDir = process.cwd()): Promise<number> {
+	const result = await checkHookFileReferences(projectDir);
+	if (result.status !== "fail" || !result.fix) {
+		return 0;
+	}
+
+	const fixResult = await result.fix.execute();
+	if (!fixResult.success) {
+		throw new Error(fixResult.message);
+	}
+
+	const match = fixResult.message.match(/Pruned\s+(\d+)/);
+	return match?.[1] ? Number.parseInt(match[1], 10) : 0;
+}
+
 /**
  * Check hook configuration validity
  */
