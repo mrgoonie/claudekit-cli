@@ -195,25 +195,57 @@ export function rewriteCommandPath(command: string, pathRewrite: PathRewriteMap)
 	// Phase 1: per-file substitution — wrapper paths take precedence over dir rewrite
 	if (pathRewrite.commandSubstitutions && pathRewrite.commandSubstitutions.size > 0) {
 		const home = homedir();
+		// Forward-slash form of homedir — Claude Code writes hook commands as
+		// `node "$HOME/.claude/hooks/X.cjs"` on ALL platforms including Windows.
+		// So the command always uses forward slashes and literal `$HOME`, never
+		// the platform abs path or `%USERPROFILE%`. We must match that form.
+		const homeForward = home.replace(/\\/g, "/");
+		const normalizeSlashesStr = (s: string) => s.replace(/\\/g, "/");
 
 		for (const [originalAbsPath, wrapperAbsPath] of pathRewrite.commandSubstitutions) {
-			// Build a set of representations the command string may contain for this path.
-			// We use a normalised absolute form so that commands written with $HOME or ~
-			// also resolve to the same key.
-			// Platform-aware env-var substitution: %USERPROFILE% on Windows, $HOME on POSIX.
-			// Include tilde form universally as a third candidate.
-			const envVar = process.platform === "win32" ? "%USERPROFILE%" : "$HOME";
-			const candidates = new Set<string>([
-				originalAbsPath, // already absolute (primary form)
-				originalAbsPath.replace(home, envVar),
-				originalAbsPath.replace(home, "~"),
-			]);
+			// Forward-slash form of the original absolute path key.
+			const originalAbsForward = normalizeSlashesStr(originalAbsPath);
 
+			// Compute the path relative to home (if originalAbsPath is under home).
+			// e.g. home=C:\Users\test, abs=C:\Users\test\.claude\hooks\X.cjs
+			//      → rel = .claude/hooks/X.cjs (no leading slash)
+			let relFromHome: string | null = null;
+			if (originalAbsForward.startsWith(`${homeForward}/`)) {
+				relFromHome = originalAbsForward.slice(homeForward.length + 1); // strip "home/"
+			} else if (originalAbsForward === homeForward) {
+				relFromHome = "";
+			}
+
+			// Build candidates covering every form Claude Code may write in a command:
+			//   1. Raw absolute path (both slash forms) — primary form on POSIX
+			//   2. $HOME/<rel>  ← Claude's universal form on ALL platforms (THE missing one)
+			//   3. ~/<rel>
+			//   4. %USERPROFILE%/<rel>  — Windows belt-and-suspenders
+			//   5. ${HOME}/<rel>
+			const candidates: string[] = [
+				originalAbsForward, // forward-slash absolute (covers POSIX and normalized Windows)
+				originalAbsPath, // raw key (may have backslashes on Windows)
+			];
+			if (relFromHome !== null && relFromHome !== "") {
+				candidates.push(`$HOME/${relFromHome}`); // Claude's universal form
+				candidates.push(`~/${relFromHome}`);
+				candidates.push(`%USERPROFILE%/${relFromHome}`);
+				candidates.push(`\${HOME}/${relFromHome}`);
+			}
+
+			// Normalize both the command and each candidate to forward slashes before
+			// includes() so that backslash/forward-slash variants never cause a miss.
+			// The wrapper output uses the wrapperAbsPath as-is; callers (hooks-settings-merger)
+			// supply absolute platform-appropriate wrapper paths.
+			const commandNorm = normalizeSlashesStr(command);
 			for (const candidate of candidates) {
-				if (command.includes(candidate)) {
-					// Replace the matched form in the command string with the wrapper path.
-					// We preserve quoting (replaceAll handles any occurrences).
-					return command.replaceAll(candidate, wrapperAbsPath);
+				const candidateNorm = normalizeSlashesStr(candidate);
+				if (commandNorm.includes(candidateNorm)) {
+					// Replace the matched form in the (forward-slash-normalized) command with
+					// the wrapper absolute path. Use forward-slash form of wrapper for
+					// consistency (the rest of the converter normalizes to forward slashes).
+					const wrapperForward = normalizeSlashesStr(wrapperAbsPath);
+					return commandNorm.replaceAll(candidateNorm, wrapperForward);
 				}
 			}
 		}
