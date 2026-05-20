@@ -9,7 +9,6 @@ const GENERATED_CONTEXT_HOOK_FILENAMES = new Set([
 	"subagent-init.cjs",
 	"team-context-inject.cjs",
 	"usage-context-awareness.cjs",
-	"usage-quota-cache-refresh.cjs",
 ]);
 
 // Keep this list in sync with claudekit-engineer metadata deletions and default hook settings.

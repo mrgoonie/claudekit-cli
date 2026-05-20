@@ -15,6 +15,12 @@ const HOOK_CHECK_TIMEOUT_MS = 5000;
 const PYTHON_CHECK_TIMEOUT_MS = 3000;
 const MAX_LOG_FILE_SIZE_BYTES = 10 * 1024 * 1024; // 10MB
 
+export function resolveDoctorCkExecutable(
+	platformName: NodeJS.Platform = process.platform,
+): string {
+	return platformName === "win32" ? "ck.cmd" : "ck";
+}
+
 export interface ClaudeSettingsFile {
 	path: string;
 	label: string;
@@ -1348,7 +1354,7 @@ export async function checkHookLogs(projectDir: string): Promise<CheckResult> {
 export async function checkCliVersion(): Promise<CheckResult> {
 	try {
 		// Try to get installed version from ck -V command
-		const versionResult = spawnSync("ck", ["-V"], {
+		const versionResult = spawnSync(resolveDoctorCkExecutable(), ["-V"], {
 			timeout: HOOK_CHECK_TIMEOUT_MS,
 			encoding: "utf-8",
 		});

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { PromptKitUpdateDeps } from "@/commands/update-cli.js";
@@ -215,6 +215,23 @@ describe("promptKitUpdate auto-init behavior", () => {
 		await promptKitUpdate(false, true, deps);
 		expect(execCount()).toBe(0);
 		expect(spawnCount()).toBe(0);
+	});
+
+	test("reinstalls latest kit when installed hooks have missing dependencies (--yes mode)", async () => {
+		const hooksDir = join(tempDir, "hooks");
+		await mkdir(hooksDir, { recursive: true });
+		await writeFile(
+			join(hooksDir, "usage-context-awareness.cjs"),
+			"const quota = require('./usage-quota-cache-refresh.cjs');\nconsole.log(quota);\n",
+		);
+
+		const { deps, execCount, spawnCount, capturedExecCmd } = makeDeps();
+		deps.getLatestReleaseTagFn = async () => "v1.0.0";
+		await promptKitUpdate(false, true, deps);
+		expect(execCount()).toBe(1);
+		expect(spawnCount()).toBe(0);
+		expect(capturedExecCmd()).toContain("--yes");
+		expect(capturedExecCmd()).toContain("--kit engineer");
 	});
 
 	test("interactive mode passes --beta when installed version is prerelease", async () => {
