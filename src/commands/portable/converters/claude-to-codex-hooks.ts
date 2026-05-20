@@ -200,9 +200,12 @@ export function rewriteCommandPath(command: string, pathRewrite: PathRewriteMap)
 			// Build a set of representations the command string may contain for this path.
 			// We use a normalised absolute form so that commands written with $HOME or ~
 			// also resolve to the same key.
+			// Platform-aware env-var substitution: %USERPROFILE% on Windows, $HOME on POSIX.
+			// Include tilde form universally as a third candidate.
+			const envVar = process.platform === "win32" ? "%USERPROFILE%" : "$HOME";
 			const candidates = new Set<string>([
 				originalAbsPath, // already absolute (primary form)
-				originalAbsPath.replace(home, "$HOME"),
+				originalAbsPath.replace(home, envVar),
 				originalAbsPath.replace(home, "~"),
 			]);
 
@@ -219,13 +222,22 @@ export function rewriteCommandPath(command: string, pathRewrite: PathRewriteMap)
 	}
 
 	// Phase 2: directory-level fallback
-	const src = pathRewrite.sourceDir.endsWith("/")
-		? pathRewrite.sourceDir
-		: `${pathRewrite.sourceDir}/`;
-	const tgt = pathRewrite.targetDir.endsWith("/")
-		? pathRewrite.targetDir
-		: `${pathRewrite.targetDir}/`;
+	// Normalize separators to forward-slash for matching (handles Windows backslash paths).
+	const normalizeSlashes = (s: string) => s.replace(/\\/g, "/");
+	const src = normalizeSlashes(
+		pathRewrite.sourceDir.endsWith("/") || pathRewrite.sourceDir.endsWith("\\")
+			? pathRewrite.sourceDir
+			: `${pathRewrite.sourceDir}/`,
+	);
+	const tgt = normalizeSlashes(
+		pathRewrite.targetDir.endsWith("/") || pathRewrite.targetDir.endsWith("\\")
+			? pathRewrite.targetDir
+			: `${pathRewrite.targetDir}/`,
+	);
 	// Short-circuit when source and target are identical (no-op rewrite)
 	if (src === tgt) return command;
-	return command.replaceAll(src, tgt);
+	// Normalize the command string for matching, then apply replacement
+	const normalizedCommand = normalizeSlashes(command);
+	if (!normalizedCommand.includes(src)) return command;
+	return normalizedCommand.replaceAll(src, tgt);
 }

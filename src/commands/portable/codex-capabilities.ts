@@ -145,13 +145,26 @@ export async function detectCodexCapabilities(): Promise<CodexCapabilities> {
 		return CODEX_CAPABILITY_TABLE[CODEX_CAPABILITY_TABLE.length - 1];
 	}
 
-	try {
-		const { stdout } = await execFileAsync("codex", ["--version"], {
-			timeout: 5000,
-			encoding: "utf8",
-		});
-		const raw = stdout.trim();
+	// Platform-aware binary candidates: try codex.exe first on Windows (explicit suffix),
+	// then codex as fallback. On POSIX, only codex is tried.
+	const binaryCandidates = process.platform === "win32" ? ["codex.exe", "codex"] : ["codex"];
 
+	let rawStdout: string | null = null;
+	for (const bin of binaryCandidates) {
+		try {
+			const { stdout } = await execFileAsync(bin, ["--version"], {
+				timeout: 5000,
+				encoding: "utf8",
+			});
+			rawStdout = stdout;
+			break; // First success wins
+		} catch {
+			// ENOENT or non-zero exit — try next candidate
+		}
+	}
+
+	if (rawStdout !== null) {
+		const raw = rawStdout.trim();
 		// Strip common prefixes like "codex 0.124.0-alpha.3" or "v0.124.0-alpha.3"
 		const version = raw.replace(/^(codex\s+)?v?/i, "").trim();
 		const match = findCapabilitiesForVersion(version);
@@ -164,15 +177,15 @@ export async function detectCodexCapabilities(): Promise<CodexCapabilities> {
 		return process.env.CK_CODEX_COMPAT === "optimistic"
 			? CODEX_CAPABILITY_TABLE[0]
 			: FALLBACK_CAPABILITIES;
-	} catch {
-		// Binary missing, timeout, or non-zero exit — warn and fall back
-		logger.warning(
-			"[!] Could not detect Codex version; using most-restrictive capability baseline. Set CK_CODEX_COMPAT=optimistic to use newest known capabilities instead.",
-		);
-		return process.env.CK_CODEX_COMPAT === "optimistic"
-			? CODEX_CAPABILITY_TABLE[0]
-			: FALLBACK_CAPABILITIES;
 	}
+
+	// All binary candidates failed — binary missing or timed out
+	logger.warning(
+		"[!] Could not detect Codex version; using most-restrictive capability baseline. Set CK_CODEX_COMPAT=optimistic to use newest known capabilities instead.",
+	);
+	return process.env.CK_CODEX_COMPAT === "optimistic"
+		? CODEX_CAPABILITY_TABLE[0]
+		: FALLBACK_CAPABILITIES;
 }
 
 /**

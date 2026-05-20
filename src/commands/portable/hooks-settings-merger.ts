@@ -45,8 +45,7 @@ export type HooksMigrationStatus =
 	| "source-settings-invalid"
 	| "source-hooks-missing"
 	| "no-matching-hooks"
-	| "merge-failed"
-	| "skipped-windows"; // Codex hooks on Windows are unsupported
+	| "merge-failed";
 
 /** Options for the main orchestrator */
 export interface MigrateHooksSettingsOptions {
@@ -353,7 +352,8 @@ function isCkManagedHookPath(absPath: string): boolean {
  *   npm run lint                         → []
  *
  * Regex matches POSIX-style absolute paths. Windows drive-letter paths
- * are intentionally out of scope — Codex hooks on Windows are disabled.
+ * (e.g. C:\Users\...) are not matched here; the self-heal check works via
+ * the codex-path-safety module for Windows paths.
  */
 function extractAbsolutePaths(command: string): string[] {
 	const matches: string[] = [];
@@ -655,20 +655,6 @@ async function migrateHooksSettingsForCodex(
 		installedHookAbsolutePaths,
 		global: isGlobal,
 	} = options;
-
-	// Step 1: Windows short-circuit
-	if (process.platform === "win32") {
-		return {
-			status: "skipped-windows",
-			success: true,
-			backupPath: null,
-			hooksRegistered: 0,
-			message:
-				"[!] Codex hook installation skipped: Codex CLI hooks are temporarily disabled on Windows.",
-			sourceSettingsPath: null,
-			targetSettingsPath: null,
-		};
-	}
 
 	if (installedHookFiles.length === 0) {
 		return {

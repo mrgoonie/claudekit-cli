@@ -118,6 +118,18 @@ export class CopyExecutor {
 	}
 
 	/**
+	 * Set the hooks directory for zombie engineer-wiring pruning.
+	 * When set, pruneZombieEngineerWirings() runs after every settings.json merge to remove
+	 * engineer-tagged hook entries whose referenced files no longer exist on disk.
+	 *
+	 * Global install:   ~/.claude/hooks
+	 * Project install:  <projectDir>/.claude/hooks
+	 */
+	setZombiePrunerHookDir(hookDir: string): void {
+		this.settingsProcessor.setZombiePrunerHookDir(hookDir);
+	}
+
+	/**
 	 * Set release manifest for selective merge optimization
 	 */
 	setManifest(manifest: ReleaseManifest | null): void {
