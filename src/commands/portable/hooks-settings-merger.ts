@@ -7,7 +7,7 @@
 import { existsSync } from "node:fs";
 import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
-import { basename, dirname, join, resolve } from "node:path";
+import { basename, dirname, extname, join, resolve } from "node:path";
 import type { CodexCapabilities } from "./codex-capabilities.js";
 import { detectCodexCapabilities } from "./codex-capabilities.js";
 import { ensureCodexHooksFeatureFlag } from "./codex-features-flag.js";
@@ -96,6 +96,15 @@ export interface MigrateHooksSettingsResult {
 interface MergeHooksOptions {
 	targetProvider?: ProviderType;
 	targetHooksDir?: string;
+}
+
+const CODEX_WRAPPABLE_HOOK_EXTENSIONS = new Set([".js", ".cjs", ".mjs", ".ts"]);
+
+function isCodexWrappableHookPath(filePath: string): boolean {
+	return (
+		hookAssetBasename(filePath) !== "node-hook-runner.sh" &&
+		CODEX_WRAPPABLE_HOOK_EXTENSIONS.has(extname(filePath).toLowerCase())
+	);
 }
 
 /**
@@ -894,8 +903,9 @@ async function migrateHooksSettingsForCodex(
 	const wrapperPaths: string[] = [];
 	const commandSubstitutions = new Map<string, string>();
 	if (installedHookAbsolutePaths && installedHookAbsolutePaths.length > 0 && targetHooksDir) {
+		const wrappableHookAbsolutePaths = installedHookAbsolutePaths.filter(isCodexWrappableHookPath);
 		const wrapperResults = generateCodexHookWrappers(
-			installedHookAbsolutePaths,
+			wrappableHookAbsolutePaths,
 			targetHooksDir,
 			capabilities,
 		);
@@ -911,9 +921,15 @@ async function migrateHooksSettingsForCodex(
 				const addKey = (p: string) => commandSubstitutions.set(p, wr.wrapperPath);
 				const base = basename(wr.originalPath);
 				addKey(wr.originalPath); // target form (as returned by installer)
+				if (targetHooksDir) {
+					addKey(join(targetHooksDir, base));
+					addKey(`./${join(targetHooksDir, base)}`);
+				}
 				if (sourceHooksDir) {
 					const sourceAbs = join(resolve(sourceHooksDir), base);
 					addKey(sourceAbs);
+					addKey(join(sourceHooksDir, base));
+					addKey(`./${join(sourceHooksDir, base)}`);
 					// macOS: `/var` is a symlink to `/private/var`. Tmp paths and user
 					// paths can appear in either form. Add both so includes() matches.
 					if (sourceAbs.startsWith("/private/")) {

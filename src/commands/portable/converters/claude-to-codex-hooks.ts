@@ -192,6 +192,8 @@ function scrubHookEntry(
  *   (e.g. `.claude/hooks-extra` vs `.claude/hooks`).
  */
 export function rewriteCommandPath(command: string, pathRewrite: PathRewriteMap): string {
+	let rewritten = command;
+
 	// Phase 1: per-file substitution — wrapper paths take precedence over dir rewrite
 	if (pathRewrite.commandSubstitutions && pathRewrite.commandSubstitutions.size > 0) {
 		const home = homedir();
@@ -207,15 +209,15 @@ export function rewriteCommandPath(command: string, pathRewrite: PathRewriteMap)
 			]);
 
 			for (const candidate of candidates) {
-				if (command.includes(candidate)) {
-					// Replace the matched form in the command string with the wrapper path.
-					// We preserve quoting (replaceAll handles any occurrences).
-					return command.replaceAll(candidate, wrapperAbsPath);
+				if (rewritten.includes(candidate)) {
+					// Replace every matched hook script path with its wrapper. Do not
+					// return early: runner commands can contain both a shell runner and
+					// the actual Node hook path, and all matching hook paths must be
+					// processed before the directory-level fallback rewrites leftovers.
+					rewritten = replaceCommandCandidate(rewritten, candidate, wrapperAbsPath);
 				}
 			}
 		}
-		// No per-file match — fall through to directory-level rewrite below so that
-		// hooks not covered by the substitution map are still relocated to targetDir.
 	}
 
 	// Phase 2: directory-level fallback
@@ -226,6 +228,25 @@ export function rewriteCommandPath(command: string, pathRewrite: PathRewriteMap)
 		? pathRewrite.targetDir
 		: `${pathRewrite.targetDir}/`;
 	// Short-circuit when source and target are identical (no-op rewrite)
-	if (src === tgt) return command;
-	return command.replaceAll(src, tgt);
+	if (src === tgt) return rewritten;
+	return rewritten.replaceAll(src, tgt);
+}
+
+function replaceCommandCandidate(command: string, candidate: string, replacement: string): string {
+	if (!isRelativeCommandCandidate(candidate)) {
+		return command.replaceAll(candidate, replacement);
+	}
+
+	const pattern = new RegExp(`(^|[\\s"'])${escapeRegExp(candidate)}`, "g");
+	return command.replace(pattern, (_match, prefix: string) => `${prefix}${replacement}`);
+}
+
+function isRelativeCommandCandidate(candidate: string): boolean {
+	return (
+		!candidate.startsWith("/") && !candidate.startsWith("$HOME/") && !candidate.startsWith("~/")
+	);
+}
+
+function escapeRegExp(value: string): string {
+	return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }

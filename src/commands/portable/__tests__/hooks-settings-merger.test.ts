@@ -618,6 +618,14 @@ describe("Codex hooks migration", () => {
 		try {
 			process.chdir(tempBase);
 			mkdirSync(join(tempBase, ".claude"), { recursive: true });
+			const codexHooksDir = join(tempBase, ".codex", "hooks");
+			mkdirSync(codexHooksDir, { recursive: true });
+			const runnerPath = join(codexHooksDir, "node-hook-runner.sh");
+			const simplifyPath = join(codexHooksDir, "simplify-gate.cjs");
+			const scoutPath = join(codexHooksDir, "scout-block.cjs");
+			writeFileSync(runnerPath, '#!/usr/bin/env bash\nnode "$1"\n');
+			writeFileSync(simplifyPath, "process.stdout.write('{}');\n");
+			writeFileSync(scoutPath, "process.stdout.write('{}');\n");
 			writeFileSync(
 				join(tempBase, ".claude", "settings.json"),
 				JSON.stringify({
@@ -651,21 +659,22 @@ describe("Codex hooks migration", () => {
 				sourceProvider: "claude-code",
 				targetProvider: "codex",
 				installedHookFiles: ["node-hook-runner.sh", "simplify-gate.cjs", "scout-block.cjs"],
+				installedHookAbsolutePaths: [runnerPath, simplifyPath, scoutPath],
 				global: false,
 			});
 
 			expect(result.status).toBe("registered");
 			expect(result.hooksRegistered).toBe(2);
 			const content = JSON.parse(await Bun.file(join(tempBase, ".codex", "hooks.json")).text());
-			expect(content.hooks.UserPromptSubmit[0].hooks[0].command).toContain(
-				".codex/hooks/simplify-gate.cjs",
-			);
-			expect(content.hooks.PreToolUse[0].hooks[0].command).toContain(
-				".codex/hooks/scout-block.cjs",
-			);
-			expect(content.hooks.PreToolUse[0].hooks[0].command).toContain(
-				".codex/hooks/node-hook-runner.sh",
-			);
+			const promptCommand = content.hooks.UserPromptSubmit[0].hooks[0].command;
+			const preToolCommand = content.hooks.PreToolUse[0].hooks[0].command;
+			expect(promptCommand).toContain(".codex/hooks/node-hook-runner.sh");
+			expect(preToolCommand).toContain(".codex/hooks/node-hook-runner.sh");
+			expect(promptCommand).toMatch(/\.codex\/hooks\/[a-f0-9]{8}-simplify-gate\.cjs/);
+			expect(preToolCommand).toMatch(/\.codex\/hooks\/[a-f0-9]{8}-scout-block\.cjs/);
+			expect(promptCommand).not.toMatch(/[a-f0-9]{8}-node-hook-runner\.sh/);
+			expect(preToolCommand).not.toMatch(/[a-f0-9]{8}-node-hook-runner\.sh/);
+			expect(JSON.stringify(content.hooks)).not.toContain(".claude/hooks");
 		} finally {
 			process.chdir(originalCwd);
 			rmSync(tempBase, { recursive: true, force: true });
