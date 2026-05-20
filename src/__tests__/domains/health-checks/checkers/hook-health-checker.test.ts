@@ -13,7 +13,19 @@ import {
 	checkHookSyntax,
 	checkPythonVenv,
 	repairMissingHookFileReferences,
+	resolveDoctorCkExecutable,
 } from "@/domains/health-checks/checkers/hook-health-checker.js";
+
+describe("resolveDoctorCkExecutable", () => {
+	test("uses the npm cmd shim on Windows", () => {
+		expect(resolveDoctorCkExecutable("win32")).toBe("ck.cmd");
+	});
+
+	test("uses ck directly on POSIX platforms", () => {
+		expect(resolveDoctorCkExecutable("darwin")).toBe("ck");
+		expect(resolveDoctorCkExecutable("linux")).toBe("ck");
+	});
+});
 
 describe("checkHookSyntax", () => {
 	let tempDir: string;
