@@ -12,6 +12,7 @@ import {
 	checkHookRuntime,
 	checkHookSyntax,
 	checkPythonVenv,
+	repairMissingHookFileReferences,
 } from "@/domains/health-checks/checkers/hook-health-checker.js";
 
 describe("checkHookSyntax", () => {
@@ -960,6 +961,38 @@ describe("checkHookFileReferences", () => {
 		const updated = JSON.parse(await readFile(settingsPath, "utf-8"));
 		expect(updated.statusLine).toBeUndefined();
 		expect(updated.otherField).toBe("preserved");
+	});
+
+	test("shared repair helper prunes stale hook references and returns count", async () => {
+		await mkdir(join(projectDir, ".claude"), { recursive: true });
+		const settingsPath = join(projectDir, ".claude", "settings.json");
+		await writeFile(
+			settingsPath,
+			JSON.stringify({
+				statusLine: {
+					command: "bash .claude/hooks/node-hook-runner.sh .claude/statusline.cjs",
+				},
+				hooks: {
+					Stop: [
+						{
+							hooks: [
+								{
+									type: "command",
+									command: 'node "$CLAUDE_PROJECT_DIR"/.claude/hooks/session-state.cjs',
+								},
+							],
+						},
+					],
+				},
+			}),
+		);
+
+		const repaired = await repairMissingHookFileReferences(projectDir);
+
+		expect(repaired).toBe(2);
+		const updated = JSON.parse(await readFile(settingsPath, "utf-8"));
+		expect(updated.statusLine).toBeUndefined();
+		expect(updated.hooks).toBeUndefined();
 	});
 
 	test("returns fail when settings reference a missing hook file", async () => {

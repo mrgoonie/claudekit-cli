@@ -9,6 +9,7 @@ import { exec, spawn } from "node:child_process";
 import { join } from "node:path";
 import { promisify } from "node:util";
 import { CkConfigManager } from "@/domains/config/ck-config-manager.js";
+import { repairMissingHookFileReferences } from "@/domains/health-checks/checkers/hook-health-checker.js";
 import { getInstalledKits } from "@/domains/migration/metadata-migration.js";
 import { versionsMatch } from "@/domains/versioning/checking/version-utils.js";
 import { getClaudeKitSetup } from "@/services/file-operations/claudekit-scanner.js";
@@ -390,23 +391,7 @@ export interface PromptMigrateUpdateDeps {
 	>;
 }
 
-export async function repairMissingHookFileReferences(projectDir = process.cwd()): Promise<number> {
-	const { checkHookFileReferences } = await import(
-		"@/domains/health-checks/checkers/hook-health-checker.js"
-	);
-	const result = await checkHookFileReferences(projectDir);
-	if (result.status !== "fail" || !result.fix) {
-		return 0;
-	}
-
-	const fixResult = await result.fix.execute();
-	if (!fixResult.success) {
-		throw new Error(fixResult.message);
-	}
-
-	const match = fixResult.message.match(/Pruned\s+(\d+)/);
-	return match?.[1] ? Number.parseInt(match[1], 10) : 0;
-}
+export { repairMissingHookFileReferences };
 
 /**
  * Step 3 of the update pipeline: independently check and run migration.
