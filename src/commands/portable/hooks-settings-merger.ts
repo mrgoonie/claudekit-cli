@@ -45,8 +45,7 @@ export type HooksMigrationStatus =
 	| "source-settings-invalid"
 	| "source-hooks-missing"
 	| "no-matching-hooks"
-	| "merge-failed"
-	| "skipped-windows"; // Codex hooks on Windows are unsupported
+	| "merge-failed";
 
 /** Options for the main orchestrator */
 export interface MigrateHooksSettingsOptions {
@@ -353,7 +352,8 @@ function isCkManagedHookPath(absPath: string): boolean {
  *   npm run lint                         → []
  *
  * Regex matches POSIX-style absolute paths. Windows drive-letter paths
- * are intentionally out of scope — Codex hooks on Windows are disabled.
+ * (e.g. C:\Users\...) are not matched here; the self-heal check works via
+ * the codex-path-safety module for Windows paths.
  */
 function extractAbsolutePaths(command: string): string[] {
 	const matches: string[] = [];
@@ -636,15 +636,14 @@ export async function migrateHooksSettings(
  * Codex hook migration pipeline (capability-gated).
  *
  * Steps:
- * 1. Windows short-circuit — Codex hooks are disabled on Windows; warn and skip.
- * 2. Detect Codex capabilities via `codex --version`.
- * 3. Read source hooks from claude-code settings.json.
- * 4. Filter to installed hook files.
- * 5. Generate wrapper .cjs scripts under ~/.codex/hooks/ (or project equivalent).
- * 6. Convert hooks via claude-to-codex-hooks transformer (event filter, matcher
+ * 1. Detect Codex capabilities via `codex --version` (runs on all platforms including Windows).
+ * 2. Read source hooks from claude-code settings.json.
+ * 3. Filter to installed hook files.
+ * 4. Generate wrapper .cjs scripts under ~/.codex/hooks/ (or project equivalent).
+ * 5. Convert hooks via claude-to-codex-hooks transformer (event filter, matcher
  *    filter, additionalContext removal, path rewrite → wrapper paths).
- * 7. Merge converted hooks into ~/.codex/hooks.json.
- * 8. Ensure [features] hooks = true in ~/.codex/config.toml.
+ * 6. Merge converted hooks into ~/.codex/hooks.json.
+ * 7. Ensure [features] hooks = true in ~/.codex/config.toml.
  */
 async function migrateHooksSettingsForCodex(
 	options: MigrateHooksSettingsOptions,
@@ -655,20 +654,6 @@ async function migrateHooksSettingsForCodex(
 		installedHookAbsolutePaths,
 		global: isGlobal,
 	} = options;
-
-	// Step 1: Windows short-circuit
-	if (process.platform === "win32") {
-		return {
-			status: "skipped-windows",
-			success: true,
-			backupPath: null,
-			hooksRegistered: 0,
-			message:
-				"[!] Codex hook installation skipped: Codex CLI hooks are temporarily disabled on Windows.",
-			sourceSettingsPath: null,
-			targetSettingsPath: null,
-		};
-	}
 
 	if (installedHookFiles.length === 0) {
 		return {
