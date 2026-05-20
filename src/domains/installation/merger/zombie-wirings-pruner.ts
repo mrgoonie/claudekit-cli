@@ -11,6 +11,9 @@
  *
  * Conservative by design: entries without `_origin: "engineer"` are NEVER pruned,
  * even if the referenced file is missing. This preserves user-added wirings.
+ * Exception: known legacy ClaudeKit prompt hooks with the old hard-coded
+ * descriptive-name text are pruned because they conflict with the current
+ * language-aware command hook and cannot self-heal via missing-file checks.
  */
 import { existsSync, readdirSync } from "node:fs";
 import { homedir } from "node:os";
@@ -97,6 +100,11 @@ export function pruneZombieEngineerWirings(settings: SettingsJson, hookDir: stri
  * Side-effect: pushes the basename to `pruned` list when pruning.
  */
 function shouldPruneEntry(entry: HookEntry, hookDir: string, pruned: string[]): boolean {
+	if (isLegacyDescriptiveNamePrompt(entry)) {
+		pruned.push("legacy-descriptive-name-prompt");
+		return true;
+	}
+
 	// Conservative: only prune entries explicitly tagged as engineer-origin
 	if (entry._origin !== "engineer") return false;
 
@@ -108,6 +116,17 @@ function shouldPruneEntry(entry: HookEntry, hookDir: string, pruned: string[]): 
 	// File missing and engineer-tagged — prune
 	pruned.push(basename(filePath));
 	return true;
+}
+
+function isLegacyDescriptiveNamePrompt(entry: HookEntry): boolean {
+	const prompt = (entry as HookEntry & { prompt?: unknown }).prompt;
+	if (entry.type !== "prompt" || typeof prompt !== "string") return false;
+
+	return (
+		prompt.includes("Use kebab-case file naming") &&
+		prompt.includes("self-documenting") &&
+		prompt.includes("Grep, Glob, Search")
+	);
 }
 
 /**

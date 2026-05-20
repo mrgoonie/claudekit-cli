@@ -476,13 +476,13 @@ export const CONFIG_FIELD_DOCS: Record<string, FieldDoc> = {
 		type: "boolean",
 		default: "true",
 		description:
-			"Injects descriptive naming context so agents generate meaningful, self-documenting file and variable names.",
+			"Injects language-aware naming context so agents generate meaningful, self-documenting file names.",
 		descriptionVi:
-			"Tiêm ngữ cảnh đặt tên mô tả để agent tạo tên tệp và biến có ý nghĩa, tự tài liệu hóa.",
+			"Tiêm ngữ cảnh đặt tên theo ngôn ngữ để agent tạo tên tệp có ý nghĩa, tự tài liệu hóa.",
 		effect:
-			"When enabled, reminds the agent to use long, descriptive kebab-case names for files and clear variable naming conventions.",
+			"When enabled, reminds the agent to prefer descriptive names while respecting language conventions such as snake_case for Python, Go, and Rust.",
 		effectVi:
-			"Khi bật, nhắc nhở agent sử dụng tên kebab-case dài, mô tả cho tệp và quy ước đặt tên biến rõ ràng.",
+			"Khi bật, nhắc agent ưu tiên tên mô tả nhưng vẫn theo quy ước ngôn ngữ như snake_case cho Python, Go và Rust.",
 		example: '{\n  "hooks": {\n    "descriptive-name": false\n  }\n}',
 	},
 	"hooks.dev-rules-reminder": {

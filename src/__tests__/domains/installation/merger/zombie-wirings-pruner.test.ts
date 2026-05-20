@@ -112,6 +112,70 @@ function buildFixtureSettings(): SettingsJson {
 // Tests
 // ---------------------------------------------------------------------------
 describe("pruneZombieEngineerWirings", () => {
+	it("prunes legacy descriptive-name prompt hook that conflicts with language conventions", () => {
+		const settings = {
+			hooks: {
+				PreToolUse: [
+					{
+						matcher: "Write",
+						hooks: [
+							{
+								type: "prompt",
+								prompt:
+									"Use kebab-case file naming with a long descriptive name to ensure this file name is self-documenting, so that when LLM is using tools (Grep, Glob, Search) to list files, it can guess what the file does right away without reading the file.",
+							},
+							{
+								type: "command",
+								command: `node "${join(testHookDir, "simplify-gate.cjs")}"`,
+								_origin: "engineer",
+							},
+						],
+					},
+				],
+			},
+		} as unknown as SettingsJson;
+
+		const { pruned, settings: result } = pruneZombieEngineerWirings(settings, testHookDir);
+
+		expect(pruned).toContain("legacy-descriptive-name-prompt");
+		const remainingHooks = (result.hooks?.PreToolUse?.flatMap((group) =>
+			"hooks" in group ? (group.hooks ?? []) : [group],
+		) ?? []) as Array<{ command?: string; type?: string }>;
+		expect(remainingHooks.some((hook) => hook.type === "prompt")).toBe(false);
+		expect(remainingHooks.some((hook) => hook.command?.includes("simplify-gate.cjs"))).toBe(true);
+	});
+
+	it("preserves unrelated user prompt hooks", () => {
+		const settings = {
+			hooks: {
+				PreToolUse: [
+					{
+						matcher: "Write",
+						hooks: [
+							{
+								type: "prompt",
+								prompt: "Before writing files, check that generated docs include a support footer.",
+							},
+							{
+								type: "command",
+								command: `node "${join(testHookDir, "simplify-gate.cjs")}"`,
+								_origin: "engineer",
+							},
+						],
+					},
+				],
+			},
+		} as unknown as SettingsJson;
+
+		const { pruned, settings: result } = pruneZombieEngineerWirings(settings, testHookDir);
+
+		expect(pruned).not.toContain("legacy-descriptive-name-prompt");
+		const remainingHooks = (result.hooks?.PreToolUse?.flatMap((group) =>
+			"hooks" in group ? (group.hooks ?? []) : [group],
+		) ?? []) as Array<{ type?: string }>;
+		expect(remainingHooks.some((hook) => hook.type === "prompt")).toBe(true);
+	});
+
 	it("keeps A (engineer, exists), prunes B (engineer, missing skill-dedup.cjs)", () => {
 		const settings = buildFixtureSettings();
 		const { pruned } = pruneZombieEngineerWirings(settings, testHookDir);
@@ -575,12 +639,17 @@ describe("settings-processor integration — zombie wirings pruned post-merge", 
 			await writeFile(sourceFile, JSON.stringify(sourceSettings, null, 2), "utf8");
 
 			// Pre-populate destination with zombie wirings (v2.18.x shape)
-			const zombieSettings: SettingsJson = {
+			const zombieSettings = {
 				hooks: {
 					PreToolUse: [
 						{
 							matcher: "Bash",
 							hooks: [
+								{
+									type: "prompt",
+									prompt:
+										"Use kebab-case file naming with a long descriptive name to ensure this file name is self-documenting, so that when LLM is using tools (Grep, Glob, Search) to list files, it can guess what the file does right away without reading the file.",
+								},
 								{
 									type: "command",
 									command: `node "${join(testHookDir, "simplify-gate.cjs")}"`,
@@ -606,7 +675,7 @@ describe("settings-processor integration — zombie wirings pruned post-merge", 
 						},
 					],
 				},
-			};
+			} as unknown as SettingsJson;
 			const destFile = pathJoin(destDir, "settings.json");
 			await writeFile(destFile, JSON.stringify(zombieSettings, null, 2), "utf8");
 
@@ -629,8 +698,16 @@ describe("settings-processor integration — zombie wirings pruned post-merge", 
 					(g) => g.hooks?.map((h) => h.command) ?? [],
 				),
 			);
+			const allPromptHooks = Object.values(result.hooks ?? {}).flatMap((groups) =>
+				(groups as Array<{ hooks?: Array<{ prompt?: string; type?: string }> }>).flatMap(
+					(g) => g.hooks?.filter((h) => h.type === "prompt") ?? [],
+				),
+			);
 			expect(allCommands.some((c) => c.includes("skill-dedup.cjs"))).toBe(false);
 			expect(allCommands.some((c) => c.includes("node-hook-runner.sh"))).toBe(false);
+			expect(allPromptHooks.some((h) => h.prompt?.includes("Use kebab-case file naming"))).toBe(
+				false,
+			);
 			// simplify-gate.cjs should still be present
 			expect(allCommands.some((c) => c.includes("simplify-gate.cjs"))).toBe(true);
 		} finally {
