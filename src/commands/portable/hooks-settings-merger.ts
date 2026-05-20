@@ -636,15 +636,14 @@ export async function migrateHooksSettings(
  * Codex hook migration pipeline (capability-gated).
  *
  * Steps:
- * 1. Windows short-circuit — Codex hooks are disabled on Windows; warn and skip.
- * 2. Detect Codex capabilities via `codex --version`.
- * 3. Read source hooks from claude-code settings.json.
- * 4. Filter to installed hook files.
- * 5. Generate wrapper .cjs scripts under ~/.codex/hooks/ (or project equivalent).
- * 6. Convert hooks via claude-to-codex-hooks transformer (event filter, matcher
+ * 1. Detect Codex capabilities via `codex --version` (runs on all platforms including Windows).
+ * 2. Read source hooks from claude-code settings.json.
+ * 3. Filter to installed hook files.
+ * 4. Generate wrapper .cjs scripts under ~/.codex/hooks/ (or project equivalent).
+ * 5. Convert hooks via claude-to-codex-hooks transformer (event filter, matcher
  *    filter, additionalContext removal, path rewrite → wrapper paths).
- * 7. Merge converted hooks into ~/.codex/hooks.json.
- * 8. Ensure [features] hooks = true in ~/.codex/config.toml.
+ * 6. Merge converted hooks into ~/.codex/hooks.json.
+ * 7. Ensure [features] hooks = true in ~/.codex/config.toml.
  */
 async function migrateHooksSettingsForCodex(
 	options: MigrateHooksSettingsOptions,

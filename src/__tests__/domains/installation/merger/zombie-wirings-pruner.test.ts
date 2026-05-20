@@ -370,6 +370,171 @@ describe("extractHookFilePath", () => {
 });
 
 // ---------------------------------------------------------------------------
+// Fix 1: compound-command false-prune guard
+// ---------------------------------------------------------------------------
+describe("extractHookFilePath — compound-command guard (Fix 1)", () => {
+	it("returns null for && compound command (preserves entry even if first file missing)", () => {
+		// a.cjs missing, b.cjs (live.cjs) exists — but whole entry must be preserved
+		const cmd = `node "${join(testHookDir, "missing.cjs")}" && node "${join(testHookDir, "simplify-gate.cjs")}"`;
+		const result = extractHookFilePath(cmd, testHookDir);
+		expect(result).toBeNull();
+	});
+
+	it("returns null for || compound command", () => {
+		const cmd = `node "${join(testHookDir, "a.cjs")}" || node "${join(testHookDir, "b.cjs")}"`;
+		const result = extractHookFilePath(cmd, testHookDir);
+		expect(result).toBeNull();
+	});
+
+	it("returns null for ; compound command", () => {
+		const cmd = `node "${join(testHookDir, "a.cjs")}"; node "${join(testHookDir, "b.cjs")}"`;
+		const result = extractHookFilePath(cmd, testHookDir);
+		expect(result).toBeNull();
+	});
+});
+
+describe("pruneZombieEngineerWirings — compound-command entry PRESERVED (Fix 1)", () => {
+	it("engineer-tagged compound command is NOT pruned even if first file is missing", () => {
+		// missing.cjs does not exist; simplify-gate.cjs does — whole entry must survive
+		const compoundCmd = `node "${join(testHookDir, "missing.cjs")}" && node "${join(testHookDir, "simplify-gate.cjs")}"`;
+		const settings: SettingsJson = {
+			hooks: {
+				PreToolUse: [
+					{
+						hooks: [
+							{
+								type: "command",
+								command: compoundCmd,
+								_origin: "engineer",
+							},
+						],
+					},
+				],
+			},
+		};
+		const { pruned, settings: result } = pruneZombieEngineerWirings(settings, testHookDir);
+		expect(pruned).toHaveLength(0);
+		const allHooks = Object.values(result.hooks ?? {}).flatMap((groups) =>
+			(groups as Array<{ hooks?: unknown[] }>).flatMap((g) => g.hooks ?? []),
+		);
+		expect(allHooks).toHaveLength(1);
+	});
+
+	it("regression: engineer-tagged single command pointing at missing file is still pruned", () => {
+		const settings: SettingsJson = {
+			hooks: {
+				PreToolUse: [
+					{
+						hooks: [
+							{
+								type: "command",
+								command: `node "${join(testHookDir, "ghost-single.cjs")}"`,
+								_origin: "engineer",
+							},
+						],
+					},
+				],
+			},
+		};
+		const { pruned } = pruneZombieEngineerWirings(settings, testHookDir);
+		expect(pruned).toContain("ghost-single.cjs");
+	});
+});
+
+// ---------------------------------------------------------------------------
+// Fix 2: empty-dir / missing-dir guard
+// ---------------------------------------------------------------------------
+describe("pruneZombieEngineerWirings — empty/missing hookDir guard (Fix 2)", () => {
+	it("hookDir does not exist → returns settings unchanged, pruned empty", () => {
+		const missingDir = join(tmpdir(), "ck-zombie-pruner-nonexistent-dir-xyz");
+		// Ensure it really doesn't exist
+		const { rmSync: rm } = require("node:fs");
+		rm(missingDir, { recursive: true, force: true });
+
+		const settings: SettingsJson = {
+			hooks: {
+				PreToolUse: [
+					{
+						hooks: [
+							{
+								type: "command",
+								command: `node "${join(missingDir, "ghost.cjs")}"`,
+								_origin: "engineer",
+							},
+						],
+					},
+				],
+			},
+		};
+		const { pruned, settings: result } = pruneZombieEngineerWirings(settings, missingDir);
+		expect(pruned).toHaveLength(0);
+		// Entry must still be present
+		const allHooks = Object.values(result.hooks ?? {}).flatMap((groups) =>
+			(groups as Array<{ hooks?: unknown[] }>).flatMap((g) => g.hooks ?? []),
+		);
+		expect(allHooks).toHaveLength(1);
+	});
+
+	it("hookDir exists but is empty → returns settings unchanged, pruned empty", () => {
+		const emptyDir = join(tmpdir(), "ck-zombie-pruner-empty-dir-xyz");
+		mkdirSync(emptyDir, { recursive: true });
+		// Remove any stray files from previous runs
+		const { readdirSync: rdSync, unlinkSync } = require("node:fs");
+		for (const f of rdSync(emptyDir)) {
+			unlinkSync(join(emptyDir, f));
+		}
+
+		try {
+			const settings: SettingsJson = {
+				hooks: {
+					PreToolUse: [
+						{
+							hooks: [
+								{
+									type: "command",
+									command: `node "${join(emptyDir, "ghost.cjs")}"`,
+									_origin: "engineer",
+								},
+							],
+						},
+					],
+				},
+			};
+			const { pruned, settings: result } = pruneZombieEngineerWirings(settings, emptyDir);
+			expect(pruned).toHaveLength(0);
+			const allHooks = Object.values(result.hooks ?? {}).flatMap((groups) =>
+				(groups as Array<{ hooks?: unknown[] }>).flatMap((g) => g.hooks ?? []),
+			);
+			expect(allHooks).toHaveLength(1);
+		} finally {
+			const { rmSync: rm } = require("node:fs");
+			rm(emptyDir, { recursive: true, force: true });
+		}
+	});
+
+	it("hookDir exists with at least one .cjs → normal pruning proceeds", () => {
+		// testHookDir has simplify-gate.cjs; ghost-check.cjs is missing → should be pruned
+		const settings: SettingsJson = {
+			hooks: {
+				PreToolUse: [
+					{
+						hooks: [
+							{
+								type: "command",
+								command: `node "${join(testHookDir, "ghost-check.cjs")}"`,
+								_origin: "engineer",
+							},
+						],
+					},
+				],
+			},
+		};
+		const { pruned } = pruneZombieEngineerWirings(settings, testHookDir);
+		expect(pruned).toContain("ghost-check.cjs");
+	});
+});
+
+// ---------------------------------------------------------------------------
 // Integration test: settings-processor pipeline with zombie settings
 // ---------------------------------------------------------------------------
 describe("settings-processor integration — zombie wirings pruned post-merge", () => {

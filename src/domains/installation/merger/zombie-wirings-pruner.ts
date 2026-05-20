@@ -12,7 +12,7 @@
  * Conservative by design: entries without `_origin: "engineer"` are NEVER pruned,
  * even if the referenced file is missing. This preserves user-added wirings.
  */
-import { existsSync } from "node:fs";
+import { existsSync, readdirSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename, dirname, isAbsolute, resolve, sep } from "node:path";
 import type { HookConfig, HookEntry, SettingsJson } from "@/domains/config/merger/types.js";
@@ -31,6 +31,18 @@ export interface PruneResult {
  */
 export function pruneZombieEngineerWirings(settings: SettingsJson, hookDir: string): PruneResult {
 	const pruned: string[] = [];
+
+	// Defense-in-depth: if hookDir is absent or contains no hook files, every existsSync
+	// check would false-negative and could prune everything. Skip pruning entirely in
+	// that state — no files on disk means "not landed yet", not "all are zombies".
+	if (!existsSync(hookDir)) {
+		return { settings, pruned };
+	}
+	const hookFiles = readdirSync(hookDir);
+	const hasHookFiles = hookFiles.some((f) => f.endsWith(".cjs") || f.endsWith(".sh"));
+	if (!hasHookFiles) {
+		return { settings, pruned };
+	}
 
 	if (!settings.hooks) {
 		return { settings, pruned };
@@ -120,6 +132,12 @@ function shouldPruneEntry(entry: HookEntry, hookDir: string, pruned: string[]): 
  */
 export function extractHookFilePath(command: string, hookDir: string): string | null {
 	if (!command) return null;
+
+	// Conservative guard: compound shell commands (&&, ||, ;, unquoted |) may
+	// reference multiple executors. Extracting only the first token could cause a
+	// false-prune when the first file is missing but a later one still ships.
+	// Return null (preserve entry) for any compound form — never prune compound commands.
+	if (/&&|\|\||;|(?<!["|'])\|(?!["|'])/.test(command)) return null;
 
 	const home = homedir().replace(/\\/g, "/");
 	const hookDirNorm = hookDir.replace(/\\/g, "/");
