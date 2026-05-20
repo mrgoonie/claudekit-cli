@@ -7,7 +7,7 @@
  *   - Unsupported matchers filtered (SessionStart only allows startup|resume)
  *   - additionalContext NOT emitted here — that's the wrapper's job at runtime
  *   - command paths optionally rewritten from source dir → wrapper dir
- *   - permissionDecision values scrubbed to only "deny" (Codex only supports deny)
+ *   - permissionDecision values scrubbed to the selected Codex capability entry
  *
  * This function is pure (no I/O). All side-effects live in the caller.
  */
@@ -129,8 +129,7 @@ function filterGroupsByMatcher(
 			// No matcher — allow through (wildcard semantics)
 			return true;
 		}
-		// For SessionStart: only startup|resume matchers are valid
-		// For Pre/PostToolUse: only Bash is valid
+		// For SessionStart and tool events, allowed matcher values are capability-driven.
 		// Matcher may be pipe-separated (e.g. "startup|resume") — keep if ANY part matches
 		const parts = group.matcher.split("|").map((p) => p.trim());
 		return parts.some((part) => allowedSet.has(part));
