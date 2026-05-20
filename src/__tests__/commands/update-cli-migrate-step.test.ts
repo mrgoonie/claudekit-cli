@@ -24,6 +24,7 @@ const loadFullConfigMock = mock(
 const execCalls: string[] = [];
 const cleanupCalls: Array<{ providers: string[]; global: boolean }> = [];
 const repairCalls: string[] = [];
+const orderedCalls: string[] = [];
 
 function makeDeps(): PromptMigrateUpdateDeps {
 	return {
@@ -43,14 +44,17 @@ function makeDeps(): PromptMigrateUpdateDeps {
 		}),
 		loadFullConfigFn: loadFullConfigMock,
 		execAsyncFn: async (command: string) => {
+			orderedCalls.push("exec");
 			execCalls.push(command);
 			return { stdout: "", stderr: "" };
 		},
 		cleanupMigratedHooksFn: async (providers, options) => {
+			orderedCalls.push("cleanup");
 			cleanupCalls.push({ providers, global: options.global });
 			return [];
 		},
 		repairHookFileReferencesFn: async (projectDir) => {
+			orderedCalls.push("repair");
 			repairCalls.push(projectDir);
 			return 0;
 		},
@@ -62,6 +66,7 @@ describe("promptMigrateUpdate (step 3 of update pipeline)", () => {
 		execCalls.length = 0;
 		cleanupCalls.length = 0;
 		repairCalls.length = 0;
+		orderedCalls.length = 0;
 		detectInstalledProvidersMock.mockReset();
 		detectInstalledProvidersMock.mockResolvedValue([]);
 		getProviderConfigMock.mockReset();
@@ -88,7 +93,7 @@ describe("promptMigrateUpdate (step 3 of update pipeline)", () => {
 	test("skips when autoMigrateAfterUpdate is not configured", async () => {
 		detectInstalledProvidersMock.mockResolvedValue(["claude-code", "codex"]);
 		await promptMigrateUpdate(makeDeps());
-		expect(repairCalls).toEqual([process.cwd()]);
+		expect(repairCalls).toEqual([process.cwd(), process.cwd()]);
 		expect(execCalls).toEqual([]);
 	});
 
@@ -104,6 +109,7 @@ describe("promptMigrateUpdate (step 3 of update pipeline)", () => {
 	test("logs hook file reference repairs even when no providers are detected", async () => {
 		const deps = makeDeps();
 		deps.repairHookFileReferencesFn = async (projectDir) => {
+			orderedCalls.push("repair");
 			repairCalls.push(projectDir);
 			return 2;
 		};
@@ -122,6 +128,7 @@ describe("promptMigrateUpdate (step 3 of update pipeline)", () => {
 		});
 		const deps = makeDeps();
 		deps.repairHookFileReferencesFn = async () => {
+			orderedCalls.push("repair");
 			throw new Error("repair failed");
 		};
 
@@ -131,6 +138,31 @@ describe("promptMigrateUpdate (step 3 of update pipeline)", () => {
 			expect.stringContaining("Hook file reference repair skipped: repair failed"),
 		);
 		expect(execCalls).toEqual(["ck migrate --agent codex --yes"]);
+	});
+
+	test("runs missing hook repair again after migrated hook cleanup", async () => {
+		detectInstalledProvidersMock.mockResolvedValue(["claude-code"]);
+		const repairResults = [0, 2];
+		const deps = makeDeps();
+		deps.repairHookFileReferencesFn = async (projectDir) => {
+			orderedCalls.push("repair");
+			repairCalls.push(projectDir);
+			return repairResults.shift() ?? 0;
+		};
+		deps.cleanupMigratedHooksFn = async (providers, options) => {
+			orderedCalls.push("cleanup");
+			cleanupCalls.push({ providers, global: options.global });
+			return [{ hooksPruned: 1, filesRemoved: 1, registryEntriesRemoved: 0 }];
+		};
+
+		await promptMigrateUpdate(deps);
+
+		expect(orderedCalls).toEqual(["repair", "cleanup", "repair"]);
+		expect(repairCalls).toEqual([process.cwd(), process.cwd()]);
+		expect(cleanupCalls).toEqual([{ providers: ["claude-code"], global: false }]);
+		expect(logger.info).toHaveBeenCalledWith("Cleaned up 2 generated-context hook artifact(s)");
+		expect(logger.info).toHaveBeenCalledWith("Repaired 2 missing hook file reference(s)");
+		expect(execCalls).toEqual([]);
 	});
 
 	test("skips when only claude-code is detected", async () => {
