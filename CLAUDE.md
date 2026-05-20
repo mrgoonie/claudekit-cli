@@ -88,7 +88,6 @@ Use `chore:` (NOT `hotfix:` or `fix:`) for the manifest-regen commit — version
 |---|---|---|
 | `CI / Metadata Deletions Check` | every PR | `scripts/check-metadata-deletions.js` — guards command-archive deletions metadata |
 | `CI / Release Dry-Run Check` | PRs touching release-related files only | semantic-release dry-run; auto-skipped otherwise |
-| `Claude Code Review` | every PR | AI bot review (severity-tagged) — feeds the maintainer review-loop |
 | `release.yml` / `release-dev.yml` | merge to `main` / `dev` | semantic-release publishes npm package |
 | `sync-dev-after-release.yml` | post-release on `main` | opens `chore: merge main into dev` PR |
 
