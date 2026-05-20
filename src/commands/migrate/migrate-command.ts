@@ -54,7 +54,12 @@ import type {
 	TargetFileState,
 } from "../portable/reconcile-types.js";
 import { reconcile } from "../portable/reconciler.js";
-import type { PortableInstallResult, PortableItem, ProviderType } from "../portable/types.js";
+import type {
+	MigrationWarning,
+	PortableInstallResult,
+	PortableItem,
+	ProviderType,
+} from "../portable/types.js";
 import { discoverSkills, getSkillSourcePath } from "../skills/skills-discovery.js";
 import { resolveMigrationScope } from "./migrate-scope-resolver.js";
 import { installSkillDirectories } from "./skill-directory-installer.js";
@@ -224,14 +229,19 @@ export async function migrateCommand(options: MigrateOptions): Promise<void> {
 		const configItem = scope.config ? await discoverConfig(options.source) : null;
 		// rulesSourcePath is non-null when scope.rules is true (same guard)
 		const ruleItems = rulesSourcePath ? await discoverRules(rulesSourcePath) : [];
-		const { items: hookItems, skippedShellHooks } = hooksSource
+		const {
+			items: hookItems,
+			skippedShellHooks,
+			warnings: hookDiscoveryWarnings,
+		} = hooksSource
 			? await discoverHooks(hooksSource)
-			: { items: [], skippedShellHooks: [] };
+			: { items: [], skippedShellHooks: [], warnings: undefined };
 		if (skippedShellHooks.length > 0) {
 			logger.warning(
 				`[migrate] Skipping ${skippedShellHooks.length} shell hook(s) not supported for migration (node-runnable only): ${skippedShellHooks.join(", ")}`,
 			);
 		}
+		logHookMigrationWarnings(hookDiscoveryWarnings);
 
 		spinner.stop("Discovery complete");
 
@@ -639,16 +649,25 @@ export async function migrateCommand(options: MigrateOptions): Promise<void> {
 				const hookResults = await installPortableItems([item], [provider], "hooks", installOpts);
 				allResults.push(...hookResults);
 				// Track successfully installed hook filenames for settings.json merge
-				for (const r of hookResults.filter((r) => r.success && !r.skipped)) {
+				if (hookResults.some((result) => result.success && !result.skipped)) {
 					const existing = successfulHookFiles.get(provider) ?? [];
-					existing.push(basename(r.path));
+					existing.push(item.name);
 					successfulHookFiles.set(provider, existing);
 				}
 			}
 		}
 
 		// After all actions executed, merge hooks into target settings.json per provider
-		for (const [hooksProvider, files] of successfulHookFiles) {
+		const hookTargetProviders = selectedProviders.filter((provider) =>
+			getProvidersSupporting("hooks").includes(provider),
+		);
+		for (const hooksProvider of hookTargetProviders) {
+			const files = collectAvailableHookAssetNames(
+				hooksProvider,
+				installGlobally,
+				hookItems,
+				successfulHookFiles.get(hooksProvider) ?? [],
+			);
 			if (files.length === 0) continue;
 			const mergeResult = await migrateHooksSettings({
 				// Source is claude-code — the merger dynamically checks settingsJsonPath,
@@ -658,6 +677,7 @@ export async function migrateCommand(options: MigrateOptions): Promise<void> {
 				installedHookFiles: files,
 				global: installGlobally,
 			});
+			logHookMigrationWarnings(mergeResult.warnings);
 			if (mergeResult.success && mergeResult.hooksRegistered > 0) {
 				logger.verbose(
 					`Registered ${mergeResult.hooksRegistered} hook(s) in ${hooksProvider} settings.json`,
@@ -841,6 +861,33 @@ function warnConversionFallback(warning: ConversionFallbackWarning): void {
 			`[migrate] Falling back to raw checksum for ${warning.provider} ${warning.type} "${warning.item}" because ${warning.format} conversion failed: ${warning.error}`,
 		),
 	);
+}
+
+function logHookMigrationWarnings(warnings: MigrationWarning[] | undefined): void {
+	if (!warnings) return;
+	for (const warning of warnings) {
+		logger.warning(`[migrate] ${warning.message}`);
+	}
+}
+
+function collectAvailableHookAssetNames(
+	provider: ProviderType,
+	global: boolean,
+	hookItems: PortableItem[],
+	successfullyInstalled: string[] = [],
+): string[] {
+	const names = new Set(successfullyInstalled);
+	const pathConfig = providers[provider].hooks;
+	const basePath = global ? pathConfig?.globalPath : pathConfig?.projectPath;
+	if (!basePath) return [...names];
+
+	for (const item of hookItems) {
+		if (existsSync(join(basePath, item.name))) {
+			names.add(item.name);
+		}
+	}
+
+	return [...names];
 }
 
 /**

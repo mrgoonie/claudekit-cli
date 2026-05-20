@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from "bun:test";
 import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import {
 	filterToInstalledHooks,
@@ -91,6 +91,28 @@ describe("rewriteHookPaths", () => {
 		};
 		const result = rewriteHookPaths(projectHooks, ".claude/hooks", ".factory/hooks");
 		expect(result.PreToolUse[0].hooks[0].command).toBe("node .factory/hooks/privacy-block.cjs");
+	});
+
+	it("rewrites $HOME and tilde commands when provider paths are absolute", () => {
+		const globalHooks = {
+			SessionStart: [
+				{
+					hooks: [
+						{ type: "command", command: 'node "$HOME/.claude/hooks/session-init.cjs"' },
+						{ type: "command", command: "node ~/.claude/hooks/usage-report.cjs" },
+					],
+				},
+			],
+		};
+		const result = rewriteHookPaths(
+			globalHooks,
+			join(homedir(), ".claude", "hooks"),
+			join(homedir(), ".codex", "hooks"),
+		);
+		expect(result.SessionStart[0].hooks[0].command).toBe(
+			'node "$HOME/.codex/hooks/session-init.cjs"',
+		);
+		expect(result.SessionStart[0].hooks[1].command).toBe("node ~/.codex/hooks/usage-report.cjs");
 	});
 });
 
@@ -362,6 +384,234 @@ describe("Codex hooks migration", () => {
 			'node "$HOME/.codex/hooks/session-init.cjs"',
 		);
 		expect(result.PreToolUse[0].hooks[0].command).toBe("node .codex/hooks/validate-tool.cjs");
+	});
+
+	it("registers CKE wrapper commands by matching the wrapped hook asset", async () => {
+		const tempBase = mkdtempSync(join(tmpdir(), "hooks-migrate-cke-wrapper-"));
+		const originalCwd = process.cwd();
+		try {
+			process.chdir(tempBase);
+			mkdirSync(join(tempBase, ".claude"), { recursive: true });
+			writeFileSync(
+				join(tempBase, ".claude", "settings.json"),
+				JSON.stringify({
+					hooks: {
+						UserPromptSubmit: [
+							{
+								hooks: [
+									{
+										type: "command",
+										command:
+											"bash .claude/hooks/node-hook-runner.sh .claude/hooks/simplify-gate.cjs",
+									},
+								],
+							},
+						],
+						PreToolUse: [
+							{
+								hooks: [
+									{
+										type: "command",
+										command: "bash .claude/hooks/node-hook-runner.sh .claude/hooks/scout-block.cjs",
+									},
+								],
+							},
+						],
+					},
+				}),
+			);
+
+			const result = await migrateHooksSettings({
+				sourceProvider: "claude-code",
+				targetProvider: "codex",
+				installedHookFiles: ["node-hook-runner.sh", "simplify-gate.cjs", "scout-block.cjs"],
+				global: false,
+			});
+
+			expect(result.status).toBe("registered");
+			expect(result.hooksRegistered).toBe(2);
+			const content = JSON.parse(await Bun.file(join(tempBase, ".codex", "hooks.json")).text());
+			expect(content.hooks.UserPromptSubmit[0].hooks[0].command).toContain(
+				".codex/hooks/simplify-gate.cjs",
+			);
+			expect(content.hooks.PreToolUse[0].hooks[0].command).toContain(
+				".codex/hooks/scout-block.cjs",
+			);
+			expect(content.hooks.PreToolUse[0].hooks[0].command).toContain(
+				".codex/hooks/node-hook-runner.sh",
+			);
+		} finally {
+			process.chdir(originalCwd);
+			rmSync(tempBase, { recursive: true, force: true });
+		}
+	});
+
+	it("skips unsupported CKM events and excluded Codex hook assets with warnings", async () => {
+		const tempBase = mkdtempSync(join(tmpdir(), "hooks-migrate-ckm-skip-"));
+		const originalCwd = process.cwd();
+		try {
+			process.chdir(tempBase);
+			mkdirSync(join(tempBase, ".claude"), { recursive: true });
+			writeFileSync(
+				join(tempBase, ".claude", "settings.json"),
+				JSON.stringify({
+					hooks: {
+						SessionStart: [
+							{
+								hooks: [{ type: "command", command: "node .claude/hooks/session-init.cjs" }],
+							},
+						],
+						SubagentStart: [
+							{
+								hooks: [
+									{ type: "command", command: "node .claude/hooks/subagent-init.cjs" },
+									{
+										type: "command",
+										command: "node .claude/hooks/brand-guidelines-reminder.cjs",
+									},
+								],
+							},
+						],
+						UserPromptSubmit: [
+							{
+								hooks: [
+									{
+										type: "command",
+										command: "node .claude/hooks/dev-rules-reminder.cjs",
+									},
+									{
+										type: "command",
+										command: "node .claude/hooks/usage-context-awareness.cjs",
+									},
+								],
+							},
+						],
+						PreCompact: [
+							{
+								hooks: [
+									{
+										type: "command",
+										command: "node .claude/hooks/write-compact-marker.cjs",
+									},
+								],
+							},
+						],
+						SessionEnd: [
+							{
+								hooks: [{ type: "command", command: "node .claude/hooks/session-end.cjs" }],
+							},
+						],
+					},
+				}),
+			);
+
+			const result = await migrateHooksSettings({
+				sourceProvider: "claude-code",
+				targetProvider: "codex",
+				installedHookFiles: [
+					"session-init.cjs",
+					"subagent-init.cjs",
+					"dev-rules-reminder.cjs",
+					"usage-context-awareness.cjs",
+					"write-compact-marker.cjs",
+					"session-end.cjs",
+				],
+				global: false,
+			});
+
+			expect(result.status).toBe("registered");
+			expect(result.hooksRegistered).toBe(2);
+			expect(result.warnings?.some((warning) => warning.reason === "unsupported-event")).toBe(true);
+			expect(result.warnings?.some((warning) => warning.reason === "excluded-hook")).toBe(true);
+			expect(result.warnings?.some((warning) => warning.reason === "missing-hook-file")).toBe(
+				false,
+			);
+			const content = JSON.parse(await Bun.file(join(tempBase, ".codex", "hooks.json")).text());
+			expect(Object.keys(content.hooks).sort()).toEqual(["SessionStart", "UserPromptSubmit"]);
+			expect(content.hooks.UserPromptSubmit[0].hooks).toHaveLength(1);
+			expect(content.hooks.UserPromptSubmit[0].hooks[0].command).toContain(
+				"dev-rules-reminder.cjs",
+			);
+			expect(JSON.stringify(content.hooks)).not.toContain("usage-context-awareness.cjs");
+			expect(JSON.stringify(content.hooks)).not.toContain("SubagentStart");
+			expect(JSON.stringify(content.hooks)).not.toContain("PreCompact");
+			expect(JSON.stringify(content.hooks)).not.toContain("SessionEnd");
+		} finally {
+			process.chdir(originalCwd);
+			rmSync(tempBase, { recursive: true, force: true });
+		}
+	});
+
+	it("prunes stale CK-owned incompatible Codex hook registrations on rerun", async () => {
+		const tempBase = mkdtempSync(join(tmpdir(), "hooks-migrate-codex-prune-"));
+		const originalCwd = process.cwd();
+		try {
+			process.chdir(tempBase);
+			mkdirSync(join(tempBase, ".claude"), { recursive: true });
+			mkdirSync(join(tempBase, ".codex"), { recursive: true });
+			writeFileSync(
+				join(tempBase, ".claude", "settings.json"),
+				JSON.stringify({
+					hooks: {
+						SessionStart: [
+							{
+								hooks: [{ type: "command", command: "node .claude/hooks/session-init.cjs" }],
+							},
+						],
+					},
+				}),
+			);
+			writeFileSync(
+				join(tempBase, ".codex", "hooks.json"),
+				JSON.stringify({
+					hooks: {
+						SubagentStart: [
+							{
+								hooks: [
+									{ type: "command", command: "node .codex/hooks/subagent-init.cjs" },
+									{ type: "command", command: "node /opt/user-subagent.cjs" },
+								],
+							},
+						],
+						UserPromptSubmit: [
+							{
+								hooks: [
+									{
+										type: "command",
+										command: "node .codex/hooks/usage-context-awareness.cjs",
+									},
+								],
+							},
+						],
+						Stop: [
+							{
+								hooks: [{ type: "command", command: "node /opt/user-stop.cjs" }],
+							},
+						],
+					},
+				}),
+			);
+
+			const result = await migrateHooksSettings({
+				sourceProvider: "claude-code",
+				targetProvider: "codex",
+				installedHookFiles: ["session-init.cjs"],
+				global: false,
+			});
+
+			expect(result.status).toBe("registered");
+			expect(result.hooksPruned).toBe(2);
+			expect(result.backupPath).not.toBeNull();
+			const content = JSON.parse(await Bun.file(join(tempBase, ".codex", "hooks.json")).text());
+			expect(content.hooks.SessionStart).toHaveLength(1);
+			expect(content.hooks.SubagentStart[0].hooks).toHaveLength(1);
+			expect(content.hooks.SubagentStart[0].hooks[0].command).toBe("node /opt/user-subagent.cjs");
+			expect(content.hooks.Stop[0].hooks[0].command).toBe("node /opt/user-stop.cjs");
+			expect(content.hooks.UserPromptSubmit).toBeUndefined();
+		} finally {
+			process.chdir(originalCwd);
+			rmSync(tempBase, { recursive: true, force: true });
+		}
 	});
 
 	it("rewrites paths from codex to claude-code hooks dir", () => {

@@ -6,26 +6,22 @@
  */
 import { existsSync, mkdirSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { readFile } from "node:fs/promises";
-import { basename, dirname, join } from "node:path";
+import { homedir } from "node:os";
+import { dirname, join } from "node:path";
+import {
+	type HookGroup,
+	type HooksSection,
+	commandReferencesInstalledAsset,
+	dedupeWarnings,
+	extractHookReferencesFromCommand,
+	filterHooksForTarget,
+	hookAssetBasename,
+	isCodexSupportedHookEvent,
+	isExcludedHookAsset,
+	normalizeHookAssetPath,
+} from "./hook-migration-compatibility.js";
 import { providers } from "./provider-registry.js";
-import type { ProviderType } from "./types.js";
-
-/** A single hook entry in settings.json */
-interface HookEntry {
-	type: string;
-	command: string;
-	timeout?: number;
-	[key: string]: unknown;
-}
-
-/** A hook group (matcher + hooks array) */
-interface HookGroup {
-	matcher?: string;
-	hooks: HookEntry[];
-}
-
-/** The hooks section: event name -> array of hook groups */
-type HooksSection = Record<string, HookGroup[]>;
+import type { MigrationWarning, ProviderType } from "./types.js";
 
 type HooksSettingsReadStatus = "ok" | "missing-file" | "invalid-json" | "missing-hooks";
 
@@ -37,6 +33,7 @@ interface HooksSettingsReadResult {
 
 export type HooksMigrationStatus =
 	| "registered"
+	| "no-compatible-hooks"
 	| "no-installed-files"
 	| "unsupported-source"
 	| "unsupported-target"
@@ -60,10 +57,17 @@ export interface MigrateHooksSettingsResult {
 	success: boolean;
 	backupPath: string | null;
 	hooksRegistered: number;
+	hooksPruned?: number;
+	warnings?: MigrationWarning[];
 	error?: string;
 	message?: string;
 	sourceSettingsPath: string | null;
 	targetSettingsPath: string | null;
+}
+
+interface MergeHooksOptions {
+	targetProvider?: ProviderType;
+	targetHooksDir?: string;
 }
 
 /**
@@ -106,10 +110,7 @@ export function rewriteHookPaths(
 	targetHooksDir: string,
 ): HooksSection {
 	if (sourceHooksDir === targetHooksDir) return hooks;
-
-	// Append trailing slash so we match exact directory, not substrings like `.claude/hooks-extra`
-	const src = sourceHooksDir.endsWith("/") ? sourceHooksDir : `${sourceHooksDir}/`;
-	const tgt = targetHooksDir.endsWith("/") ? targetHooksDir : `${targetHooksDir}/`;
+	const rewritePairs = buildHookDirRewritePairs(sourceHooksDir, targetHooksDir);
 
 	const rewritten: HooksSection = {};
 	for (const [event, groups] of Object.entries(hooks)) {
@@ -120,11 +121,51 @@ export function rewriteHookPaths(
 				// replaceAll rewrites ALL occurrences in the command string — including
 				// arguments and env vars that reference the hooks directory. This is intentional:
 				// the entire hook should be self-contained within the hooks directory.
-				command: entry.command.replaceAll(src, tgt),
+				command: rewritePairs.reduce(
+					(command, [src, tgt]) => command.replaceAll(src, tgt),
+					entry.command,
+				),
 			})),
 		}));
 	}
 	return rewritten;
+}
+
+function normalizeDirPattern(value: string): string {
+	return value.replace(/\\/g, "/").replace(/\/+$/, "").replace(/^\.\//, "");
+}
+
+function homeRelativeDir(value: string): string {
+	const normalized = normalizeDirPattern(value);
+	const home = normalizeDirPattern(homedir());
+	return normalized.startsWith(`${home}/`) ? normalized.slice(home.length + 1) : normalized;
+}
+
+function buildHookDirRewritePairs(
+	sourceHooksDir: string,
+	targetHooksDir: string,
+): [string, string][] {
+	const source = normalizeDirPattern(sourceHooksDir);
+	const target = normalizeDirPattern(targetHooksDir);
+	const sourceHomeRelative = homeRelativeDir(sourceHooksDir);
+	const targetHomeRelative = homeRelativeDir(targetHooksDir);
+	const candidates: [string, string][] = [
+		[source, target],
+		[`$HOME/${sourceHomeRelative}`, `$HOME/${targetHomeRelative}`],
+		[`~/${sourceHomeRelative}`, `~/${targetHomeRelative}`],
+		[sourceHomeRelative, targetHomeRelative],
+	];
+	const seen = new Set<string>();
+	return candidates
+		.filter(([src]) => src.length > 0)
+		.map(([src, tgt]) => [`${src}/`, `${tgt}/`] as [string, string])
+		.filter(([src, tgt]) => {
+			const key = `${src}\0${tgt}`;
+			if (src === tgt || seen.has(key)) return false;
+			seen.add(key);
+			return true;
+		})
+		.sort((left, right) => right[0].length - left[0].length);
 }
 
 /**
@@ -134,17 +175,25 @@ export function rewriteHookPaths(
 export function filterToInstalledHooks(
 	hooks: HooksSection,
 	installedFiles: string[],
+	options: { targetProvider?: ProviderType; warnings?: MigrationWarning[] } = {},
 ): HooksSection {
-	const installedSet = new Set(installedFiles);
+	if (options.targetProvider) {
+		const result = filterHooksForTarget(hooks, installedFiles, options.targetProvider);
+		options.warnings?.push(...result.warnings);
+		return result.hooks;
+	}
+
+	const installedSet = new Set(installedFiles.map(normalizeHookAssetPath));
+	for (const file of installedFiles) {
+		installedSet.add(hookAssetBasename(file));
+	}
 	const filtered: HooksSection = {};
 
 	for (const [event, groups] of Object.entries(hooks)) {
 		const filteredGroups: HookGroup[] = [];
 		for (const group of groups) {
 			const matchingHooks = group.hooks.filter((entry) => {
-				// Extract filename from command string (e.g., 'node "$HOME/.claude/hooks/session-init.cjs"')
-				const filename = extractFilenameFromCommand(entry.command);
-				return filename ? installedSet.has(filename) : false;
+				return commandReferencesInstalledAsset(entry.command, installedSet);
 			});
 			if (matchingHooks.length > 0) {
 				filteredGroups.push({ ...group, hooks: matchingHooks });
@@ -158,35 +207,14 @@ export function filterToInstalledHooks(
 }
 
 /**
- * Extract the hook filename from a command string.
- * E.g., 'node "$HOME/.claude/hooks/session-init.cjs"' -> 'session-init.cjs'
- */
-function extractFilenameFromCommand(command: string): string | null {
-	// Strip pipes, redirects, and trailing args before extracting filename
-	const normalized = command.replace(/\s*[|>&].*$/, "").trim();
-	// Try quoted path first — handles spaces in filenames/directories
-	const quotedMatch = normalized.match(/["']([^"']+\.(?:js|cjs|mjs|ts))["']/);
-	if (quotedMatch) return quotedMatch[1].split(/[\\/]/).pop() ?? null;
-	// Match unquoted path/file.ext pattern (handles trailing args like --verbose)
-	const match = normalized.match(/[\\/]([^"\\/\s]+\.\w+)/);
-	if (match) return match[1];
-	// Fallback: find first token with a file extension
-	const tokens = normalized.split(/\s+/);
-	for (const token of tokens) {
-		const clean = token.replace(/["']/g, "");
-		if (/\.\w+$/.test(clean)) return basename(clean);
-	}
-	return null;
-}
-
-/**
  * Merge new hooks into target settings.json.
  * Creates backup of existing file, deduplicates by command string per event+matcher.
  */
 export async function mergeHooksIntoSettings(
 	targetSettingsPath: string,
 	newHooks: HooksSection,
-): Promise<{ backupPath: string | null }> {
+	options: MergeHooksOptions = {},
+): Promise<{ backupPath: string | null; hooksPruned: number }> {
 	// Read existing settings (create empty object if missing)
 	let existingSettings: Record<string, unknown> = {};
 	let backupPath: string | null = null;
@@ -209,10 +237,13 @@ export async function mergeHooksIntoSettings(
 		} catch {
 			backupPath = null;
 		}
+	} else if (Object.keys(newHooks).length === 0) {
+		return { backupPath: null, hooksPruned: 0 };
 	}
 
 	const existingHooks = (existingSettings.hooks ?? {}) as HooksSection;
-	const merged = deduplicateMerge(existingHooks, newHooks);
+	const cleanup = pruneIncompatibleHookRegistrations(existingHooks, options);
+	const merged = deduplicateMerge(cleanup.hooks, newHooks);
 	existingSettings.hooks = merged;
 
 	// Atomic write: temp file + rename
@@ -227,7 +258,48 @@ export async function mergeHooksIntoSettings(
 		throw new Error(`Failed to write settings: ${err}. Backup preserved at: ${backupPath}`);
 	}
 
-	return { backupPath };
+	return { backupPath, hooksPruned: cleanup.hooksPruned };
+}
+
+function pruneIncompatibleHookRegistrations(
+	hooks: HooksSection,
+	options: MergeHooksOptions,
+): { hooks: HooksSection; hooksPruned: number } {
+	if (options.targetProvider !== "codex") return { hooks, hooksPruned: 0 };
+	const targetHooksDir = options.targetHooksDir || ".codex/hooks";
+	let hooksPruned = 0;
+	const pruned: HooksSection = {};
+
+	for (const [event, groups] of Object.entries(hooks)) {
+		const keptGroups: HookGroup[] = [];
+		for (const group of groups) {
+			const keptHooks = group.hooks.filter((entry) => {
+				const refs = extractHookReferencesFromCommand(entry.command);
+				const targetOwned = commandTargetsHookDir(entry.command, targetHooksDir);
+				const incompatible =
+					!isCodexSupportedHookEvent(event) || refs.some((ref) => isExcludedHookAsset(ref));
+				if (targetOwned && incompatible) {
+					hooksPruned += 1;
+					return false;
+				}
+				return true;
+			});
+			if (keptHooks.length > 0) keptGroups.push({ ...group, hooks: keptHooks });
+		}
+		if (keptGroups.length > 0) pruned[event] = keptGroups;
+	}
+
+	return { hooks: pruned, hooksPruned };
+}
+
+function commandTargetsHookDir(command: string, targetHooksDir: string): boolean {
+	const normalizedCommand = command.replace(/\\/g, "/");
+	const normalizedDir = targetHooksDir.replace(/\\/g, "/").replace(/\/+$/, "");
+	return (
+		normalizedCommand.includes(`${normalizedDir}/`) ||
+		normalizedCommand.includes("$HOME/.codex/hooks/") ||
+		normalizedCommand.includes("~/.codex/hooks/")
+	);
 }
 
 /**
@@ -403,7 +475,11 @@ export async function migrateHooksSettings(
 		: (targetConfig.hooks?.projectPath ?? "");
 
 	// Pipeline: filter -> rewrite -> merge
-	const filtered = filterToInstalledHooks(sourceHooks, installedHookFiles);
+	const warnings: MigrationWarning[] = [];
+	const filtered = filterToInstalledHooks(sourceHooks, installedHookFiles, {
+		targetProvider,
+		warnings,
+	});
 	const rewritten = rewriteHookPaths(filtered, sourceHooksDir, targetHooksDir);
 
 	// Count hooks being registered
@@ -415,11 +491,35 @@ export async function migrateHooksSettings(
 	}
 
 	if (hooksRegistered === 0) {
+		if (targetProvider === "codex") {
+			const hasCompatibilitySkip = warnings.some(
+				(warning) => warning.reason === "unsupported-event" || warning.reason === "excluded-hook",
+			);
+			const { backupPath, hooksPruned } = await mergeHooksIntoSettings(
+				resolvedTargetPath,
+				{},
+				{ targetProvider, targetHooksDir },
+			);
+			if (hooksPruned > 0 || hasCompatibilitySkip) {
+				return {
+					status: "no-compatible-hooks",
+					success: true,
+					backupPath,
+					hooksRegistered: 0,
+					hooksPruned,
+					warnings: dedupeWarnings(warnings),
+					message: `Hook files were copied, but no compatible Codex hook registrations were found in ${resolvedSourcePath}; ${hooksPruned} stale incompatible registration(s) pruned from ${resolvedTargetPath}.`,
+					sourceSettingsPath: resolvedSourcePath,
+					targetSettingsPath: resolvedTargetPath,
+				};
+			}
+		}
 		return {
 			status: "no-matching-hooks",
 			success: true,
 			backupPath: null,
 			hooksRegistered: 0,
+			warnings: dedupeWarnings(warnings),
 			message: `Hook files were copied, but none of the installed hooks matched registrations from ${resolvedSourcePath}; ${resolvedTargetPath} was not updated.`,
 			sourceSettingsPath: resolvedSourcePath,
 			targetSettingsPath: resolvedTargetPath,
@@ -427,12 +527,21 @@ export async function migrateHooksSettings(
 	}
 
 	try {
-		const { backupPath } = await mergeHooksIntoSettings(resolvedTargetPath, rewritten);
+		const { backupPath, hooksPruned } = await mergeHooksIntoSettings(
+			resolvedTargetPath,
+			rewritten,
+			{
+				targetProvider,
+				targetHooksDir,
+			},
+		);
 		return {
 			status: "registered",
 			success: true,
 			backupPath,
 			hooksRegistered,
+			hooksPruned,
+			warnings: dedupeWarnings(warnings),
 			sourceSettingsPath: resolvedSourcePath,
 			targetSettingsPath: resolvedTargetPath,
 		};

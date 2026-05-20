@@ -22,6 +22,10 @@ async function setupServer(): Promise<TestServer> {
 	registerActionRoutes(app);
 
 	const server = app.listen(0);
+	await new Promise<void>((resolveListening, rejectListening) => {
+		server.once("listening", resolveListening);
+		server.once("error", rejectListening);
+	});
 	const address = server.address();
 	if (!address || typeof address === "string") {
 		throw new Error("Failed to start test server");
