@@ -415,17 +415,21 @@ export async function repairMissingHookFileReferences(projectDir = process.cwd()
  */
 export async function promptMigrateUpdate(deps?: PromptMigrateUpdateDeps): Promise<void> {
 	try {
-		try {
-			const repairFn = deps?.repairHookFileReferencesFn ?? repairMissingHookFileReferences;
-			const repaired = await repairFn(process.cwd());
-			if (repaired > 0) {
-				logger.info(`Repaired ${repaired} missing hook file reference(s)`);
+		const repairFn = deps?.repairHookFileReferencesFn ?? repairMissingHookFileReferences;
+		const repairHookFileReferencesSafely = async () => {
+			try {
+				const repaired = await repairFn(process.cwd());
+				if (repaired > 0) {
+					logger.info(`Repaired ${repaired} missing hook file reference(s)`);
+				}
+			} catch (error) {
+				logger.verbose(
+					`Hook file reference repair skipped: ${error instanceof Error ? error.message : "unknown"}`,
+				);
 			}
-		} catch (error) {
-			logger.verbose(
-				`Hook file reference repair skipped: ${error instanceof Error ? error.message : "unknown"}`,
-			);
-		}
+		};
+
+		await repairHookFileReferencesSafely();
 
 		const providerRegistry =
 			deps?.detectInstalledProvidersFn && deps?.getProviderConfigFn
@@ -481,6 +485,8 @@ export async function promptMigrateUpdate(deps?: PromptMigrateUpdateDeps): Promi
 				`Migrated hook cleanup skipped: ${error instanceof Error ? error.message : "unknown"}`,
 			);
 		}
+
+		await repairHookFileReferencesSafely();
 
 		const targets = allProviders.filter((p) => p !== "claude-code");
 		if (targets.length === 0) {
