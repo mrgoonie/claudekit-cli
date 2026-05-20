@@ -1,7 +1,7 @@
 /**
  * Tests for ConfigVersionChecker - version checking with caching and GitHub API
  */
-import { afterEach, beforeEach, describe, expect, it } from "bun:test";
+import { afterEach, beforeEach, describe, expect, it, mock } from "bun:test";
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -231,6 +231,72 @@ describe("ConfigVersionChecker", () => {
 
 			expect(engineerResult.latestVersion).toBe("2.0.0");
 			expect(marketingResult.latestVersion).toBe("3.0.0");
+		});
+
+		it("uses separate cache files per update channel", async () => {
+			const stableCache = {
+				lastCheck: Date.now(),
+				latestVersion: "2.16.0",
+			};
+			const betaCache = {
+				lastCheck: Date.now(),
+				latestVersion: "2.17.0-beta.2",
+			};
+
+			await writeFile(
+				join(testDir, "engineer-stable-config-update-cache.json"),
+				JSON.stringify(stableCache),
+			);
+			await writeFile(
+				join(testDir, "engineer-beta-config-update-cache.json"),
+				JSON.stringify(betaCache),
+			);
+
+			const stableResult = await ConfigVersionChecker.checkForUpdates("engineer", "2.16.0", false);
+			const betaResult = await ConfigVersionChecker.checkForUpdates(
+				"engineer",
+				"2.17.0-beta.1",
+				false,
+			);
+
+			expect(stableResult.latestVersion).toBe("2.16.0");
+			expect(betaResult.latestVersion).toBe("2.17.0-beta.2");
+		});
+	});
+
+	describe("beta channel detection", () => {
+		it("checks latest beta releases when current version is a prerelease", async () => {
+			const originalFetch = globalThis.fetch;
+			globalThis.fetch = Object.assign(
+				mock(
+					async () =>
+						new Response(
+							JSON.stringify([
+								{ tag_name: "v2.15.0", prerelease: false, draft: false },
+								{ tag_name: "v2.16.0-beta.9", prerelease: true, draft: false },
+								{ tag_name: "v2.16.0-beta.10", prerelease: true, draft: false },
+							]),
+							{
+								status: 200,
+								headers: { etag: '"beta-etag"' },
+							},
+						),
+				),
+				{ preconnect: () => {} },
+			) as typeof fetch;
+
+			try {
+				const result = await ConfigVersionChecker.checkForUpdates(
+					"engineer",
+					"2.16.0-beta.9",
+					false,
+				);
+
+				expect(result.latestVersion).toBe("2.16.0-beta.10");
+				expect(result.hasUpdates).toBe(true);
+			} finally {
+				globalThis.fetch = originalFetch;
+			}
 		});
 	});
 });

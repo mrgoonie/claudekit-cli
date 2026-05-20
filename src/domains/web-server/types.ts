@@ -3,6 +3,9 @@
  */
 
 import type { Server } from "node:http";
+import type { PlanScope } from "@/domains/plan-parser/plan-types.js";
+import type { PlanValidationMode } from "@/types";
+import type { ProjectActivePlan } from "./project-plan-data.js";
 
 export interface ServerOptions {
 	port?: number;
@@ -43,6 +46,13 @@ export interface ProjectInfo {
 	// History integration fields (optional)
 	source?: "session" | "history" | "both";
 	interactionCount?: number;
+	planSettings?: {
+		scope: PlanScope;
+		plansDir: string;
+		validationMode: PlanValidationMode;
+		activePlanCount: number;
+	};
+	activePlans?: ProjectActivePlan[];
 }
 
 export interface SkillInfo {

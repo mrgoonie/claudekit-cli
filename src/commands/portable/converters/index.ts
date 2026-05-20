@@ -2,6 +2,7 @@
  * Converter registry — dispatches to the correct converter based on format
  */
 import type { ConversionFormat, ConversionResult, PortableItem, ProviderType } from "../types.js";
+import { convertCommandToCodexSkill } from "./command-to-codex-skill.js";
 import { convertDirectCopy } from "./direct-copy.js";
 import { convertFmStrip } from "./fm-strip.js";
 import { convertFmToCodexToml } from "./fm-to-codex-toml.js";
@@ -9,9 +10,14 @@ import { convertFmToFm } from "./fm-to-fm.js";
 import { convertFmToJson } from "./fm-to-json.js";
 import { convertFmToYaml } from "./fm-to-yaml.js";
 import { convertMdStrip } from "./md-strip.js";
+import { convertMdToKiroSteering } from "./md-to-kiro-steering.js";
 import { convertMdToMdc } from "./md-to-mdc.js";
 import { convertMdToToml } from "./md-to-toml.js";
 import { convertToSkillMd } from "./skill-md.js";
+
+export interface ConversionOptions {
+	global?: boolean;
+}
 
 /**
  * Convert a portable item to the target provider's format
@@ -20,11 +26,14 @@ export function convertItem(
 	item: PortableItem,
 	format: ConversionFormat,
 	provider: ProviderType,
+	options: ConversionOptions = {},
 ): ConversionResult {
 	try {
 		switch (format) {
 			case "direct-copy":
 				return convertDirectCopy(item, provider);
+			case "command-to-codex-skill":
+				return convertCommandToCodexSkill(item);
 			case "fm-to-fm":
 				return convertFmToFm(item, provider);
 			case "fm-to-yaml":
@@ -38,9 +47,11 @@ export function convertItem(
 			case "skill-md":
 				return convertToSkillMd(item);
 			case "md-strip":
-				return convertMdStrip(item, provider);
+				return convertMdStrip(item, provider, { global: options.global });
 			case "md-to-mdc":
 				return convertMdToMdc(item, provider);
+			case "md-to-kiro-steering":
+				return convertMdToKiroSteering(item, provider);
 			case "fm-to-codex-toml":
 				return convertFmToCodexToml(item);
 			default: {

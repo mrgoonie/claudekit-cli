@@ -14,6 +14,8 @@ export interface UpdateCheckResult {
 	fromCache: boolean;
 }
 
+export type UpdateChannel = "stable" | "beta";
+
 /**
  * Cached update check data
  */

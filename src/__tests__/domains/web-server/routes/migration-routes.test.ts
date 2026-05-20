@@ -1,25 +1,28 @@
-import { afterAll, afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
-import { mkdir, mkdtemp, rm } from "node:fs/promises";
+import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
+import { existsSync } from "node:fs";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
+import type {
+	PortableInstallationV3,
+	PortableRegistryV3,
+} from "@/commands/portable/portable-registry.js";
 import express, { type Express } from "express";
 
 const actualAgentDiscovery = await import("@/commands/agents/agents-discovery.js");
 const actualCommandDiscovery = await import("@/commands/commands/commands-discovery.js");
 const actualConfigDiscovery = await import("@/commands/portable/config-discovery.js");
 const actualPortableInstaller = await import("@/commands/portable/portable-installer.js");
-const actualPortableRegistry = await import("@/commands/portable/portable-registry.js");
 const actualSkillDirectoryInstaller = await import(
 	"@/commands/migrate/skill-directory-installer.js"
 );
 const actualSkillDiscovery = await import("@/commands/skills/skills-discovery.js");
 
-type PortableRegistryResult = Awaited<
-	ReturnType<typeof actualPortableRegistry.readPortableRegistry>
->;
+type PortableRegistryResult = PortableRegistryV3;
 type AgentDiscoveryResult = Awaited<ReturnType<typeof actualAgentDiscovery.discoverAgents>>;
 type CommandDiscoveryResult = Awaited<ReturnType<typeof actualCommandDiscovery.discoverCommands>>;
 type SkillDiscoveryResult = Awaited<ReturnType<typeof actualSkillDiscovery.discoverSkills>>;
+type ConfigDiscoveryResult = Awaited<ReturnType<typeof actualConfigDiscovery.discoverConfig>>;
 type HookDiscoveryResult = Awaited<ReturnType<typeof actualConfigDiscovery.discoverHooks>>;
 type PortableInstallBatch = Awaited<
 	ReturnType<typeof actualPortableInstaller.installPortableItems>
@@ -49,7 +52,7 @@ mock.module("@/commands/skills/skills-discovery.js", () => ({
 	getSkillSourcePath: getSkillSourcePathMock,
 }));
 
-const discoverConfigMock = mock(async () => null);
+const discoverConfigMock = mock(async (): Promise<ConfigDiscoveryResult> => null);
 const discoverRulesMock = mock(async () => []);
 const discoverHooksMock = mock(
 	async (): Promise<HookDiscoveryResult> => ({
@@ -71,6 +74,7 @@ const installPortableItemsMock = mock(
 		_items: unknown[],
 		_providers: unknown[],
 		_type: unknown,
+		_options?: unknown,
 	): Promise<PortableInstallBatch> => [],
 );
 mock.module("@/commands/portable/portable-installer.js", () => ({
@@ -102,15 +106,21 @@ const readPortableRegistryMock = mock(
 	}),
 );
 const addPortableInstallationMock = mock(async () => undefined);
-const removePortableInstallationMock = mock(async () => undefined);
-mock.module("@/commands/portable/portable-registry.js", () => ({
-	...actualPortableRegistry,
-	readPortableRegistry: readPortableRegistryMock,
-	addPortableInstallation: addPortableInstallationMock,
-	removePortableInstallation: removePortableInstallationMock,
-}));
+const removePortableInstallationMock = mock(
+	async (
+		_item?: string,
+		_type?: string,
+		_provider?: string,
+		_global?: boolean,
+		_options?: { path?: string },
+	): Promise<PortableInstallationV3 | null> => null,
+);
+const removeInstallationsByFilterMock = mock(async () => []);
 
 const { registerMigrationRoutes } = await import("@/domains/web-server/routes/migration-routes.js");
+// The route module now holds references to the mocked dependencies. Restore the
+// module registry immediately so parallel test files import the real modules.
+mock.restore();
 
 interface TestServer {
 	server: ReturnType<Express["listen"]>;
@@ -150,7 +160,14 @@ async function setupServer(): Promise<TestServer> {
 
 	const app = express();
 	app.use(express.json());
-	registerMigrationRoutes(app);
+	registerMigrationRoutes(app, {
+		registry: {
+			addPortableInstallation: addPortableInstallationMock,
+			readPortableRegistry: readPortableRegistryMock,
+			removePortableInstallation: removePortableInstallationMock,
+			removeInstallationsByFilter: removeInstallationsByFilterMock,
+		},
+	});
 
 	const server = app.listen(0);
 	await new Promise<void>((resolveServer, rejectServer) => {
@@ -174,7 +191,7 @@ async function teardownServer(ctx: TestServer): Promise<void> {
 	await rm(ctx.testHome, { recursive: true, force: true });
 }
 
-describe("migration reconcile route", () => {
+describe.serial("migration reconcile route", () => {
 	let ctx!: TestServer;
 	let hasCtx = false;
 
@@ -183,10 +200,16 @@ describe("migration reconcile route", () => {
 		hasCtx = true;
 		discoverAgentsMock.mockReset();
 		discoverAgentsMock.mockResolvedValue([]);
+		getAgentSourcePathMock.mockReset();
+		getAgentSourcePathMock.mockReturnValue(null);
 		discoverCommandsMock.mockReset();
 		discoverCommandsMock.mockResolvedValue([]);
+		getCommandSourcePathMock.mockReset();
+		getCommandSourcePathMock.mockReturnValue(null);
 		discoverSkillsMock.mockReset();
 		discoverSkillsMock.mockResolvedValue([]);
+		getSkillSourcePathMock.mockReset();
+		getSkillSourcePathMock.mockReturnValue(null);
 		discoverConfigMock.mockReset();
 		discoverConfigMock.mockResolvedValue(null);
 		discoverRulesMock.mockReset();
@@ -207,7 +230,9 @@ describe("migration reconcile route", () => {
 		addPortableInstallationMock.mockReset();
 		addPortableInstallationMock.mockResolvedValue(undefined);
 		removePortableInstallationMock.mockReset();
-		removePortableInstallationMock.mockResolvedValue(undefined);
+		removePortableInstallationMock.mockResolvedValue(null);
+		removeInstallationsByFilterMock.mockReset();
+		removeInstallationsByFilterMock.mockResolvedValue([]);
 	});
 
 	afterEach(async () => {
@@ -215,10 +240,6 @@ describe("migration reconcile route", () => {
 			await teardownServer(ctx);
 			hasCtx = false;
 		}
-	});
-
-	afterAll(() => {
-		mock.restore();
 	});
 
 	test("returns provider list including Droid as recommended", async () => {
@@ -327,6 +348,81 @@ describe("migration reconcile route", () => {
 			counts: { installed: number; skipped: number; failed: number };
 		};
 		expect(body.counts.skipped).toBeGreaterThanOrEqual(1);
+	});
+
+	test("plan execution prunes generated-context hook artifacts before installing", async () => {
+		const originalCwd = process.cwd();
+		try {
+			process.chdir(ctx.testHome);
+			const hooksDir = join(ctx.testHome, ".codex", "hooks");
+			const generatedHookPath = join(hooksDir, "session-init.cjs");
+			const safeHookPath = join(hooksDir, "privacy-block.cjs");
+			await mkdir(hooksDir, { recursive: true });
+			await writeFile(generatedHookPath, "// generated context hook");
+			await writeFile(safeHookPath, "// safe hook");
+			await writeFile(
+				join(ctx.testHome, ".codex", "hooks.json"),
+				JSON.stringify(
+					{
+						hooks: {
+							SessionStart: [
+								{
+									hooks: [{ type: "command", command: `node "${generatedHookPath}"` }],
+								},
+							],
+							PreToolUse: [
+								{
+									hooks: [{ type: "command", command: `node "${safeHookPath}"` }],
+								},
+							],
+						},
+					},
+					null,
+					2,
+				),
+			);
+
+			const plan = {
+				actions: [],
+				summary: { install: 0, update: 0, skip: 0, conflict: 0, delete: 0 },
+				hasConflicts: false,
+				meta: {
+					include: {
+						agents: false,
+						commands: false,
+						skills: false,
+						config: false,
+						rules: false,
+						hooks: true,
+					},
+					providers: ["codex"],
+				},
+			};
+
+			const res = await fetch(`${ctx.baseUrl}/api/migrate/execute`, {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({ plan, resolutions: {} }),
+			});
+
+			expect(res.status).toBe(200);
+			const body = (await res.json()) as {
+				warnings: string[];
+				counts: { installed: number; skipped: number; failed: number };
+			};
+			expect(body.warnings).toContain("Disabled 2 generated-context hook artifact(s) for codex");
+			expect(body.counts).toEqual({ installed: 0, skipped: 0, failed: 0 });
+			expect(existsSync(generatedHookPath)).toBe(false);
+			expect(existsSync(safeHookPath)).toBe(true);
+
+			const hooksJson = JSON.parse(
+				await readFile(join(ctx.testHome, ".codex", "hooks.json"), "utf8"),
+			);
+			expect(hooksJson.hooks.SessionStart).toBeUndefined();
+			expect(hooksJson.hooks.PreToolUse[0].hooks[0].command).toContain("privacy-block.cjs");
+		} finally {
+			process.chdir(originalCwd);
+		}
 	});
 
 	test("backfills stale registry checksums for skip actions during plan execution", async () => {
@@ -531,6 +627,97 @@ describe("migration reconcile route", () => {
 		expect(body.discovery.skills).toBe(2);
 	});
 
+	test("install mode with skills=false does not fall back to installing discovered skills (#740)", async () => {
+		getSkillSourcePathMock.mockReturnValueOnce("/tmp/skills");
+		discoverSkillsMock.mockResolvedValueOnce([
+			{
+				name: "skill-a",
+				displayName: "Skill A",
+				description: "",
+				version: "1.0.0",
+				license: "MIT",
+				path: "/tmp/skill-a",
+			},
+		]);
+
+		// Synthetic install plan built by the UI's buildSyntheticPlan — user
+		// selected only hooks, not skills. Skills must stay untouched even
+		// though discovery would surface them.
+		const plan = {
+			actions: [],
+			summary: { install: 0, update: 0, skip: 0, conflict: 0, delete: 0 },
+			hasConflicts: false,
+			meta: {
+				include: {
+					agents: false,
+					commands: false,
+					skills: false,
+					config: false,
+					rules: false,
+					hooks: true,
+				},
+				providers: ["codex"],
+				items: { skills: [] },
+				mode: "install",
+			},
+		};
+
+		const res = await fetch(`${ctx.baseUrl}/api/migrate/execute`, {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({ plan, resolutions: {}, mode: "install" }),
+		});
+
+		expect(res.status).toBe(200);
+		// Scope holds: no skill installs triggered by the fallback.
+		expect(installSkillDirectoriesMock).not.toHaveBeenCalled();
+	});
+
+	test("install mode with skills=true but items.skills=[] does not install discovered skills (#740 guard)", async () => {
+		getSkillSourcePathMock.mockReturnValueOnce("/tmp/skills");
+		discoverSkillsMock.mockResolvedValueOnce([
+			{
+				name: "skill-a",
+				displayName: "Skill A",
+				description: "",
+				version: "1.0.0",
+				license: "MIT",
+				path: "/tmp/skill-a",
+			},
+		]);
+
+		// Exercises the inner ternary: include.skills: true passes the outer
+		// guard, but allowedSkillNames is empty — install mode must mean
+		// "install nothing", not fall back to "install everything".
+		const plan = {
+			actions: [],
+			summary: { install: 0, update: 0, skip: 0, conflict: 0, delete: 0 },
+			hasConflicts: false,
+			meta: {
+				include: {
+					agents: false,
+					commands: false,
+					skills: true,
+					config: false,
+					rules: false,
+					hooks: false,
+				},
+				providers: ["codex"],
+				items: { skills: [] },
+				mode: "install",
+			},
+		};
+
+		const res = await fetch(`${ctx.baseUrl}/api/migrate/execute`, {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({ plan, resolutions: {}, mode: "install" }),
+		});
+
+		expect(res.status).toBe(200);
+		expect(installSkillDirectoriesMock).not.toHaveBeenCalled();
+	});
+
 	test('accepts global query values "1", "0", and empty string', async () => {
 		const trueLike = await fetch(`${ctx.baseUrl}/api/migrate/reconcile?providers=codex&global=1`);
 		expect(trueLike.status).toBe(200);
@@ -540,6 +727,266 @@ describe("migration reconcile route", () => {
 
 		const emptyLike = await fetch(`${ctx.baseUrl}/api/migrate/reconcile?providers=codex&global=`);
 		expect(emptyLike.status).toBe(200);
+	});
+
+	test("reconcile plan keeps project-scoped Codex command actions project-local", async () => {
+		getCommandSourcePathMock.mockReturnValueOnce("/tmp/commands");
+		discoverCommandsMock.mockResolvedValueOnce([
+			{
+				name: "local",
+				displayName: "Local",
+				description: "",
+				type: "command",
+				sourcePath: "/tmp/commands/local.md",
+				frontmatter: { name: "Local" },
+				body: "# Local command\n",
+			},
+		]);
+
+		const res = await fetch(
+			`${ctx.baseUrl}/api/migrate/reconcile?providers=codex&agents=false&commands=true&skills=false&config=false&rules=false&hooks=false&global=false`,
+		);
+
+		expect(res.status).toBe(200);
+		const body = (await res.json()) as {
+			plan: {
+				actions: Array<{ action: string; type: string; provider: string; global: boolean }>;
+				meta: { items: { commands: string[] } };
+			};
+		};
+
+		expect(body.plan.meta.items.commands).toEqual(["local"]);
+		expect(body.plan.actions).toEqual([
+			expect.objectContaining({
+				action: "install",
+				provider: "codex",
+				type: "command",
+				global: false,
+			}),
+		]);
+		expect(
+			body.plan.actions.some(
+				(action) =>
+					action.provider === "codex" && action.type === "command" && action.global === true,
+			),
+		).toBe(false);
+	});
+
+	test("reconcile plan cleans legacy Codex prompt commands before skill reinstall", async () => {
+		const legacyPromptPath = join(ctx.testHome, ".codex", "prompts", "local.md");
+		getCommandSourcePathMock.mockReturnValueOnce("/tmp/commands");
+		discoverCommandsMock.mockResolvedValueOnce([
+			{
+				name: "local",
+				displayName: "Local",
+				description: "",
+				type: "command",
+				sourcePath: "/tmp/commands/local.md",
+				frontmatter: { name: "Local" },
+				body: "# Local command\n",
+			},
+		]);
+		readPortableRegistryMock.mockResolvedValueOnce({
+			version: "3.0",
+			installations: [
+				{
+					item: "local",
+					type: "command",
+					provider: "codex",
+					global: false,
+					path: legacyPromptPath,
+					installedAt: "2024-01-01T00:00:00.000Z",
+					sourcePath: "/tmp/commands/local.md",
+					sourceChecksum: "old-source",
+					targetChecksum: "old-target",
+					installSource: "kit",
+				},
+			],
+		});
+
+		const res = await fetch(
+			`${ctx.baseUrl}/api/migrate/reconcile?providers=codex&agents=false&commands=true&skills=false&config=false&rules=false&hooks=false&global=false`,
+		);
+
+		expect(res.status).toBe(200);
+		const body = (await res.json()) as {
+			plan: {
+				actions: Array<{
+					action: string;
+					type: string;
+					provider: string;
+					global: boolean;
+					targetPath: string;
+					reasonCode?: string;
+				}>;
+			};
+		};
+
+		expect(body.plan.actions).toContainEqual(
+			expect.objectContaining({
+				action: "delete",
+				type: "command",
+				provider: "codex",
+				global: false,
+				targetPath: legacyPromptPath,
+				reasonCode: "path-migrated-cleanup",
+			}),
+		);
+		expect(body.plan.actions).toContainEqual(
+			expect.objectContaining({
+				action: "install",
+				type: "command",
+				provider: "codex",
+				global: false,
+			}),
+		);
+	});
+
+	test("plan execution preserves reinstalled Codex command skill registry after legacy prompt cleanup", async () => {
+		const legacyPromptPath = join(ctx.testHome, ".codex", "prompts", "local.md");
+		const newSkillPath = join(
+			ctx.testHome,
+			".agents",
+			"skills",
+			"source-command-local",
+			"SKILL.md",
+		);
+		await mkdir(join(ctx.testHome, ".codex", "prompts"), { recursive: true });
+		await mkdir(join(ctx.testHome, ".agents", "skills", "source-command-local"), {
+			recursive: true,
+		});
+		await writeFile(legacyPromptPath, "# Legacy Codex prompt\n", "utf-8");
+
+		let registryState: PortableRegistryResult = {
+			version: "3.0",
+			installations: [
+				{
+					item: "local",
+					type: "command",
+					provider: "codex",
+					global: false,
+					path: legacyPromptPath,
+					installedAt: "2024-01-01T00:00:00.000Z",
+					sourcePath: "/tmp/commands/local.md",
+					sourceChecksum: "old-source",
+					targetChecksum: "old-target",
+					installSource: "kit",
+				},
+			],
+		};
+
+		getCommandSourcePathMock.mockReturnValueOnce("/tmp/commands");
+		discoverCommandsMock.mockResolvedValueOnce([
+			{
+				name: "local",
+				displayName: "Local",
+				description: "",
+				type: "command",
+				sourcePath: "/tmp/commands/local.md",
+				frontmatter: { name: "Local" },
+				body: "# Local command\n",
+			},
+		]);
+		readPortableRegistryMock.mockImplementation(async () => registryState);
+		installPortableItemsMock.mockImplementation(async (items, providers, type) => {
+			if (type !== "command") return [];
+			const provider = String(providers[0]) as PortableInstallBatch[number]["provider"];
+			registryState = {
+				version: "3.0",
+				installations: [
+					{
+						item: "local",
+						type: "command",
+						provider: "codex",
+						global: false,
+						path: newSkillPath,
+						installedAt: "2026-05-09T00:00:00.000Z",
+						sourcePath: "/tmp/commands/local.md",
+						sourceChecksum: "new-source",
+						targetChecksum: "new-target",
+						installSource: "kit",
+					},
+				],
+			};
+			await writeFile(newSkillPath, "---\nname: source-command-local\n---\n", "utf-8");
+			return items.map(() => ({
+				provider,
+				providerDisplayName: provider,
+				success: true,
+				path: newSkillPath,
+			}));
+		});
+		removePortableInstallationMock.mockImplementation(
+			async (item, type, provider, global, options?: { path?: string }) => {
+				const index = registryState.installations.findIndex(
+					(entry) =>
+						entry.item === item &&
+						entry.type === type &&
+						entry.provider === provider &&
+						entry.global === global &&
+						(!options?.path || resolve(entry.path) === resolve(options.path)),
+				);
+				if (index === -1) return null;
+				const [removed] = registryState.installations.splice(index, 1);
+				return removed;
+			},
+		);
+
+		const plan = {
+			actions: [
+				{
+					action: "delete",
+					item: "local",
+					type: "command",
+					provider: "codex",
+					global: false,
+					targetPath: legacyPromptPath,
+					reason: "Legacy Codex prompt command path migrated to skills",
+					reasonCode: "path-migrated-cleanup",
+				},
+				{
+					action: "install",
+					item: "local",
+					type: "command",
+					provider: "codex",
+					global: false,
+					targetPath: newSkillPath,
+					reason: "Install command as Codex skill",
+				},
+			],
+			summary: { install: 1, update: 0, skip: 0, conflict: 0, delete: 1 },
+			hasConflicts: false,
+			meta: {
+				include: {
+					agents: false,
+					commands: true,
+					skills: false,
+					config: false,
+					rules: false,
+					hooks: false,
+				},
+				providers: ["codex"],
+			},
+		};
+
+		const res = await fetch(`${ctx.baseUrl}/api/migrate/execute`, {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({ plan, resolutions: {} }),
+		});
+
+		expect(res.status).toBe(200);
+		expect(existsSync(legacyPromptPath)).toBe(false);
+		expect(existsSync(newSkillPath)).toBe(true);
+		expect(registryState.installations).toHaveLength(1);
+		expect(registryState.installations[0]?.path).toBe(newSkillPath);
+		expect(removePortableInstallationMock).toHaveBeenCalledWith(
+			"local",
+			"command",
+			"codex",
+			false,
+			{ path: legacyPromptPath },
+		);
 	});
 
 	test("legacy execution installs per-item in parallel and preserves item tagging", async () => {
@@ -795,6 +1242,137 @@ describe("migration reconcile route", () => {
 		} finally {
 			process.chdir(originalCwd);
 		}
+	});
+
+	test("legacy execution installs project-scoped Codex commands without globalizing config", async () => {
+		getCommandSourcePathMock.mockReturnValueOnce("/tmp/commands");
+		discoverCommandsMock.mockResolvedValueOnce([
+			{
+				name: "plan",
+				displayName: "Plan",
+				description: "",
+				type: "command",
+				sourcePath: "/tmp/commands/plan.md",
+				frontmatter: {},
+				body: "plan",
+			},
+		]);
+		discoverConfigMock.mockResolvedValueOnce({
+			name: "AGENTS",
+			displayName: "AGENTS",
+			description: "",
+			type: "config",
+			sourcePath: "/tmp/AGENTS.md",
+			frontmatter: {},
+			body: "config",
+		});
+		installPortableItemsMock.mockImplementation(
+			async (items: unknown[], providers: unknown[], type: unknown, options?: unknown) =>
+				providers.map((provider) => {
+					const item = items[0] as { name?: string } | undefined;
+					const installOptions = options as { global?: boolean } | undefined;
+					return {
+						provider: provider as PortableInstallBatch[number]["provider"],
+						providerDisplayName: String(provider),
+						success: true,
+						path: `/tmp/${String(provider)}/${String(type)}/${installOptions?.global ? "global" : "project"}/${item?.name ?? "item"}`,
+					};
+				}),
+		);
+
+		const res = await fetch(`${ctx.baseUrl}/api/migrate/execute`, {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({
+				providers: ["codex"],
+				include: {
+					agents: false,
+					commands: true,
+					skills: false,
+					config: true,
+					rules: false,
+					hooks: false,
+				},
+				global: false,
+			}),
+		});
+
+		expect(res.status).toBe(200);
+		const body = (await res.json()) as {
+			warnings: string[];
+			counts: { installed: number; skipped: number; failed: number };
+		};
+		expect(body.warnings).toEqual([]);
+		expect(body.counts.installed).toBe(2);
+		expect(body.counts.skipped).toBe(0);
+
+		const commandCall = installPortableItemsMock.mock.calls.find((call) => call[2] === "command");
+		const configCall = installPortableItemsMock.mock.calls.find((call) => call[2] === "config");
+		expect(commandCall?.[3]).toEqual({ global: false });
+		expect(configCall?.[3]).toEqual({ global: false });
+	});
+
+	test("legacy execution batches Codex commands so converted skill collisions are visible", async () => {
+		getCommandSourcePathMock.mockReturnValueOnce("/tmp/commands");
+		discoverCommandsMock.mockResolvedValueOnce([
+			{
+				name: "foo/bar",
+				segments: ["foo", "bar"],
+				displayName: "Foo Bar",
+				description: "",
+				type: "command",
+				sourcePath: "/tmp/commands/foo/bar.md",
+				frontmatter: {},
+				body: "nested",
+			},
+			{
+				name: "foo-bar",
+				displayName: "Foo Bar Flat",
+				description: "",
+				type: "command",
+				sourcePath: "/tmp/commands/foo-bar.md",
+				frontmatter: {},
+				body: "flat",
+			},
+		]);
+		installPortableItemsMock.mockImplementationOnce(async (items, providers, type, options) => {
+			expect(type).toBe("command");
+			expect(options).toEqual({ global: false });
+			expect(items.map((item) => (item as { name: string }).name)).toEqual(["foo/bar", "foo-bar"]);
+			return items.map((item) => ({
+				provider: providers[0] as PortableInstallBatch[number]["provider"],
+				providerDisplayName: "Codex",
+				success: true,
+				path: `/tmp/codex/${(item as { name: string }).name}`,
+				itemName: (item as { name: string }).name,
+			}));
+		});
+
+		const res = await fetch(`${ctx.baseUrl}/api/migrate/execute`, {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({
+				providers: ["codex"],
+				include: {
+					agents: false,
+					commands: true,
+					skills: false,
+					config: false,
+					rules: false,
+					hooks: false,
+				},
+				global: false,
+			}),
+		});
+
+		expect(res.status).toBe(200);
+		const body = (await res.json()) as {
+			counts: { installed: number; skipped: number; failed: number };
+			results: Array<{ itemName?: string }>;
+		};
+		expect(body.counts.installed).toBe(2);
+		expect(body.results.map((entry) => entry.itemName)).toEqual(["foo-bar", "foo/bar"]);
+		expect(installPortableItemsMock).toHaveBeenCalledTimes(1);
 	});
 
 	test("validates providers query and sanitizes unknown provider tokens", async () => {

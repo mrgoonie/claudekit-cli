@@ -4,9 +4,34 @@
  */
 
 import { join } from "node:path";
-import { REQUIRED_ENV_KEYS, checkRequiredKeysExist } from "@/domains/installation/setup-wizard.js";
+import { checkRequiredKeysExist } from "@/domains/installation/setup-wizard.js";
 import type { ClaudeKitSetup } from "@/types";
 import type { CheckResult } from "../types.js";
+
+const GLOBAL_PROVIDER_SETUP_SUGGESTION =
+	"Run: ck init --global (configure Gemini, OpenRouter, or MiniMax)";
+const PROVIDER_SETUP_SUGGESTION = "Run: ck init (configure Gemini, OpenRouter, or MiniMax)";
+
+function formatConfiguredProviderMessage(providers: string[]): string {
+	if (providers.length === 0) {
+		return "No supported image-generation provider keys configured";
+	}
+
+	const labels = providers.map((provider) => {
+		switch (provider) {
+			case "google":
+				return "Gemini";
+			case "openrouter":
+				return "OpenRouter";
+			case "minimax":
+				return "MiniMax";
+			default:
+				return provider;
+		}
+	});
+
+	return `Configured image providers: ${labels.join(", ")}`;
+}
 
 /**
  * Check required environment keys in .env files
@@ -30,7 +55,7 @@ export async function checkEnvKeys(setup: ClaudeKitSetup): Promise<CheckResult[]
 				status: "warn",
 				message: globalCheck.envExists ? `Missing: ${missingKeys}` : ".env file not found",
 				details: globalEnvPath,
-				suggestion: "Run: ck init --global",
+				suggestion: GLOBAL_PROVIDER_SETUP_SUGGESTION,
 				autoFixable: false,
 			});
 		} else {
@@ -40,7 +65,7 @@ export async function checkEnvKeys(setup: ClaudeKitSetup): Promise<CheckResult[]
 				group: "claudekit",
 				priority: "standard",
 				status: "pass",
-				message: `${REQUIRED_ENV_KEYS.length} required key(s) configured`,
+				message: formatConfiguredProviderMessage(globalCheck.configuredProviders),
 				details: globalEnvPath,
 				autoFixable: false,
 			});
@@ -62,7 +87,7 @@ export async function checkEnvKeys(setup: ClaudeKitSetup): Promise<CheckResult[]
 				status: "warn",
 				message: projectCheck.envExists ? `Missing: ${missingKeys}` : ".env file not found",
 				details: projectEnvPath,
-				suggestion: "Run: ck init",
+				suggestion: PROVIDER_SETUP_SUGGESTION,
 				autoFixable: false,
 			});
 		} else {
@@ -72,7 +97,7 @@ export async function checkEnvKeys(setup: ClaudeKitSetup): Promise<CheckResult[]
 				group: "claudekit",
 				priority: "standard",
 				status: "pass",
-				message: `${REQUIRED_ENV_KEYS.length} required key(s) configured`,
+				message: formatConfiguredProviderMessage(projectCheck.configuredProviders),
 				details: projectEnvPath,
 				autoFixable: false,
 			});

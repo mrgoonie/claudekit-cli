@@ -118,6 +118,36 @@ description: Test skill at source location
 			}
 		});
 
+		it("should skip OpenCode installation when skill already lives in Claude root", async () => {
+			const samePathSkillDir = join(home, ".claude/skills/opencode-native-skill");
+			mkdirSync(samePathSkillDir, { recursive: true });
+			writeFileSync(
+				join(samePathSkillDir, "SKILL.md"),
+				`---
+name: opencode-native-skill
+description: OpenCode native Claude-compatible skill
+---
+# OpenCode Native Skill
+`,
+			);
+
+			const samePathSkill: SkillInfo = {
+				name: "opencode-native-skill",
+				description: "OpenCode native Claude-compatible skill",
+				path: samePathSkillDir,
+			};
+
+			try {
+				const result = await installSkillForAgent(samePathSkill, "opencode", { global: true });
+
+				expect(result.success).toBe(true);
+				expect(result.skipped).toBe(true);
+				expect(result.skipReason).toContain("already exists at source");
+			} finally {
+				rmSync(samePathSkillDir, { recursive: true, force: true });
+			}
+		});
+
 		it("should not skip when source and target are different paths", async () => {
 			// Skill source is in test directory, target is in .claude/skills
 			const result = await installSkillForAgent(testSkill, "claude-code", { global: true });

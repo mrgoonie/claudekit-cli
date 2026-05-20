@@ -56,6 +56,7 @@ flowchart TD
   - writes per-agent `.codex/agents/<slug>.toml`
   - merges `[agents.*]` block into `.codex/config.toml` with CK sentinels
   - serializes writes with a per-target lock to prevent concurrent merge races
+- Codex commands migrate as Codex skills, matching current upstream Codex external command import behavior. Project-scope command migrations write `.agents/skills/source-command-*/SKILL.md`; `--global` writes `~/.agents/skills/source-command-*/SKILL.md`.
 - Conflict resolution policy:
   - interactive CLI: prompt (`overwrite`, `keep`, `show-diff`)
   - non-interactive: safe default is `keep`
@@ -69,6 +70,7 @@ flowchart TD
 - Emits summary counts:
   - `installed`, `skipped`, `failed`
 - Includes warnings and per-provider results for CLI + dashboard.
+- CLI summary output now includes destination-aware preflight rows plus a boxed WHERE / WHAT / NEXT footer so the target path stays visible before confirmation.
 
 ## Codex Hook Compatibility
 

@@ -45,6 +45,10 @@ const VALID_FLAGS = new Set([
 	"port",
 	"open",
 	"dev",
+	"global",
+	// Tracking metadata (CLI-strict plan tracking):
+	"source",
+	"sessionId",
 ]);
 
 // ─── Registry freshness check ────────────────────────────────────────────────
@@ -76,17 +80,47 @@ function extractOptionsFromSource(): Set<string> {
 
 // ─── Engineer file paths ──────────────────────────────────────────────────────
 
-const ENGINEER_ROOT = resolve(__dirname, "../../../../../claudekit-engineer/.claude");
+const ENGINEER_REPO_ROOT = resolve(__dirname, "../../../../../claudekit-engineer");
+
+function resolveEngineerSourceRoot(): string {
+	const packageJsonPath = join(ENGINEER_REPO_ROOT, "package.json");
+	if (existsSync(packageJsonPath)) {
+		try {
+			const packageJson = JSON.parse(readFileSync(packageJsonPath, "utf8")) as {
+				claudekit?: { sourceDir?: string };
+			};
+			const sourceDir = packageJson.claudekit?.sourceDir;
+			if (sourceDir) {
+				const layoutAwareRoot = join(ENGINEER_REPO_ROOT, sourceDir);
+				if (existsSync(layoutAwareRoot)) {
+					return layoutAwareRoot;
+				}
+			}
+		} catch {
+			// Fall back to the legacy layout below.
+		}
+	}
+
+	return join(ENGINEER_REPO_ROOT, ".claude");
+}
+
+const ENGINEER_ROOT = resolveEngineerSourceRoot();
 const HAS_ENGINEER_REPO = existsSync(ENGINEER_ROOT);
 
 /** Specific files named in the contract spec */
-const NAMED_FILES = [
-	resolve(ENGINEER_ROOT, "hooks/subagent-init.cjs"),
-	resolve(ENGINEER_ROOT, "hooks/plan-format-kanban.cjs"),
-	resolve(ENGINEER_ROOT, "skills/cook/references/workflow-steps.md"),
-	resolve(ENGINEER_ROOT, "skills/plan/references/plan-organization.md"),
-	resolve(ENGINEER_ROOT, "skills/project-management/references/progress-tracking.md"),
+const NAMED_FILE_CANDIDATES = [
+	["hooks/subagent-init.cjs"],
+	["hooks/plan-format-kanban.cjs"],
+	["skills/cook/references/workflow-steps.md"],
+	["skills/ck-plan/references/plan-organization.md", "skills/plan/references/plan-organization.md"],
+	["skills/project-management/references/progress-tracking.md"],
 ];
+
+const NAMED_FILES = NAMED_FILE_CANDIDATES.map((candidates) =>
+	candidates
+		.map((relativePath) => resolve(ENGINEER_ROOT, relativePath))
+		.find((candidatePath) => existsSync(candidatePath)),
+).filter((filePath): filePath is string => Boolean(filePath));
 
 // ─── Extraction helpers ───────────────────────────────────────────────────────
 
@@ -130,8 +164,9 @@ function extractInvocations(filePath: string): CkPlanInvocation[] {
 			continue;
 		}
 
-		// Only process lines with `ck plan`
-		if (!/ck\s+plan/.test(line)) continue;
+		// Only process lines with `ck plan` — word boundary prevents substring
+		// matches against words ending in "ck" (e.g. "fact-check plan claims").
+		if (!/\bck\s+plan\b/.test(line)) continue;
 
 		// Skip /ck:skill references (not CLI invocations)
 		if (/\/ck:[a-z]/.test(line)) continue;
@@ -264,9 +299,9 @@ function listFilesRecursive(dir: string): string[] {
 // ─── Catch-all scan ───────────────────────────────────────────────────────────
 
 describe.skipIf(!HAS_ENGINEER_REPO)(
-	"Catch-all: all engineer .claude/ files — subcommands are valid",
+	"Catch-all: all engineer source files — subcommands are valid",
 	() => {
-		// Recursively collect all files under .claude/
+		// Recursively collect all files under the current engineer source root.
 		const allFiles = listFilesRecursive(ENGINEER_ROOT);
 
 		const invocations = collectFromFiles(allFiles);
@@ -287,7 +322,7 @@ describe.skipIf(!HAS_ENGINEER_REPO)(
 );
 
 describe.skipIf(!HAS_ENGINEER_REPO)(
-	"Catch-all: all engineer .claude/ files — flags are valid",
+	"Catch-all: all engineer source files — flags are valid",
 	() => {
 		const allFiles = listFilesRecursive(ENGINEER_ROOT);
 

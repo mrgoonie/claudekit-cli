@@ -1,8 +1,11 @@
 import { execSync } from "node:child_process";
+import { homedir } from "node:os";
+import { dirname, join } from "node:path";
 import { InstalledSettingsTracker } from "@/domains/config/installed-settings-tracker.js";
 import { type SettingsJson, SettingsMerger } from "@/domains/config/settings-merger.js";
-import { normalizeCommand } from "@/shared/command-normalizer.js";
+import { normalizeCommand, repairClaudeHookCommandPath } from "@/shared/command-normalizer.js";
 import { logger } from "@/shared/logger.js";
+import { PathResolver } from "@/shared/path-resolver.js";
 import type { InstalledSettings } from "@/types";
 import { copy, pathExists, readFile, writeFile } from "fs-extra";
 import semver from "semver";
@@ -89,7 +92,8 @@ export class SettingsProcessor {
 	 *
 	 * Path transformation rules:
 	 * - Global mode: .claude/ → "$HOME/.claude/" (all shells — $HOME works in PowerShell, cmd, Git Bash, Unix)
-	 * - Local mode: .claude/ → "$CLAUDE_PROJECT_DIR/.claude/" (CC expands this internally on all platforms)
+	 * - Local mode: .claude/ → "$CLAUDE_PROJECT_DIR"/.claude/ (keep .claude outside the quoted var)
+	 *   so Claude Code's Windows expansion does not collapse the separator into `project.claude`
 	 */
 	async processSettingsJson(sourceFile: string, destFile: string): Promise<void> {
 		try {
@@ -99,19 +103,18 @@ export class SettingsProcessor {
 			// Transform paths in source content first
 			let transformedSource = sourceContent;
 			if (this.isGlobal) {
-				const homeVar = '"$HOME"';
-				transformedSource = this.transformClaudePaths(sourceContent, homeVar);
+				const globalRoot = this.getCanonicalGlobalCommandRoot();
+				transformedSource = this.transformClaudePaths(sourceContent, globalRoot);
 				if (transformedSource !== sourceContent) {
 					logger.debug(
-						`Transformed .claude/ paths to ${homeVar}/.claude/ in settings.json for global installation`,
+						`Transformed .claude/ paths to ${globalRoot} in settings.json for global installation`,
 					);
 				}
 			} else {
-				const projectDirVar = '"$CLAUDE_PROJECT_DIR"';
-				transformedSource = this.transformClaudePaths(sourceContent, projectDirVar);
+				transformedSource = this.transformClaudePaths(sourceContent, "$CLAUDE_PROJECT_DIR");
 				if (transformedSource !== sourceContent) {
 					logger.debug(
-						`Transformed .claude/ paths to ${projectDirVar}/.claude/ in settings.json for local installation`,
+						'Transformed .claude/ paths to "$CLAUDE_PROJECT_DIR"/.claude/ in settings.json for local installation',
 					);
 				}
 			}
@@ -128,7 +131,7 @@ export class SettingsProcessor {
 					const parsedSettings = JSON.parse(transformedSource) as SettingsJson;
 
 					// Fix broken hook path formats before writing
-					this.fixHookCommandPaths(parsedSettings);
+					this.logHookCommandRepair(this.fixHookCommandPaths(parsedSettings), "fresh install");
 
 					await SettingsMerger.writeSettingsFile(destFile, parsedSettings);
 
@@ -153,6 +156,8 @@ export class SettingsProcessor {
 				// Inject team hooks if supported
 				await this.injectTeamHooksIfSupported(destFile);
 			}
+
+			await this.repairSiblingSettingsLocal(destFile);
 		} catch (error) {
 			logger.error(`Failed to process settings.json: ${error}`);
 			// Fallback to direct copy if processing fails
@@ -244,10 +249,7 @@ export class SettingsProcessor {
 		}
 
 		// Fix broken hook path formats (tilde, variable-only quoting, unquoted)
-		const pathsFixed = this.fixHookCommandPaths(mergeResult.merged);
-		if (pathsFixed) {
-			logger.info("Fixed hook command paths to canonical quoted format");
-		}
+		this.logHookCommandRepair(this.fixHookCommandPaths(mergeResult.merged), "merged settings");
 
 		// Prune hooks referencing files listed in metadata.json deletions
 		const hooksPruned = this.pruneDeletedHooks(mergeResult.merged);
@@ -457,33 +459,18 @@ export class SettingsProcessor {
 	/**
 	 * Read settings file and normalize $CLAUDE_PROJECT_DIR paths to $HOME for global installs.
 	 * This ensures deduplication works correctly when merging into global settings.
+	 * NOTE: Mutations are in-memory only — callers must persist the result via writeSettingsFile.
 	 */
 	private async readAndNormalizeGlobalSettings(destFile: string): Promise<SettingsJson | null> {
 		try {
 			const content = await readFile(destFile, "utf-8");
 			if (!content.trim()) return null;
-
-			// Replace $CLAUDE_PROJECT_DIR (and Windows variants) with $HOME (universal)
-			const homeVar = "$HOME";
-			let normalized = content;
-
-			// Unix: $CLAUDE_PROJECT_DIR → $HOME (handle both quoted and unquoted)
-			normalized = normalized.replace(/"\$CLAUDE_PROJECT_DIR"/g, `"${homeVar}"`);
-			normalized = normalized.replace(/\$CLAUDE_PROJECT_DIR/g, homeVar);
-
-			// Windows: %CLAUDE_PROJECT_DIR% → $HOME
-			normalized = normalized.replace(/"%CLAUDE_PROJECT_DIR%"/g, `"${homeVar}"`);
-			normalized = normalized.replace(/%CLAUDE_PROJECT_DIR%/g, homeVar);
-
-			// Windows: %USERPROFILE% → $HOME (migration for pre-existing files)
-			normalized = normalized.replace(/"%USERPROFILE%"/g, `"${homeVar}"`);
-			normalized = normalized.replace(/%USERPROFILE%/g, homeVar);
-
-			if (normalized !== content) {
-				logger.debug("Normalized $CLAUDE_PROJECT_DIR paths to $HOME in existing global settings");
-			}
-
-			return JSON.parse(normalized) as SettingsJson;
+			const parsedSettings = JSON.parse(content) as SettingsJson;
+			this.logHookCommandRepair(
+				this.fixHookCommandPaths(parsedSettings),
+				"existing global settings",
+			);
+			return parsedSettings;
 		} catch {
 			return null;
 		}
@@ -491,14 +478,17 @@ export class SettingsProcessor {
 
 	/**
 	 * Transform relative .claude/ paths to use a prefix variable.
-	 * Wraps the ENTIRE path argument in quotes to handle spaces in paths
-	 * (e.g., C:\Users\Thieu Nguyen\).
+	 *
+	 * Global installs keep the full path inside quotes so `$HOME/.claude/...` survives spaces.
+	 * Local installs must keep `.claude/...` outside the quoted `$CLAUDE_PROJECT_DIR` token.
+	 * Embedding `/.claude/...` inside the quoted variable triggers a Windows expansion bug where
+	 * Claude Code resolves `project/.claude/...` as `project.claude/...`.
 	 *
 	 * @param content - The file content to transform (raw JSON)
-	 * @param prefix - The environment variable prefix (e.g., '"$HOME"', '"%USERPROFILE%"')
-	 * @returns Transformed content with paths prefixed and fully quoted
+	 * @param root - The path root (e.g., "$HOME", "$CLAUDE_PROJECT_DIR", "/custom/claude")
+	 * @returns Transformed content with the appropriate quoting strategy per scope
 	 */
-	private transformClaudePaths(content: string, prefix: string): string {
+	private transformClaudePaths(content: string, root: string): string {
 		// Security: Validate that .claude/ paths don't contain shell injection attempts
 		// Matches dangerous chars after .claude/ but before whitespace or quote
 		if (/\.claude\/[^\s"']*[;`$&|><]/.test(content)) {
@@ -508,44 +498,61 @@ export class SettingsProcessor {
 
 		let transformed = content;
 
-		// Extract raw env var (without quotes) for all replacements
-		const rawPrefix = prefix.replace(/"/g, "");
-
-		// Pattern 1: "node .claude/..." or "node ./.claude/..." - hook command pattern
-		// Captures the full path (e.g., .claude/hooks/session-init.cjs) and wraps
-		// the entire argument (variable + path) in JSON-escaped quotes.
-		// Before: node .claude/hooks/session-init.cjs
-		// After:  node \"$HOME/.claude/hooks/session-init.cjs\" (in JSON)
-		// Parsed: node "$HOME/.claude/hooks/session-init.cjs"
+		// Pattern 1: node .claude/... or node ./.claude/... in settings JSON.
+		// Global: node \"$HOME/.claude/hooks/foo.cjs\"
+		// Local:  node \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/foo.cjs
+		// NOTE: formatCommandPath returns plain output with literal " chars.
+		// The .replace(/"/g, '\\"') is needed here because this regex operates on raw JSON text,
+		// so quotes must be escaped. fixSingleCommandPath does NOT apply this escape because it
+		// works on parsed command strings (post-JSON-decode).
+		// Bash node-hook-runner commands are parsed commands, not raw node invocations, so
+		// fixHookCommandPaths repairs them after JSON parsing.
 		transformed = transformed.replace(
-			/(node\s+)(?:\.\/)?(\.claude\/[^\s"\\]+)/g,
-			`$1\\"${rawPrefix}/$2\\"`,
+			/(node\s+)(?:\.\/)?(\.claude\/[^\s"\\]+)([^"\\]*)/g,
+			(_match, nodePrefix: string, relativePath: string, suffix: string) => {
+				return this.formatCommandPath(nodePrefix, root, relativePath, suffix).replace(/"/g, '\\"');
+			},
 		);
 
 		// Pattern 2: Already has $CLAUDE_PROJECT_DIR - replace with appropriate prefix
-		if (rawPrefix.includes("HOME") || rawPrefix.includes("USERPROFILE")) {
-			// Global mode: $CLAUDE_PROJECT_DIR → $HOME or %USERPROFILE%
-			transformed = transformed.replace(/\$CLAUDE_PROJECT_DIR/g, rawPrefix);
-			transformed = transformed.replace(/%CLAUDE_PROJECT_DIR%/g, rawPrefix);
+		if (this.isGlobal) {
+			transformed = transformed.replace(/"\$CLAUDE_PROJECT_DIR"/g, `"${root}"`);
+			transformed = transformed.replace(/\$CLAUDE_PROJECT_DIR/g, root);
+			transformed = transformed.replace(/"%CLAUDE_PROJECT_DIR%"/g, `"${root}"`);
+			transformed = transformed.replace(/%CLAUDE_PROJECT_DIR%/g, root);
 		}
 
 		return transformed;
 	}
 
 	/**
+	 * Emit a one-line log when hook command paths were canonicalized. Centralizes the
+	 * message so all callers describe the self-heal identically. `context` optionally
+	 * disambiguates simultaneous repair passes (e.g. "during merge" vs. a specific file).
+	 */
+	private logHookCommandRepair(count: number, context?: string): void {
+		if (count <= 0) return;
+		const suffix = context ? ` (${context})` : "";
+		logger.info(
+			`Repaired ${count} hook command path(s) to canonical quoted format${suffix} — protects against shells word-splitting on usernames with spaces`,
+		);
+	}
+
+	/**
 	 * Fix hook command path formats in settings after merge.
-	 * Repairs all known broken formats to the canonical full-path-quoted form.
+	 * Repairs all known broken formats to the canonical scope-aware form.
 	 *
 	 * Fixes:
 	 * - Tilde: node ~/.claude/... → node "$HOME/.claude/..."
-	 * - Variable-only quoting: node "$HOME"/.claude/... → node "$HOME/.claude/..."
+	 * - Global variable-only quoting: node "$HOME"/.claude/... → node "$HOME/.claude/..."
+	 * - Local embedded quoting: node "$CLAUDE_PROJECT_DIR/.claude/..." → node "$CLAUDE_PROJECT_DIR"/.claude/...
 	 * - Unquoted: node $HOME/.claude/... → node "$HOME/.claude/..."
 	 * - Windows %USERPROFILE% → normalized to $HOME (universal across all shells)
 	 *
 	 * This runs AFTER merge so it catches both source (new) and destination (existing) hooks.
 	 */
-	private fixHookCommandPaths(settings: SettingsJson): boolean {
-		let fixed = false;
+	private fixHookCommandPaths(settings: SettingsJson): number {
+		let fixed = 0;
 
 		// Fix hooks
 		if (settings.hooks) {
@@ -555,7 +562,7 @@ export class SettingsProcessor {
 						const result = this.fixSingleCommandPath(entry.command);
 						if (result !== entry.command) {
 							entry.command = result;
-							fixed = true;
+							fixed++;
 						}
 					}
 					if ("hooks" in entry && entry.hooks) {
@@ -564,7 +571,7 @@ export class SettingsProcessor {
 								const result = this.fixSingleCommandPath(hook.command);
 								if (result !== hook.command) {
 									hook.command = result;
-									fixed = true;
+									fixed++;
 								}
 							}
 						}
@@ -579,7 +586,7 @@ export class SettingsProcessor {
 			const result = this.fixSingleCommandPath(statusLine.command);
 			if (result !== statusLine.command) {
 				statusLine.command = result;
-				fixed = true;
+				fixed++;
 			}
 		}
 
@@ -587,50 +594,24 @@ export class SettingsProcessor {
 	}
 
 	/**
-	 * Fix a single hook command path to canonical full-path-quoted format.
+	 * Fix a single hook command path to canonical scope-aware quoting.
 	 * Only processes paths containing .claude/ — leaves other commands untouched.
 	 */
 	private fixSingleCommandPath(cmd: string): string {
-		// Only fix node commands targeting .claude/ paths
-		if (!cmd.includes(".claude/") && !cmd.includes(".claude\\")) return cmd;
+		return repairClaudeHookCommandPath(cmd, this.getClaudeCommandRoot()).command;
+	}
 
-		// Pattern: node .claude/... or node ./.claude/... (bare relative — missing path prefix)
-		// Catches hooks that weren't transformed during global install or preserved from old installs
-		const bareRelativeRe = /^(node\s+)(?:\.\/)?\.claude\//;
-		if (bareRelativeRe.test(cmd)) {
-			const prefix = this.isGlobal ? "$HOME" : "$CLAUDE_PROJECT_DIR";
-			return cmd.replace(/^(node\s+)(?:\.\/)?(\.claude\/.+)$/, `$1"${prefix}/$2"`);
-		}
-
-		// Pattern: node "VAR"/.claude/... (variable-only quoting — the main bug)
-		const varOnlyQuotingRe =
-			/^(node\s+)"(\$HOME|\$CLAUDE_PROJECT_DIR|%USERPROFILE%|%CLAUDE_PROJECT_DIR%)"[/\\](.+)$/;
-		const varOnlyMatch = cmd.match(varOnlyQuotingRe);
-		if (varOnlyMatch) {
-			const [, nodePrefix, capturedVar, restPath] = varOnlyMatch;
-			const canonicalVar = this.canonicalizePathVar(capturedVar);
-			return `${nodePrefix}"${canonicalVar}/${restPath.replace(/\\/g, "/")}"`;
-		}
-
-		// Pattern: node ~/.claude/... (tilde — doesn't expand on Windows)
-		const tildeRe = /^(node\s+)~[/\\](.+)$/;
-		const tildeMatch = cmd.match(tildeRe);
-		if (tildeMatch) {
-			const [, nodePrefix, restPath] = tildeMatch;
-			return `${nodePrefix}"$HOME/${restPath.replace(/\\/g, "/")}"`;
-		}
-
-		// Pattern: node $HOME/.claude/... or node %USERPROFILE%/.claude/... (unquoted)
-		const unquotedRe =
-			/^(node\s+)(\$HOME|\$CLAUDE_PROJECT_DIR|%USERPROFILE%|%CLAUDE_PROJECT_DIR%)[/\\](.+)$/;
-		const unquotedMatch = cmd.match(unquotedRe);
-		if (unquotedMatch) {
-			const [, nodePrefix, capturedVar, restPath] = unquotedMatch;
-			const canonicalVar = this.canonicalizePathVar(capturedVar);
-			return `${nodePrefix}"${canonicalVar}/${restPath.replace(/\\/g, "/")}"`;
-		}
-
-		return cmd;
+	private formatCommandPath(
+		nodePrefix: string,
+		capturedVar: string,
+		relativePath: string,
+		suffix = "",
+	): string {
+		const canonicalRoot = this.canonicalizePathRoot(capturedVar);
+		const normalizedRelativePath = this.normalizeRelativePath(canonicalRoot, relativePath);
+		return canonicalRoot === "$CLAUDE_PROJECT_DIR"
+			? `${nodePrefix}"${canonicalRoot}"/${normalizedRelativePath}${suffix}`
+			: `${nodePrefix}"${canonicalRoot}/${normalizedRelativePath}"${suffix}`;
 	}
 
 	/**
@@ -638,15 +619,81 @@ export class SettingsProcessor {
 	 * - %USERPROFILE% → $HOME (universal across all shells)
 	 * - %CLAUDE_PROJECT_DIR% → $CLAUDE_PROJECT_DIR (CC expands both, prefer Unix-style)
 	 */
-	private canonicalizePathVar(capturedVar: string): string {
+	private canonicalizePathRoot(capturedVar: string): string {
 		switch (capturedVar) {
 			case "%USERPROFILE%":
-				return "$HOME";
+			case "$HOME":
+				return this.isGlobal ? this.getCanonicalGlobalCommandRoot() : "$HOME";
 			case "%CLAUDE_PROJECT_DIR%":
-				return "$CLAUDE_PROJECT_DIR";
+			case "$CLAUDE_PROJECT_DIR":
+				return this.isGlobal ? this.getCanonicalGlobalCommandRoot() : "$CLAUDE_PROJECT_DIR";
 			default:
-				return capturedVar;
+				return capturedVar.replace(/\\/g, "/").replace(/\/+$/, "");
 		}
+	}
+
+	private normalizeRelativePath(root: string, relativePath: string): string {
+		const normalizedRelativePath = relativePath.replace(/\\/g, "/").replace(/^\/+/, "");
+
+		if (root !== "$CLAUDE_PROJECT_DIR" && this.usesCustomGlobalInstallPath()) {
+			return normalizedRelativePath.replace(/^\.claude\//, "");
+		}
+
+		return normalizedRelativePath;
+	}
+
+	private getCanonicalGlobalCommandRoot(): string {
+		if (this.usesCustomGlobalInstallPath()) {
+			return PathResolver.getGlobalKitDir().replace(/\\/g, "/").replace(/\/+$/, "");
+		}
+
+		return "$HOME";
+	}
+
+	private usesCustomGlobalInstallPath(): boolean {
+		if (!this.isGlobal || !this.projectDir) {
+			if (this.isGlobal && !this.projectDir) {
+				logger.debug(
+					"usesCustomGlobalInstallPath: global mode but projectDir not set — defaulting to $HOME",
+				);
+			}
+			return false;
+		}
+
+		const configuredGlobalDir = PathResolver.getGlobalKitDir()
+			.replace(/\\/g, "/")
+			.replace(/\/+$/, "");
+		const defaultGlobalDir = join(homedir(), ".claude").replace(/\\/g, "/");
+		return configuredGlobalDir !== defaultGlobalDir;
+	}
+
+	private getClaudeCommandRoot(): string {
+		return this.isGlobal ? this.getCanonicalGlobalCommandRoot() : "$CLAUDE_PROJECT_DIR";
+	}
+
+	private async repairSettingsFile(filePath: string): Promise<boolean> {
+		const settings = await SettingsMerger.readSettingsFile(filePath);
+		if (!settings) {
+			return false;
+		}
+
+		const pathsFixed = this.fixHookCommandPaths(settings);
+		if (pathsFixed === 0) {
+			return false;
+		}
+
+		this.logHookCommandRepair(pathsFixed, filePath);
+		await SettingsMerger.writeSettingsFile(filePath, settings);
+		return true;
+	}
+
+	private async repairSiblingSettingsLocal(destFile: string): Promise<void> {
+		const settingsLocalPath = join(dirname(destFile), "settings.local.json");
+		if (settingsLocalPath === destFile || !(await pathExists(settingsLocalPath))) {
+			return;
+		}
+
+		await this.repairSettingsFile(settingsLocalPath);
 	}
 
 	/**
@@ -713,9 +760,6 @@ export class SettingsProcessor {
 			return;
 		}
 
-		// Determine path prefix (universal — $HOME works in PowerShell, cmd, Git Bash, Unix)
-		const prefix = this.isGlobal ? "$HOME" : "$CLAUDE_PROJECT_DIR";
-
 		// Initialize hooks if missing
 		if (!settings.hooks) {
 			settings.hooks = {};
@@ -733,7 +777,11 @@ export class SettingsProcessor {
 		] as const;
 
 		for (const { event, handler } of teamHooks) {
-			const hookCommand = `node "${prefix}/.claude/hooks/${handler}"`;
+			const hookCommand = this.formatCommandPath(
+				"node ",
+				this.isGlobal ? this.getCanonicalGlobalCommandRoot() : "$CLAUDE_PROJECT_DIR",
+				`.claude/hooks/${handler}`,
+			);
 			const eventHooks = settings.hooks[event];
 
 			if (eventHooks && eventHooks.length > 0) continue; // Already present

@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PR #613 — Dashboard UI Fix: Hook Diagnostics Wrapping + External Volume Path</title>
+<style>
+:root { --bg: #0d0d0d; --fg: #e8e4df; --card: #1a1714; --border: #2d2923; --muted: #6b6560; --accent: #f7a072; --red: #ef4444; --green: #22c55e; }
+.light { --bg: #f8f6f3; --fg: #1a1714; --card: #ffffff; --border: #e5e0da; --muted: #8a8580; --accent: #d4845a; --red: #dc2626; --green: #16a34a; }
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif; background: var(--bg); color: var(--fg); line-height: 1.6; padding: 2rem; max-width: 1200px; margin: 0 auto; }
+h1 { font-size: 1.5rem; margin-bottom: 0.5rem; }
+.subtitle { color: var(--muted); font-size: 0.875rem; margin-bottom: 2rem; }
+.theme-toggle { position: fixed; top: 1rem; right: 1rem; background: var(--card); border: 1px solid var(--border); color: var(--fg); padding: 0.5rem 1rem; border-radius: 8px; cursor: pointer; font-size: 0.8rem; z-index: 100; }
+.theme-toggle:hover { border-color: var(--accent); }
+.summary-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1rem; margin-bottom: 2rem; }
+.summary-card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 1.25rem; }
+.summary-card h3 { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); margin-bottom: 0.5rem; }
+.summary-card p { font-size: 0.875rem; }
+.badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 0.7rem; font-weight: 600; text-transform: uppercase; }
+.badge-bug { background: rgba(239,68,68,0.15); color: var(--red); }
+.badge-fix { background: rgba(34,197,94,0.15); color: var(--green); }
+.env-note { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 0.75rem 1rem; font-size: 0.8rem; color: var(--muted); margin-bottom: 2rem; }
+.comparison { margin-bottom: 3rem; }
+.comparison h2 { font-size: 1.1rem; margin-bottom: 1rem; border-bottom: 1px solid var(--border); padding-bottom: 0.5rem; }
+.comparison-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+@media (max-width: 768px) { .comparison-grid { grid-template-columns: 1fr; } }
+.comparison-col { background: var(--card); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+.comparison-col-header { padding: 0.5rem 1rem; font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; border-bottom: 1px solid var(--border); }
+.col-before .comparison-col-header { color: var(--muted); }
+.col-after .comparison-col-header { color: var(--accent); }
+.comparison-col-body { padding: 1rem; }
+.code-block { background: rgba(0,0,0,0.3); border-radius: 8px; padding: 1rem; font-family: 'SF Mono', 'Fira Code', monospace; font-size: 0.75rem; line-height: 1.6; overflow-x: auto; white-space: pre; }
+.light .code-block { background: rgba(0,0,0,0.05); }
+.del { color: var(--red); }
+.ins { color: var(--green); }
+.dim { color: var(--muted); }
+.desc { font-size: 0.85rem; color: var(--muted); margin-top: 0.75rem; }
+.file-table { width: 100%; border-collapse: collapse; margin-top: 1rem; }
+.file-table th, .file-table td { text-align: left; padding: 0.5rem 0.75rem; border-bottom: 1px solid var(--border); font-size: 0.8rem; }
+.file-table th { color: var(--muted); font-weight: 600; text-transform: uppercase; font-size: 0.7rem; letter-spacing: 0.05em; }
+.mono { font-family: 'SF Mono', 'Fira Code', monospace; font-size: 0.75rem; }
+</style>
+</head>
+<body>
+<button class="theme-toggle" onclick="document.documentElement.classList.toggle('light'); this.textContent = document.documentElement.classList.contains('light') ? '&#9679; Dark' : '&#9675; Light'">&#9675; Light</button>
+
+<h1>PR #613 — Dashboard UI Fix</h1>
+<p class="subtitle">Hook Diagnostics text wrapping + external volume path validation</p>
+
+<div class="summary-cards">
+  <div class="summary-card">
+    <h3>Bug 1 <span class="badge badge-bug">UI</span></h3>
+    <p>Hook Diagnostics card text wraps vertically, character-by-character. The <code>lg:flex-row</code> layout triggers inside a 320px aside column, squeezing the text container.</p>
+  </div>
+  <div class="summary-card">
+    <h3>Bug 2 <span class="badge badge-bug">Backend</span></h3>
+    <p>Discovered projects on external volumes (<code>/Volumes/</code>) get 403 "Path is not allowed" because <code>isActionPathAllowed()</code> doesn't decode discovered project paths.</p>
+  </div>
+  <div class="summary-card">
+    <h3>Fix <span class="badge badge-fix">Applied</span></h3>
+    <p>Removed <code>lg:flex-row</code> breakpoint (always stack vertically). Added base64url path decoding for discovered project IDs in path validation.</p>
+  </div>
+</div>
+
+<div class="env-note">
+  All captures use the same dashboard instance, dark theme, same user context.
+</div>
+
+<!-- Comparison 1: Hook Diagnostics Card -->
+<div class="comparison">
+  <h2>1. Hook Diagnostics Card — Text Wrapping</h2>
+  <div class="comparison-grid">
+    <div class="comparison-col col-before">
+      <div class="comparison-col-header">Before</div>
+      <div class="comparison-col-body">
+        <div class="code-block"><span class="dim">&lt;!-- system-hook-diagnostics-card.tsx:120 --&gt;</span>
+<span class="dim">&lt;div className="</span><span class="del">flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between</span><span class="dim">"&gt;</span>
+
+<span class="dim">/* Layout on xl+ screens (320px aside): */</span>
+<span class="dim">┌─────────────────────────────────────────┐</span>
+<span class="dim">│ 320px aside                             │</span>
+<span class="dim">│ ┌─────────┐  ┌─────────────────────────┐│</span>
+<span class="dim">│ │</span><span class="del">H         </span><span class="dim">│  │ Global hooks ▾  Refresh ││</span>
+<span class="dim">│ │</span><span class="del">O         </span><span class="dim">│  │                         ││</span>
+<span class="dim">│ │</span><span class="del">O         </span><span class="dim">│  └─────────────────────────┘│</span>
+<span class="dim">│ │</span><span class="del">K         </span><span class="dim">│                             │</span>
+<span class="dim">│ │</span><span class="del">...~100px </span><span class="dim">│                             │</span>
+<span class="dim">│ └─────────┘                             │</span>
+<span class="dim">└─────────────────────────────────────────┘</span>
+
+<span class="del">lg:flex-row active inside 320px column!</span>
+<span class="del">Text squeezed → wraps character-by-character</span></div>
+        <p class="desc">Before: <code>lg:flex-row</code> forces side-by-side layout inside 320px, leaving ~100px for text. Description and paths wrap vertically.</p>
+      </div>
+    </div>
+    <div class="comparison-col col-after">
+      <div class="comparison-col-header">After</div>
+      <div class="comparison-col-body">
+        <div class="code-block"><span class="dim">&lt;!-- system-hook-diagnostics-card.tsx:120 --&gt;</span>
+<span class="dim">&lt;div className="</span><span class="ins">flex flex-col gap-3</span><span class="dim">"&gt;</span>
+
+<span class="dim">/* Layout on xl+ screens (320px aside): */</span>
+<span class="dim">┌─────────────────────────────────────────┐</span>
+<span class="dim">│ 320px aside                             │</span>
+<span class="dim">│ ┌───────────────────────────────────────┐</span>
+<span class="dim">│ │</span><span class="ins">HOOK DIAGNOSTICS                       </span><span class="dim">│</span>
+<span class="dim">│ │</span><span class="ins">Inspect recent hook activity and       </span><span class="dim">│</span>
+<span class="dim">│ │</span><span class="ins">failures without opening JSONL files.  </span><span class="dim">│</span>
+<span class="dim">│ │</span><span class="ins">~/.claude/hooks/.logs/hook-log-...     </span><span class="dim">│</span>
+<span class="dim">│ └───────────────────────────────────────┘</span>
+<span class="dim">│ ┌───────────────────────────────────────┐</span>
+<span class="dim">│ │ Global hooks ▾          Refresh       │</span>
+<span class="dim">│ └───────────────────────────────────────┘</span>
+<span class="dim">└─────────────────────────────────────────┘</span>
+
+<span class="ins">Always flex-col → text gets full 320px width</span></div>
+        <p class="desc">After: Always vertical stack. Title, description, and path get the full 320px width. Dropdown below.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Comparison 2: Path Validation -->
+<div class="comparison">
+  <h2>2. External Volume Path Validation</h2>
+  <div class="comparison-grid">
+    <div class="comparison-col col-before">
+      <div class="comparison-col-header">Before</div>
+      <div class="comparison-col-body">
+        <div class="code-block"><span class="dim">// action-routes.ts:778-795</span>
+<span class="dim">async function isActionPathAllowed(dirPath, projectId) {</span>
+  <span class="dim">if (projectId && !projectId.startsWith("discovered-")) {</span>
+    <span class="dim">// registered project → exact match ✓</span>
+  <span class="dim">}</span>
+
+  <span class="del">// discovered-* projects fall through here</span>
+  <span class="del">// ↓ Only checks registered projects (not discovered)</span>
+  <span class="dim">const registeredProjects = await listProjects();</span>
+  <span class="dim">if (registeredProjects.some(p => p.path === dirPath)) ✓</span>
+
+  <span class="dim">if (isPathInsideBase(dirPath, process.cwd())) ✓</span>
+
+  <span class="del">return isPathInsideBase(dirPath, homedir());</span>
+  <span class="del">// /Volumes/T9/ is NOT inside /Users/kai/</span>
+  <span class="del">// → returns false → 403 "Path not allowed"</span>
+<span class="dim">}</span></div>
+        <p class="desc">Before: Discovered projects skip the first check, then fail all fallback checks for external volumes outside <code>homedir()</code>.</p>
+      </div>
+    </div>
+    <div class="comparison-col col-after">
+      <div class="comparison-col-header">After</div>
+      <div class="comparison-col-body">
+        <div class="code-block"><span class="dim">// action-routes.ts:778-804</span>
+<span class="dim">async function isActionPathAllowed(dirPath, projectId) {</span>
+  <span class="dim">if (projectId && !projectId.startsWith("discovered-")) {</span>
+    <span class="dim">// registered project → exact match ✓</span>
+  <span class="dim">}</span>
+
+  <span class="ins">// Discovered projects: decode base64url path from ID</span>
+  <span class="ins">if (projectId?.startsWith("discovered-")) {</span>
+    <span class="ins">  const encoded = projectId.slice("discovered-".length);</span>
+    <span class="ins">  const discoveredPath = Buffer.from(encoded, "base64url");</span>
+    <span class="ins">  if (resolve(discoveredPath) === dirPath) return true;</span>
+    <span class="ins">  // /Volumes/T9/Projects/ndcc matches → ✓ allowed</span>
+  <span class="ins">}</span>
+
+  <span class="dim">const registeredProjects = await listProjects();</span>
+  <span class="dim">if (registeredProjects.some(p => p.path === dirPath)) ✓</span>
+
+  <span class="dim">if (isPathInsideBase(dirPath, process.cwd())) ✓</span>
+
+  <span class="dim">return isPathInsideBase(dirPath, homedir());</span>
+<span class="dim">}</span></div>
+        <p class="desc">After: Decodes the base64url-encoded path from the discovered project ID and verifies it matches the requested path. External volumes now work.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- What changed -->
+<div class="comparison">
+  <h2>What Changed</h2>
+  <table class="file-table">
+    <thead>
+      <tr><th>File</th><th>Change</th><th>Lines</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td class="mono">src/ui/src/components/system-hook-diagnostics-card.tsx</td>
+        <td>Remove <code>lg:flex-row lg:items-start lg:justify-between</code></td>
+        <td>+1 -1</td>
+      </tr>
+      <tr>
+        <td class="mono">src/domains/web-server/routes/action-routes.ts</td>
+        <td>Add discovered project base64url path decode + verify</td>
+        <td>+12 -0</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- Validation -->
+<div class="comparison">
+  <h2>Validation</h2>
+  <div class="summary-card">
+    <ul style="list-style: none; padding: 0;">
+      <li>[OK] <code>bun run validate</code> — typecheck, lint, 3827 tests pass, build OK</li>
+      <li>[OK] Both commits pass pre-commit quality gate hooks</li>
+      <li>[OK] Code change is minimal and targeted</li>
+      <li>[OK] No breaking changes to existing APIs</li>
+      <li>[OK] Discovered project path decode matches project-routes.ts pattern (line 243-246)</li>
+    </ul>
+  </div>
+</div>
+
+</body>
+</html>

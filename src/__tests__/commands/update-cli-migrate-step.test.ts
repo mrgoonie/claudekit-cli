@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, mock, spyOn, test } from "bun:
 import type { PromptMigrateUpdateDeps } from "@/commands/update-cli.js";
 import { promptMigrateUpdate } from "@/commands/update-cli.js";
 import { logger } from "@/shared/logger.js";
+import type { MigrateScopeConfig } from "@/types/ck-config.js";
 
 const detectInstalledProvidersMock = mock(async () => [] as string[]);
 const getProviderConfigMock = mock((provider: string) => ({ displayName: provider }));
@@ -13,6 +14,7 @@ const loadFullConfigMock = mock(
 					| {
 							autoMigrateAfterUpdate?: boolean;
 							migrateProviders?: "auto" | string[];
+							migrateScope?: MigrateScopeConfig;
 					  }
 					| undefined;
 			};
@@ -20,6 +22,8 @@ const loadFullConfigMock = mock(
 );
 
 const execCalls: string[] = [];
+const cleanupCalls: Array<{ providers: string[]; global: boolean }> = [];
+const repairCalls: string[] = [];
 
 function makeDeps(): PromptMigrateUpdateDeps {
 	return {
@@ -42,12 +46,22 @@ function makeDeps(): PromptMigrateUpdateDeps {
 			execCalls.push(command);
 			return { stdout: "", stderr: "" };
 		},
+		cleanupMigratedHooksFn: async (providers, options) => {
+			cleanupCalls.push({ providers, global: options.global });
+			return [];
+		},
+		repairHookFileReferencesFn: async (projectDir) => {
+			repairCalls.push(projectDir);
+			return 0;
+		},
 	};
 }
 
 describe("promptMigrateUpdate (step 3 of update pipeline)", () => {
 	beforeEach(() => {
 		execCalls.length = 0;
+		cleanupCalls.length = 0;
+		repairCalls.length = 0;
 		detectInstalledProvidersMock.mockReset();
 		detectInstalledProvidersMock.mockResolvedValue([]);
 		getProviderConfigMock.mockReset();
@@ -74,6 +88,7 @@ describe("promptMigrateUpdate (step 3 of update pipeline)", () => {
 	test("skips when autoMigrateAfterUpdate is not configured", async () => {
 		detectInstalledProvidersMock.mockResolvedValue(["claude-code", "codex"]);
 		await promptMigrateUpdate(makeDeps());
+		expect(repairCalls).toEqual([process.cwd()]);
 		expect(execCalls).toEqual([]);
 	});
 
@@ -82,7 +97,40 @@ describe("promptMigrateUpdate (step 3 of update pipeline)", () => {
 			config: { updatePipeline: { autoMigrateAfterUpdate: true } },
 		});
 		await promptMigrateUpdate(makeDeps());
+		expect(repairCalls).toEqual([process.cwd()]);
 		expect(execCalls).toEqual([]);
+	});
+
+	test("logs hook file reference repairs even when no providers are detected", async () => {
+		const deps = makeDeps();
+		deps.repairHookFileReferencesFn = async (projectDir) => {
+			repairCalls.push(projectDir);
+			return 2;
+		};
+
+		await promptMigrateUpdate(deps);
+
+		expect(repairCalls).toEqual([process.cwd()]);
+		expect(logger.info).toHaveBeenCalledWith("Repaired 2 missing hook file reference(s)");
+		expect(execCalls).toEqual([]);
+	});
+
+	test("continues migration step when hook file reference repair fails", async () => {
+		detectInstalledProvidersMock.mockResolvedValue(["codex"]);
+		loadFullConfigMock.mockResolvedValue({
+			config: { updatePipeline: { autoMigrateAfterUpdate: true } },
+		});
+		const deps = makeDeps();
+		deps.repairHookFileReferencesFn = async () => {
+			throw new Error("repair failed");
+		};
+
+		await promptMigrateUpdate(deps);
+
+		expect(logger.verbose).toHaveBeenCalledWith(
+			expect.stringContaining("Hook file reference repair skipped: repair failed"),
+		);
+		expect(execCalls).toEqual(["ck migrate --agent codex --yes"]);
 	});
 
 	test("skips when only claude-code is detected", async () => {
@@ -100,6 +148,9 @@ describe("promptMigrateUpdate (step 3 of update pipeline)", () => {
 			config: { updatePipeline: { autoMigrateAfterUpdate: true, migrateProviders: "auto" } },
 		});
 		await promptMigrateUpdate(makeDeps());
+		expect(cleanupCalls).toEqual([
+			{ providers: ["claude-code", "codex", "gemini-cli"], global: false },
+		]);
 		expect(execCalls).toEqual(["ck migrate --agent codex --agent gemini-cli --yes"]);
 	});
 
@@ -139,6 +190,7 @@ describe("promptMigrateUpdate (step 3 of update pipeline)", () => {
 			},
 		});
 		await promptMigrateUpdate(deps);
+		expect(cleanupCalls).toEqual([{ providers: ["codex"], global: true }]);
 		expect(execCalls).toEqual(["ck migrate -g --agent codex --yes"]);
 	});
 
@@ -152,6 +204,73 @@ describe("promptMigrateUpdate (step 3 of update pipeline)", () => {
 			"Some provider names contain invalid characters and were skipped",
 		);
 		expect(execCalls).toEqual(["ck migrate --agent codex --yes"]);
+	});
+
+	test("emits --skip-skills when migrateScope.skills is false (symlink scenario)", async () => {
+		detectInstalledProvidersMock.mockResolvedValue(["claude-code", "codex"]);
+		loadFullConfigMock.mockResolvedValue({
+			config: {
+				updatePipeline: {
+					autoMigrateAfterUpdate: true,
+					migrateScope: { skills: false },
+				},
+			},
+		});
+		await promptMigrateUpdate(makeDeps());
+		expect(execCalls).toEqual(["ck migrate --agent codex --skip-skills --yes"]);
+	});
+
+	test("emits multiple --skip-X flags in deterministic order", async () => {
+		detectInstalledProvidersMock.mockResolvedValue(["claude-code", "codex"]);
+		loadFullConfigMock.mockResolvedValue({
+			config: {
+				updatePipeline: {
+					autoMigrateAfterUpdate: true,
+					migrateScope: { skills: false, config: false, rules: false },
+				},
+			},
+		});
+		await promptMigrateUpdate(makeDeps());
+		expect(execCalls).toEqual([
+			"ck migrate --agent codex --skip-skills --skip-config --skip-rules --yes",
+		]);
+	});
+
+	test("does not emit --skip-X when migrateScope is absent (default behavior unchanged)", async () => {
+		detectInstalledProvidersMock.mockResolvedValue(["claude-code", "codex"]);
+		loadFullConfigMock.mockResolvedValue({
+			config: { updatePipeline: { autoMigrateAfterUpdate: true } },
+		});
+		await promptMigrateUpdate(makeDeps());
+		expect(execCalls).toEqual(["ck migrate --agent codex --yes"]);
+	});
+
+	test("does not emit --skip-X when all migrateScope fields are true", async () => {
+		detectInstalledProvidersMock.mockResolvedValue(["claude-code", "codex"]);
+		loadFullConfigMock.mockResolvedValue({
+			config: {
+				updatePipeline: {
+					autoMigrateAfterUpdate: true,
+					migrateScope: { agents: true, commands: true, skills: true },
+				},
+			},
+		});
+		await promptMigrateUpdate(makeDeps());
+		expect(execCalls).toEqual(["ck migrate --agent codex --yes"]);
+	});
+
+	test("ignores migrateScope entirely when autoMigrateAfterUpdate is false", async () => {
+		detectInstalledProvidersMock.mockResolvedValue(["claude-code", "codex"]);
+		loadFullConfigMock.mockResolvedValue({
+			config: {
+				updatePipeline: {
+					autoMigrateAfterUpdate: false,
+					migrateScope: { skills: false },
+				},
+			},
+		});
+		await promptMigrateUpdate(makeDeps());
+		expect(execCalls).toEqual([]);
 	});
 
 	test("handles exec failure gracefully", async () => {

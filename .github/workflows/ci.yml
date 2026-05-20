@@ -57,8 +57,98 @@ jobs:
           CI: "true"
           CI_SAFE_MODE: "true"
 
+      - name: Verify help parity and regenerated docs
+        run: |
+          bun run help:check-parity
+          bun run manifest:generate
+          bun run docs:generate
+          # Allow diff only when the sole change is generatedAt / generated comment timestamps
+          DIFF=$(git diff -- cli-manifest.json docs/cli-reference.md)
+          if [ -z "$DIFF" ]; then
+            echo "OK - no diff"
+          else
+            MEANINGFUL=$(echo "$DIFF" | grep -E '^[+-][^+-]' | grep -v '"generatedAt"' | grep -v '<!-- generated:' || true)
+            if [ -n "$MEANINGFUL" ]; then
+              echo "[X] cli-manifest.json or docs/cli-reference.md is stale. Re-run 'bun run manifest:generate && bun run docs:generate' and commit."
+              echo "$MEANINGFUL"
+              exit 1
+            fi
+            echo "OK - only generatedAt/timestamp lines differ"
+          fi
+
       - name: Build dashboard UI
         run: bun run ui:build
 
       - name: Verify packaged CLI
         run: node scripts/prepublish-check.js
+
+  metadata-check:
+    name: Metadata Deletions Check
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Fetch origin/dev for diff base
+        run: git fetch origin dev
+
+      - name: Check metadata deletions
+        run: node scripts/check-metadata-deletions.js
+
+  release-check:
+    name: Release Dry-Run Check
+    needs: test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
+
+      - name: Detect release-related file changes
+        id: changes
+        uses: dorny/paths-filter@de90cc6fb38fc0963ad72b210f1f284cd68cea36  # v3
+        with:
+          filters: |
+            release:
+              - '.releaserc*'
+              - '.github/workflows/release*.yml'
+              - 'scripts/*build*'
+              - 'scripts/*publish*'
+              - 'scripts/prepublish*'
+              - 'scripts/check-release-dry-run.js'
+              - 'package.json'
+              - '.npmignore'
+              - 'bin/**'
+
+      - name: Setup Bun
+        if: steps.changes.outputs.release == 'true'
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6  # v2
+        with:
+          bun-version: 1.3.2
+
+      - name: Install system dependencies
+        if: steps.changes.outputs.release == 'true'
+        run: sudo apt-get update && sudo apt-get install -y libsecret-1-dev
+
+      - name: Install dependencies
+        if: steps.changes.outputs.release == 'true'
+        run: bun install --frozen-lockfile
+
+      - name: Build
+        if: steps.changes.outputs.release == 'true'
+        run: bun run build
+
+      - name: Build dashboard UI
+        if: steps.changes.outputs.release == 'true'
+        run: bun run ui:build
+
+      - name: Run release dry-run check
+        if: steps.changes.outputs.release == 'true'
+        run: node scripts/check-release-dry-run.js
+
+      - name: Skip (no release-related changes)
+        if: steps.changes.outputs.release != 'true'
+        run: echo "[i] No release-related files changed — skipping release dry-run check."

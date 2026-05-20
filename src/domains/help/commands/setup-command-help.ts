@@ -8,12 +8,17 @@ import type { CommandHelp } from "../help-types.js";
 
 export const setupCommandHelp: CommandHelp = {
 	name: "setup",
-	description: "Run guided setup for API keys and optional packages",
+	description:
+		"Run guided setup for provider API keys, preferred image provider, and optional packages",
 	usage: "ck setup [options]",
 	examples: [
 		{
 			command: "ck setup",
 			description: "Run setup wizard in current project",
+		},
+		{
+			command: "ck setup --global",
+			description: "Configure global provider keys and a preferred image-generation path",
 		},
 		{
 			command: "ck setup --global --skip-packages",

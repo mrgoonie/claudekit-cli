@@ -58,7 +58,11 @@ export function usePanelSizes({
 			e.preventDefault();
 			setIsDragging(true);
 
-			const container = (e.target as HTMLElement).parentElement;
+			// Walk up from event target to find the flex container (not the resize handle itself)
+			let container = (e.currentTarget as HTMLElement).parentElement;
+			while (container && getComputedStyle(container).display !== "flex") {
+				container = container.parentElement;
+			}
 			if (!container) return;
 
 			const containerRect = container.getBoundingClientRect();

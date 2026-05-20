@@ -2,13 +2,16 @@
  * Provider registry — defines all supported providers with their
  * path configurations for agents, commands, and skills.
  */
+import { execFileSync } from "node:child_process";
 import { existsSync, readdirSync, statSync } from "node:fs";
-import { homedir } from "node:os";
+import { homedir, platform } from "node:os";
 import { join } from "node:path";
 import type { ProviderConfig, ProviderType } from "./types.js";
 
 const home = homedir();
 const cwd = process.cwd();
+const isWin = platform() === "win32";
+const OPENCODE_BINARY_NAME = isWin ? "opencode.exe" : "opencode";
 
 function hasInstallSignal(path: string | null | undefined): boolean {
 	if (!path || !existsSync(path)) {
@@ -31,6 +34,43 @@ function hasInstallSignal(path: string | null | undefined): boolean {
 
 function hasAnyInstallSignal(paths: Array<string | null | undefined>): boolean {
 	return paths.some((path) => hasInstallSignal(path));
+}
+
+/** Cache for binary lookups (avoids repeated shell spawns within a single run) */
+export const binaryCache = new Map<string, boolean>();
+
+/**
+ * Check if a binary exists in PATH. Uses `which` (Unix) or `where` (Windows).
+ * Results are cached per binary name for the duration of the process.
+ */
+export function hasBinaryInPath(name: string): boolean {
+	const cached = binaryCache.get(name);
+	if (cached !== undefined) return cached;
+
+	try {
+		execFileSync(isWin ? "where" : "which", [name], { stdio: "pipe", timeout: 3000 });
+		binaryCache.set(name, true);
+		return true;
+	} catch {
+		binaryCache.set(name, false);
+		return false;
+	}
+}
+
+function hasOpenCodeInstallSignal(): boolean {
+	return (
+		hasBinaryInPath("opencode") ||
+		hasAnyInstallSignal([
+			join(cwd, "opencode.json"),
+			join(cwd, "opencode.jsonc"),
+			join(cwd, ".opencode/agents"),
+			join(cwd, ".opencode/commands"),
+			join(home, ".config/opencode/AGENTS.md"),
+			join(home, ".config/opencode/agents"),
+			join(home, ".config/opencode/commands"),
+			join(home, ".opencode/bin", OPENCODE_BINARY_NAME),
+		])
+	);
 }
 
 /**
@@ -88,6 +128,7 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 			globalPath: join(home, ".claude/settings.json"),
 		},
 		detect: async () =>
+			hasBinaryInPath("claude") ||
 			hasAnyInstallSignal([
 				join(cwd, ".claude/agents"),
 				join(cwd, ".claude/commands"),
@@ -122,8 +163,11 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 			fileExtension: ".md",
 		},
 		skills: {
-			projectPath: ".opencode/skills",
-			globalPath: join(home, ".config/opencode/skills"),
+			// OpenCode reads Claude-compatible skill roots natively.
+			// Writing duplicate copies to .opencode/skills can shadow .claude/skills
+			// and make OpenCode load the wrong version of a skill.
+			projectPath: ".claude/skills",
+			globalPath: join(home, ".claude/skills"),
 			format: "direct-copy",
 			writeStrategy: "per-file",
 			fileExtension: ".md",
@@ -144,18 +188,7 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 		},
 		hooks: null,
 		settingsJsonPath: null,
-		detect: async () =>
-			hasAnyInstallSignal([
-				join(cwd, "opencode.json"),
-				join(cwd, "opencode.jsonc"),
-				join(cwd, ".opencode/agents"),
-				join(cwd, ".opencode/commands"),
-				join(cwd, ".opencode/skills"),
-				join(home, ".config/opencode/AGENTS.md"),
-				join(home, ".config/opencode/agents"),
-				join(home, ".config/opencode/commands"),
-				join(home, ".config/opencode/skills"),
-			]),
+		detect: async () => hasOpenCodeInstallSignal(),
 	},
 	"github-copilot": {
 		name: "github-copilot",
@@ -212,12 +245,12 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 			fileExtension: ".toml",
 		},
 		commands: {
-			projectPath: null, // Codex commands are global only (deprecated — skills preferred)
-			globalPath: join(home, ".codex/prompts"),
-			format: "direct-copy",
+			// Current Codex imports external commands as skills, not as prompt files.
+			projectPath: ".agents/skills",
+			globalPath: join(home, ".agents/skills"),
+			format: "command-to-codex-skill",
 			writeStrategy: "per-file",
 			fileExtension: ".md",
-			nestedCommands: false, // Codex scans top-level only
 		},
 		skills: {
 			projectPath: ".agents/skills", // Codex uses .agents/skills/ for project skills
@@ -243,8 +276,11 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 		hooks: {
 			projectPath: ".codex/hooks",
 			globalPath: join(home, ".codex/hooks"),
+			// "codex-hooks" write strategy: capability-gated transform + wrapper generation.
+			// hooks-settings-merger.ts checks for this strategy and routes through the
+			// Codex compatibility pipeline instead of direct-copy.
 			format: "direct-copy",
-			writeStrategy: "per-file",
+			writeStrategy: "codex-hooks",
 			fileExtension: "",
 		},
 		settingsJsonPath: {
@@ -252,16 +288,17 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 			globalPath: join(home, ".codex/hooks.json"),
 		},
 		detect: async () =>
+			hasBinaryInPath("codex") ||
 			hasAnyInstallSignal([
 				join(cwd, ".codex/config.toml"),
 				join(cwd, ".codex/agents"),
-				join(cwd, ".codex/prompts"),
+				join(cwd, ".agents/skills"),
 				join(cwd, ".codex/hooks.json"),
 				join(home, ".codex/config.toml"),
 				join(home, ".codex/agents"),
 				join(home, ".codex/AGENTS.md"),
 				join(home, ".codex/instructions.md"),
-				join(home, ".codex/prompts"),
+				join(home, ".agents/skills"),
 				join(home, ".codex/hooks.json"),
 			]),
 	},
@@ -316,6 +353,7 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 			globalPath: join(home, ".factory/settings.json"),
 		},
 		detect: async () =>
+			hasBinaryInPath("droid") ||
 			hasAnyInstallSignal([
 				join(cwd, ".factory/droids"),
 				join(cwd, ".factory/commands"),
@@ -345,8 +383,8 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 		},
 		commands: null, // Cursor does not support commands
 		skills: {
-			projectPath: ".agents/skills", // Cursor reads .agents/skills/ at project level
-			globalPath: join(home, ".cursor/skills"), // Cursor does NOT read ~/.agents/skills/ globally
+			projectPath: ".cursor/skills", // Cursor reads .cursor/skills/ at project level (upstream: cursor.com/docs/skills)
+			globalPath: join(home, ".cursor/skills"), // Cursor global skills at ~/.cursor/skills
 			format: "direct-copy",
 			writeStrategy: "per-file",
 			fileExtension: ".md",
@@ -370,6 +408,7 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 		// Note: .agents/skills/ intentionally omitted — it's shared across 5+ providers
 		// and can't identify cursor specifically. Cursor users always have .cursor/rules.
 		detect: async () =>
+			hasBinaryInPath("cursor") ||
 			hasAnyInstallSignal([
 				join(cwd, ".cursor/rules"),
 				join(home, ".cursor/rules"),
@@ -466,6 +505,50 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 				join(home, ".kilocode/skills"),
 			]),
 	},
+	kiro: {
+		name: "kiro",
+		displayName: "Kiro IDE",
+		subagents: "none", // Kiro uses steering for context injection, not agent delegation
+		agents: {
+			projectPath: ".kiro/steering",
+			globalPath: null, // Kiro is project-first; no global agents path
+			format: "md-to-kiro-steering",
+			writeStrategy: "per-file",
+			fileExtension: ".md",
+		},
+		commands: null, // Kiro does not support commands
+		skills: {
+			projectPath: ".kiro/skills",
+			globalPath: null, // Kiro skills are project-level only
+			format: "direct-copy",
+			writeStrategy: "per-file",
+			fileExtension: ".md",
+		},
+		config: {
+			projectPath: ".kiro/steering/project.md",
+			globalPath: null, // Kiro config is project-level only
+			format: "md-to-kiro-steering",
+			writeStrategy: "single-file",
+			fileExtension: ".md",
+		},
+		rules: {
+			projectPath: ".kiro/steering",
+			globalPath: null, // Kiro rules are project-level only
+			format: "md-to-kiro-steering",
+			writeStrategy: "per-file",
+			fileExtension: ".md",
+		},
+		hooks: null, // Kiro hooks are YAML-based, incompatible with Claude Code JS hooks
+		settingsJsonPath: null, // Kiro uses .kiro/settings/mcp.json (incompatible format)
+		detect: async () =>
+			hasAnyInstallSignal([
+				join(cwd, ".kiro/steering"),
+				join(cwd, ".kiro/skills"),
+				join(cwd, ".kiro/hooks"),
+				join(cwd, ".kiro/agents"),
+				join(cwd, ".kiro/settings/mcp.json"),
+			]),
+	},
 	windsurf: {
 		name: "windsurf",
 		displayName: "Windsurf",
@@ -487,8 +570,8 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 			nestedCommands: false, // Windsurf workflows are flat
 		},
 		skills: {
-			projectPath: ".agents/skills", // Windsurf reads .agents/skills/ for cross-agent compat
-			globalPath: join(home, ".agents/skills"), // Consolidated: Windsurf scans both paths
+			projectPath: ".windsurf/skills", // Windsurf reads .windsurf/skills/ at project level (upstream: docs.windsurf.com/windsurf/cascade/skills)
+			globalPath: join(home, ".codeium/windsurf/skills"), // Windsurf global skills at ~/.codeium/windsurf/skills
 			format: "direct-copy",
 			writeStrategy: "per-file",
 			fileExtension: ".md",
@@ -513,6 +596,7 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 		hooks: null,
 		settingsJsonPath: null,
 		detect: async () =>
+			hasBinaryInPath("windsurf") ||
 			hasAnyInstallSignal([
 				join(cwd, ".windsurf/rules"),
 				join(cwd, ".windsurf/workflows"),
@@ -556,6 +640,7 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 		hooks: null,
 		settingsJsonPath: null,
 		detect: async () =>
+			hasBinaryInPath("goose") ||
 			hasAnyInstallSignal([
 				join(cwd, ".goosehints"),
 				join(cwd, ".goose/skills"),
@@ -602,9 +687,19 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 			writeStrategy: "merge-single",
 			fileExtension: ".md",
 		},
-		hooks: null,
-		settingsJsonPath: null,
+		hooks: {
+			projectPath: ".gemini/hooks",
+			globalPath: join(home, ".gemini/hooks"),
+			format: "direct-copy",
+			writeStrategy: "per-file",
+			fileExtension: "",
+		},
+		settingsJsonPath: {
+			projectPath: ".gemini/settings.json",
+			globalPath: join(home, ".gemini/settings.json"),
+		},
 		detect: async () =>
+			hasBinaryInPath("gemini") ||
 			hasAnyInstallSignal([
 				join(cwd, ".gemini/commands"),
 				join(cwd, "GEMINI.md"),
@@ -648,6 +743,7 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 		hooks: null,
 		settingsJsonPath: null,
 		detect: async () =>
+			hasBinaryInPath("amp") ||
 			hasAnyInstallSignal([
 				join(cwd, ".amp/rules"),
 				join(cwd, "AGENT.md"), // Amp's primary config (not shared with other providers)
@@ -659,22 +755,20 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 		name: "antigravity",
 		displayName: "Antigravity",
 		subagents: "full",
-		agents: {
-			projectPath: ".agent/rules",
-			globalPath: join(home, ".gemini/antigravity"),
-			format: "fm-strip",
-			writeStrategy: "per-file",
-			fileExtension: ".md",
-		},
+		// Antigravity has no separate "agents" concept — agents ARE skills (SKILL.md format).
+		// Claude Code agents are migrated to .agent/skills/ alongside native Antigravity skills.
+		agents: null,
 		commands: {
 			projectPath: ".agent/workflows",
-			globalPath: join(home, ".gemini/antigravity/global_workflows"),
+			globalPath: null, // No verified global workflows path; only project-level confirmed
 			format: "direct-copy",
 			writeStrategy: "per-file",
 			fileExtension: ".md",
-			nestedCommands: false, // Antigravity nesting support unknown, flatten to be safe
+			nestedCommands: false, // Verified: Antigravity workflows are flat single-level files
 		},
 		skills: {
+			// Skills use <name>/SKILL.md directory format; installSkillDirectories() copies whole dirs
+			// Global: ~/.gemini/antigravity/skills/ (confirmed: Codelabs docs)
 			projectPath: ".agent/skills",
 			globalPath: join(home, ".gemini/antigravity/skills"),
 			format: "direct-copy",
@@ -683,30 +777,32 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 		},
 		config: {
 			projectPath: "GEMINI.md",
-			globalPath: join(home, ".gemini/antigravity/GEMINI.md"),
+			// Global config lives at ~/.gemini/GEMINI.md (shared with Gemini CLI)
+			// Source: Google Codelabs + github.com/google-gemini/gemini-cli/issues/16058
+			globalPath: join(home, ".gemini/GEMINI.md"),
 			format: "md-strip",
 			writeStrategy: "single-file",
 			fileExtension: ".md",
 		},
 		rules: {
 			projectPath: ".agent/rules",
-			globalPath: join(home, ".gemini/antigravity/rules"),
+			globalPath: null, // No verified global rules path separate from ~/.gemini/GEMINI.md
 			format: "md-strip",
 			writeStrategy: "per-file",
 			fileExtension: ".md",
 		},
-		hooks: null,
-		settingsJsonPath: null,
+		hooks: null, // ~/.gemini/settings.json has no user-configurable hooks section
+		settingsJsonPath: null, // ~/.gemini/settings.json format incompatible with Claude Code
 		detect: async () =>
+			hasBinaryInPath("agy") ||
+			hasBinaryInPath("antigravity") ||
 			hasAnyInstallSignal([
 				join(cwd, ".agent/rules"),
 				join(cwd, ".agent/skills"),
 				join(cwd, ".agent/workflows"),
 				join(cwd, "GEMINI.md"),
-				join(home, ".gemini/antigravity/GEMINI.md"),
-				join(home, ".gemini/antigravity/rules"),
+				join(home, ".gemini/antigravity"), // Global antigravity config dir
 				join(home, ".gemini/antigravity/skills"),
-				join(home, ".gemini/antigravity/global_workflows"),
 			]),
 	},
 	cline: {
@@ -837,6 +933,22 @@ export function getProvidersSupporting(
 }
 
 /**
+ * Get the base destination path for a portable type on a specific provider.
+ * For per-file strategies this returns the parent directory. For merge/single
+ * targets it returns the actual target file path.
+ */
+export function getPortableBasePath(
+	provider: ProviderType,
+	portableType: "agents" | "commands" | "skills" | "config" | "rules" | "hooks",
+	options: { global: boolean },
+): string | null {
+	const config = providers[provider];
+	const pathConfig = config[portableType];
+	if (!pathConfig) return null;
+	return options.global ? pathConfig.globalPath : pathConfig.projectPath;
+}
+
+/**
  * Get install path for a portable item on a specific provider
  */
 export function getPortableInstallPath(
@@ -849,7 +961,7 @@ export function getPortableInstallPath(
 	const pathConfig = config[portableType];
 	if (!pathConfig) return null;
 
-	const basePath = options.global ? pathConfig.globalPath : pathConfig.projectPath;
+	const basePath = getPortableBasePath(provider, portableType, options);
 	if (!basePath) return null;
 
 	// For merge-single / yaml-merge / json-merge / single-file, the path IS the target file

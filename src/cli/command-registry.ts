@@ -7,6 +7,7 @@
 import type { cac } from "cac";
 import { agentsCommand } from "../commands/agents/index.js";
 import { apiCommand } from "../commands/api/index.js";
+import { registerBackupsCommand } from "../commands/backups/index.js";
 import { commandsCommand } from "../commands/commands/index.js";
 import { configCommand } from "../commands/config/index.js";
 import { doctorCommand } from "../commands/doctor.js";
@@ -206,6 +207,9 @@ export function registerCommands(cli: ReturnType<typeof cac>): void {
 			await uninstallCommand(options);
 		});
 
+	// Backups command
+	registerBackupsCommand(cli);
+
 	// Easter Egg command (Code Hunt 2025)
 	cli
 		.command("easter-egg", "🥚 Roll for a random discount code (Code Hunt 2025)")
@@ -313,10 +317,20 @@ export function registerCommands(cli: ReturnType<typeof cac>): void {
 		.option("--force", "Force uninstall even if not in registry")
 		.option("--sync", "Sync registry with filesystem (remove orphans)")
 		.option("-y, --yes", "Skip confirmation prompts")
+		.option("--catalog", "Show skill catalog stats")
+		.option("--regenerate", "Force regenerate catalog (use with --catalog)")
+		.option("--search <query>", "BM25 full-text search over skill catalog")
+		.option("--json", "Output search results as JSON (use with --search)")
+		.option("--limit <n>", "Max search results, default 10 (use with --search)")
+		.option("--validate", "Validate SKILL.md frontmatter fields")
 		.action(async (options) => {
 			// Normalize agent to always be an array
 			if (options.agent && !Array.isArray(options.agent)) {
 				options.agent = [options.agent];
+			}
+			// Normalize limit to number
+			if (options.limit !== undefined) {
+				options.limit = Number(options.limit);
 			}
 			await skillsCommand(options);
 		});
@@ -372,6 +386,7 @@ export function registerCommands(cli: ReturnType<typeof cac>): void {
 		.option("--port <port>", "Port for kanban dashboard")
 		.option("--no-open", "Don't auto-open browser")
 		.option("--dev", "Development mode for dashboard")
+		.option("-g, --global", "Use global plans scope (~/.claude/plans or configured global root)")
 		.option("--title <title>", "Plan title (for create)")
 		.option("--phases <phases>", "Comma-separated phase names (for create)")
 		.option("--dir <dir>", "Plan directory (for create)")
@@ -379,6 +394,8 @@ export function registerCommands(cli: ReturnType<typeof cac>): void {
 		.option("--issue <issue>", "GitHub issue number (for create)")
 		.option("--after <after>", "Insert after phase ID (for add-phase)")
 		.option("--start", "Mark as in-progress instead of completed (for check)")
+		.option("--source <source>", "Creation source: skill | cli | dashboard (for create)")
+		.option("--session-id <id>", "Claude session ID for tracking (for create)")
 		.action(async (action, target, options) => {
 			await planCommand(action, target, options);
 		});
@@ -416,9 +433,15 @@ export function registerCommands(cli: ReturnType<typeof cac>): void {
 		.option("-g, --global", "Install globally instead of project-level")
 		.option("--all", "Migrate to all supported providers")
 		.option("-y, --yes", "Skip confirmation prompts")
+		.option("--only-agents", "Migrate agents only")
+		.option("--only-commands", "Migrate commands only")
+		.option("--only-skills", "Migrate skills only")
 		.option("--config", "Migrate CLAUDE.md config only")
 		.option("--rules", "Migrate .claude/rules/ only")
 		.option("--hooks", "Migrate .claude/hooks/ only")
+		.option("--skip-agents", "Skip agents migration")
+		.option("--skip-commands", "Skip commands migration")
+		.option("--skip-skills", "Skip skills migration (preserve symlinks/custom layouts)")
 		.option("--skip-config", "Skip config migration")
 		.option("--skip-rules", "Skip rules migration")
 		.option("--skip-hooks", "Skip hooks migration")
@@ -428,6 +451,17 @@ export function registerCommands(cli: ReturnType<typeof cac>): void {
 		)
 		.option("--dry-run", "Preview migration targets without writing files")
 		.option("-f, --force", "Force reinstall deleted/edited items")
+		// Mode flags (P5 — smart default: unknown checksums → install, valid registry → reconcile)
+		.option("--install", "Opt-in install picker mode (select specific items to install)")
+		.option("--reconcile", "Force reconcile mode (current default when registry is valid)")
+		.option(
+			"--reinstall-empty-dirs",
+			"Reinstall all items when their type directory is empty (default: true)",
+		)
+		.option(
+			"--respect-deletions",
+			"Preserve deletion even when type directory is empty (disables reinstall-empty-dirs)",
+		)
 		.action(async (options) => {
 			if (options.agent && !Array.isArray(options.agent)) {
 				options.agent = [options.agent];

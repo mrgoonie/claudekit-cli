@@ -46,6 +46,11 @@ export async function invokeClaude(options: {
 		tools,
 	];
 
+	// Claude CLI requires --verbose when using -p --output-format stream-json
+	if (outputFormat === "stream-json") {
+		args.push("--verbose");
+	}
+
 	const child = spawn("claude", args, {
 		cwd: options.cwd,
 		stdio: ["pipe", "pipe", "pipe"],
@@ -115,7 +120,8 @@ function collectClaudeOutput(
  * Each line is a JSON object: tool_use, tool_result, assistant message, result, etc.
  */
 function logStreamEvent(chunk: string): void {
-	for (const line of chunk.split("\n").filter(Boolean)) {
+	// Strip carriage returns for Windows CRLF compatibility
+	for (const line of chunk.replace(/\r/g, "").split("\n").filter(Boolean)) {
 		try {
 			const event = JSON.parse(line) as Record<string, unknown>;
 			const type = event.type as string;
@@ -156,7 +162,8 @@ function logStreamEvent(chunk: string): void {
  * Parse stream-json (NDJSON) output — extract final result text from the last "result" event
  */
 function parseStreamJsonOutput(stdout: string): ClaudeResult {
-	const lines = stdout.split("\n").filter(Boolean);
+	// Strip carriage returns for Windows compatibility (CRLF → LF)
+	const lines = stdout.replace(/\r/g, "").split("\n").filter(Boolean);
 
 	// Find the last "result" event
 	for (let i = lines.length - 1; i >= 0; i--) {

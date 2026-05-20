@@ -8,29 +8,29 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
+import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
 import { mkdir, writeFile } from "node:fs/promises";
-import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { cleanupCommandsDirectory } from "@/services/transformers/commands-prefix/prefix-cleaner.js";
 import type { Metadata } from "@/types";
-import { pathExists, remove } from "fs-extra";
+import { pathExists } from "fs-extra";
 
 describe("cleanupCommandsDirectory - kit-aware", () => {
 	let tempDir: string;
 	let claudeDir: string;
 	let commandsDir: string;
 
-	beforeEach(async () => {
-		tempDir = await mkdtemp(join(tmpdir(), "prefix-cleaner-test-"));
+	beforeEach(() => {
+		tempDir = mkdtempSync(join(tmpdir(), "prefix-cleaner-test-"));
 		claudeDir = join(tempDir, ".claude");
 		commandsDir = join(claudeDir, "commands");
-		await mkdir(commandsDir, { recursive: true });
+		mkdirSync(commandsDir, { recursive: true });
 	});
 
 	afterEach(async () => {
 		if (await pathExists(tempDir)) {
-			await remove(tempDir);
+			rmSync(tempDir, { recursive: true, force: true });
 		}
 	});
 
@@ -373,14 +373,9 @@ describe("cleanupCommandsDirectory - kit-aware", () => {
  */
 async function calculateChecksum(filePath: string): Promise<string> {
 	const { createHash } = await import("node:crypto");
-	const { createReadStream } = await import("node:fs");
+	const { readFile } = await import("node:fs/promises");
 
-	return new Promise((resolve, reject) => {
-		const hash = createHash("sha256");
-		const stream = createReadStream(filePath);
-
-		stream.on("data", (chunk) => hash.update(chunk));
-		stream.on("end", () => resolve(hash.digest("hex")));
-		stream.on("error", reject);
-	});
+	return createHash("sha256")
+		.update(await readFile(filePath))
+		.digest("hex");
 }

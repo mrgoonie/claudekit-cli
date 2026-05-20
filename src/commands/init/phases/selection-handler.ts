@@ -10,6 +10,7 @@ import { GitHubClient } from "@/domains/github/github-client.js";
 import { detectAccessibleKits } from "@/domains/github/kit-access-checker.js";
 import { runPreflightChecks } from "@/domains/github/preflight-checker.js";
 import { handleFreshInstallation } from "@/domains/installation/fresh-installer.js";
+import { repairLegacyWindowsGlobalKitDir } from "@/domains/installation/global-kit-legacy-repair.js";
 import { versionsMatch } from "@/domains/versioning/checking/version-utils.js";
 import { readManifest } from "@/services/file-operations/manifest/manifest-reader.js";
 import { logger } from "@/shared/logger.js";
@@ -22,6 +23,28 @@ import { isSyncContext } from "../types.js";
 /**
  * Select kit, target directory, and version
  */
+function buildKitScopedUninstallCommands(
+	kits: KitType[],
+	resolvedDir: string,
+	isGlobal: boolean,
+): string[] {
+	const scopeFlag =
+		isGlobal || PathResolver.isLocalSameAsGlobal(resolvedDir) ? "--global" : "--local";
+	return kits.map((kit) => `ck uninstall ${scopeFlag} --kit ${kit}`);
+}
+
+function buildRerunInitCommand(kitType: KitType, resolvedDir: string, isGlobal: boolean): string {
+	const args = ["ck init"];
+	const targetsGlobal = isGlobal || PathResolver.isLocalSameAsGlobal(resolvedDir);
+	if (targetsGlobal) {
+		args.push("--global");
+	} else {
+		args.push(`--dir ${JSON.stringify(resolvedDir)}`);
+	}
+	args.push(`--kit ${kitType}`);
+	return args.join(" ");
+}
+
 export async function handleSelection(ctx: InitContext): Promise<InitContext> {
 	if (ctx.cancelled) return ctx;
 
@@ -78,7 +101,17 @@ export async function handleSelection(ctx: InitContext): Promise<InitContext> {
 		}
 
 		// Pre-flight passed, now check kit access
-		accessibleKits = await detectAccessibleKits();
+		try {
+			accessibleKits = await detectAccessibleKits();
+		} catch (err) {
+			// Non-404 errors (network failure, auth error, rate limit) propagate here
+			// when PR1 lands. Surface the classified message and hint to ck doctor.
+			const message = err instanceof Error ? err.message : String(err);
+			logger.error(`Failed to check repository access: ${message}`);
+			logger.info("");
+			logger.info("Run: ck doctor");
+			return { ...ctx, cancelled: true };
+		}
 
 		if (accessibleKits.length === 0) {
 			// Pre-flight passed but no access = real access issue (not a gh CLI problem)
@@ -234,6 +267,30 @@ export async function handleSelection(ctx: InitContext): Promise<InitContext> {
 	}
 
 	const resolvedDir = resolve(targetDir);
+	if (ctx.options.global) {
+		try {
+			const repairResult = await repairLegacyWindowsGlobalKitDir({ targetDir: resolvedDir });
+			if (repairResult.status === "repaired") {
+				logger.success(
+					`Migrated legacy Windows global kit directory from ${repairResult.legacyDir} to ${resolvedDir}`,
+				);
+			} else if (
+				repairResult.reason === "target-exists" ||
+				repairResult.reason === "ambiguous-legacy-dirs"
+			) {
+				logger.warning(
+					`Detected legacy Windows global kit directory but did not auto-migrate it (${repairResult.reason}).`,
+				);
+				logger.info(`Using global kit directory: ${resolvedDir}`);
+			}
+		} catch (err) {
+			// Repair is opportunistic — never abort the install if it fails
+			// (EACCES on locked dir, ENOTEMPTY on race, etc.)
+			logger.warning(
+				`Legacy global kit dir repair failed, continuing: ${err instanceof Error ? err.message : String(err)}`,
+			);
+		}
+	}
 	logger.info(`Target directory: ${resolvedDir}`);
 
 	// HOME directory detection: warn if installing to HOME without --global flag
@@ -302,6 +359,17 @@ export async function handleSelection(ctx: InitContext): Promise<InitContext> {
 							);
 
 							if (!confirmAdd) {
+								logger.info("To remove one installed kit first, run:");
+								for (const command of buildKitScopedUninstallCommands(
+									otherKits,
+									resolvedDir,
+									ctx.options.global,
+								)) {
+									logger.info(`  ${command}`);
+								}
+								logger.info(
+									`Then rerun: ${buildRerunInitCommand(kitType, resolvedDir, ctx.options.global)}`,
+								);
 								logger.warning("Multi-kit installation cancelled by user");
 								return { ...ctx, cancelled: true };
 							}

@@ -20,6 +20,7 @@ const SystemSettingsJsonCard: React.FC = () => {
 	const [cursorLine, setCursorLine] = useState(0);
 	const [exists, setExists] = useState(false);
 	const [loadFailed, setLoadFailed] = useState(false);
+	const [loadErrorDetail, setLoadErrorDetail] = useState<string | null>(null);
 	const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
 	const [syntaxError, setSyntaxError] = useState<string | null>(null);
 	const [saveFeedback, setSaveFeedback] = useState<string | null>(null);
@@ -30,6 +31,7 @@ const SystemSettingsJsonCard: React.FC = () => {
 		const loadSettings = async () => {
 			setIsLoading(true);
 			setLoadFailed(false);
+			setLoadErrorDetail(null);
 
 			try {
 				const data = await fetchSettingsFile();
@@ -40,8 +42,12 @@ const SystemSettingsJsonCard: React.FC = () => {
 				setOriginalJsonText(normalized);
 				setSettingsJsonText(normalized);
 				setSyntaxError(null);
-			} catch {
+				setLoadErrorDetail(null);
+			} catch (err) {
 				if (cancelled) return;
+				const detail = err instanceof Error ? err.message : String(err);
+				console.error("[SystemSettingsJsonCard] fetchSettingsFile failed:", err);
+				setLoadErrorDetail(detail);
 				setLoadFailed(true);
 				setExists(false);
 				setSettingsPath(SETTINGS_FALLBACK_PATH);
@@ -169,7 +175,14 @@ const SystemSettingsJsonCard: React.FC = () => {
 			)}
 
 			{!isLoading && loadFailed && (
-				<p className="mt-2 px-1 text-xs text-red-500">{t("settingsJsonLoadFailed")}</p>
+				<div className="mt-2 px-1 text-xs text-red-500">
+					<p>{t("settingsJsonLoadFailed")}</p>
+					{loadErrorDetail && (
+						<p className="mt-1 break-words">
+							{t("settingsLoadFailedDetail")} {loadErrorDetail}
+						</p>
+					)}
+				</div>
 			)}
 		</section>
 	);

@@ -1,6 +1,11 @@
 /**
  * Central model taxonomy — provider-agnostic tier mapping for portable migration.
  * Translates Claude model names (opus/sonnet/haiku) to target provider equivalents.
+ *
+ * Note: OPENCODE_DEFAULT_MODEL and the simple resolveOpenCodeDefaultModel() wrapper
+ * have been removed in favour of the auth-first dynamic resolver in
+ * opencode-model-discovery.ts (#771). Use getOpenCodeDefaultModelOverride() to check
+ * for .ck.json user overrides before calling the dynamic resolver.
  */
 
 /** Provider-agnostic capability tiers */
@@ -47,6 +52,11 @@ export function setTaxonomyOverrides(
 	overrides: Record<string, Record<string, ResolvedModel>> | undefined,
 ): void {
 	userOverrides = overrides;
+}
+
+/** User-set opencode default model override from .ck.json, if any. */
+export function getOpenCodeDefaultModelOverride(): string | undefined {
+	return userOverrides?.opencode?.default?.model;
 }
 
 /**

@@ -1,9 +1,11 @@
 import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { readdir } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { homedir, tmpdir } from "node:os";
 import { join, resolve } from "node:path";
+import { type SettingsJson, SettingsMerger } from "@/domains/config/settings-merger.js";
 import { CLAUDEKIT_CLI_NPM_PACKAGE_NAME } from "@/shared/claudekit-constants.js";
+import { repairClaudeHookCommandPath } from "@/shared/command-normalizer.js";
 import { logger } from "@/shared/logger.js";
 import { PathResolver } from "@/shared/path-resolver.js";
 import type { CheckResult } from "../types.js";
@@ -12,6 +14,44 @@ import { HOOK_EXTENSIONS } from "./shared.js";
 const HOOK_CHECK_TIMEOUT_MS = 5000;
 const PYTHON_CHECK_TIMEOUT_MS = 3000;
 const MAX_LOG_FILE_SIZE_BYTES = 10 * 1024 * 1024; // 10MB
+
+export interface ClaudeSettingsFile {
+	path: string;
+	label: string;
+	root: string;
+}
+
+export interface HookCommandFinding {
+	path: string;
+	label: string;
+	eventName: string;
+	matcher?: string;
+	command: string;
+	expected: string;
+	issue: "raw-relative" | "invalid-format";
+}
+
+/**
+ * Thrown when `repairHookCommandsInSettingsFile` applies fixes but a post-fix
+ * re-detection pass still finds stale entries. This indicates the fixer and
+ * detector have diverged — a checker/fixer parity violation.
+ *
+ * @see docs/code-standards.md — "Checker/Fixer Parity for autoFixable health checks"
+ */
+export class FixerDidNotConvergeError extends Error {
+	readonly unresolved: HookCommandFinding[];
+
+	constructor(unresolved: HookCommandFinding[]) {
+		const lines = unresolved
+			.map((f) => `  ${f.label} :: ${f.eventName} :: ${f.command}`)
+			.join("\n");
+		super(
+			`ck doctor --fix: fixer did not converge — ${unresolved.length} stale hook command path(s) remain after repair:\n${lines}\n\nThis is a bug. Please open an issue at https://github.com/mrgoonie/claudekit-cli`,
+		);
+		this.name = "FixerDidNotConvergeError";
+		this.unresolved = unresolved;
+	}
+}
 
 /**
  * Get the hooks directory to check (prefer project, fallback to global)
@@ -30,6 +70,211 @@ function getHooksDir(projectDir: string): string | null {
  */
 function isPathWithin(filePath: string, parentDir: string): boolean {
 	return resolve(filePath).startsWith(resolve(parentDir));
+}
+
+function getCanonicalGlobalCommandRoot(): string {
+	const configuredGlobalDir = PathResolver.getGlobalKitDir()
+		.replace(/\\/g, "/")
+		.replace(/\/+$/, "");
+	const defaultGlobalDir = join(homedir(), ".claude").replace(/\\/g, "/");
+	return configuredGlobalDir === defaultGlobalDir ? "$HOME" : configuredGlobalDir;
+}
+
+function getClaudeSettingsFiles(projectDir: string): ClaudeSettingsFile[] {
+	const globalClaudeDir = PathResolver.getGlobalKitDir();
+	const candidates: ClaudeSettingsFile[] = [
+		{
+			path: resolve(projectDir, ".claude", "settings.json"),
+			label: "project settings.json",
+			root: "$CLAUDE_PROJECT_DIR",
+		},
+		{
+			path: resolve(projectDir, ".claude", "settings.local.json"),
+			label: "project settings.local.json",
+			root: "$CLAUDE_PROJECT_DIR",
+		},
+		{
+			path: resolve(globalClaudeDir, "settings.json"),
+			label: "global settings.json",
+			root: getCanonicalGlobalCommandRoot(),
+		},
+		{
+			path: resolve(globalClaudeDir, "settings.local.json"),
+			label: "global settings.local.json",
+			root: getCanonicalGlobalCommandRoot(),
+		},
+	];
+
+	return candidates.filter((candidate) => existsSync(candidate.path));
+}
+
+/**
+ * Returns true if the command is already in one of the two recognized canonical forms,
+ * regardless of which settings-file root is in use.
+ *
+ * The health-checker uses this to suppress false-positive findings for cross-scope
+ * canonical references (e.g., a $HOME hook intentionally placed in a project settings
+ * file, or a $CLAUDE_PROJECT_DIR hook in a global settings file). These are valid
+ * user configurations and must not be flagged as stale.
+ *
+ * Note: repairClaudeNodeCommandPath's own canonical guard only short-circuits
+ * same-scope cases (so SettingsProcessor can still intentionally re-root cross-scope
+ * commands during install). This function provides the health-checker-specific gate.
+ *
+ * Canonical forms:
+ *   node "$HOME/.claude/..."              — $HOME full-path-in-quotes
+ *   node "$CLAUDE_PROJECT_DIR"/.claude/... — $CLAUDE_PROJECT_DIR var-only-quoted
+ */
+function isAlreadyCanonical(cmd: string): boolean {
+	return (
+		/^node\s+"\$HOME\/\.claude\/[^"]+"/.test(cmd) ||
+		/^node\s+"\$CLAUDE_PROJECT_DIR"\/\.claude\/\S+/.test(cmd) ||
+		/^bash\s+"\$HOME\/\.claude\/hooks\/node-hook-runner\.sh"\s+"\$HOME\/\.claude\/[^"]+"/.test(
+			cmd,
+		) ||
+		/^bash\s+"\$CLAUDE_PROJECT_DIR"\/\.claude\/hooks\/node-hook-runner\.sh\s+"\$CLAUDE_PROJECT_DIR"\/\.claude\/\S+/.test(
+			cmd,
+		)
+	);
+}
+
+function collectHookCommandFindings(
+	settings: SettingsJson,
+	settingsFile: ClaudeSettingsFile,
+): HookCommandFinding[] {
+	if (!settings.hooks) {
+		return [];
+	}
+
+	const findings: HookCommandFinding[] = [];
+	for (const [eventName, entries] of Object.entries(settings.hooks)) {
+		for (const entry of entries) {
+			if ("command" in entry && typeof entry.command === "string") {
+				// Skip commands already in any canonical form — cross-scope references are valid.
+				if (isAlreadyCanonical(entry.command)) continue;
+				const repair = repairClaudeHookCommandPath(entry.command, settingsFile.root);
+				if (repair.changed && repair.issue) {
+					findings.push({
+						path: settingsFile.path,
+						label: settingsFile.label,
+						eventName,
+						command: entry.command,
+						expected: repair.command,
+						issue: repair.issue,
+					});
+				}
+			}
+
+			if (!("hooks" in entry) || !entry.hooks) {
+				continue;
+			}
+
+			for (const hook of entry.hooks) {
+				if (!hook.command) {
+					continue;
+				}
+
+				// Skip commands already in any canonical form — cross-scope references are valid.
+				if (isAlreadyCanonical(hook.command)) continue;
+
+				const repair = repairClaudeHookCommandPath(hook.command, settingsFile.root);
+				if (!repair.changed || !repair.issue) {
+					continue;
+				}
+
+				findings.push({
+					path: settingsFile.path,
+					label: settingsFile.label,
+					eventName,
+					matcher: "matcher" in entry ? entry.matcher : undefined,
+					command: hook.command,
+					expected: repair.command,
+					issue: repair.issue,
+				});
+			}
+		}
+	}
+
+	return findings;
+}
+
+/**
+ * Read a settings file from disk and return all stale hook command findings.
+ *
+ * This is the single canonical detect function used by both `checkHookCommandPaths`
+ * (reporting) and `repairHookCommandsInSettingsFile` (fixing). Keeping them on the
+ * same code path prevents checker/fixer divergence.
+ *
+ * @see docs/code-standards.md — "Checker/Fixer Parity for autoFixable health checks"
+ */
+export async function findStaleHookCommandsInFile(
+	settingsFile: ClaudeSettingsFile,
+): Promise<HookCommandFinding[]> {
+	const settings = await SettingsMerger.readSettingsFile(settingsFile.path);
+	if (!settings) {
+		return [];
+	}
+	return collectHookCommandFindings(settings, settingsFile);
+}
+
+async function repairHookCommandsInSettingsFile(settingsFile: ClaudeSettingsFile): Promise<number> {
+	const settings = await SettingsMerger.readSettingsFile(settingsFile.path);
+	if (!settings?.hooks) {
+		return 0;
+	}
+
+	// Phase 1: identify stale entries using the canonical detect function.
+	// This is the single source of truth — the same logic the checker uses.
+	const findings = collectHookCommandFindings(settings, settingsFile);
+	if (findings.length === 0) {
+		return 0;
+	}
+
+	// Phase 2: apply repairs. Build a lookup from stale command → expected command
+	// to avoid re-running repairClaudeNodeCommandPath independently (which would
+	// create a second divergence point).
+	const repairMap = new Map<string, string>(findings.map((f) => [f.command, f.expected]));
+
+	let repaired = 0;
+	for (const entries of Object.values(settings.hooks)) {
+		for (const entry of entries) {
+			if ("command" in entry && typeof entry.command === "string") {
+				const fixed = repairMap.get(entry.command);
+				if (fixed !== undefined) {
+					entry.command = fixed;
+					repaired++;
+				}
+			}
+
+			if (!("hooks" in entry) || !entry.hooks) {
+				continue;
+			}
+
+			for (const hook of entry.hooks) {
+				if (!hook.command) {
+					continue;
+				}
+				const fixed = repairMap.get(hook.command);
+				if (fixed !== undefined) {
+					hook.command = fixed;
+					repaired++;
+				}
+			}
+		}
+	}
+
+	if (repaired > 0) {
+		await SettingsMerger.writeSettingsFile(settingsFile.path, settings);
+	}
+
+	// Phase 3: post-fix verification — re-detect using the same canonical function.
+	// If the fixer is missing a code path the detector has, this will catch it.
+	const remaining = collectHookCommandFindings(settings, settingsFile);
+	if (remaining.length > 0) {
+		throw new FixerDidNotConvergeError(remaining);
+	}
+
+	return repaired;
 }
 
 /**
@@ -391,6 +636,376 @@ export async function checkHookRuntime(projectDir: string): Promise<CheckResult>
 }
 
 /**
+ * Validate configured hook commands in Claude settings files.
+ * Unlike checkHookRuntime, this inspects the actual command strings Claude executes.
+ */
+export async function checkHookCommandPaths(projectDir: string): Promise<CheckResult> {
+	const settingsFiles = getClaudeSettingsFiles(projectDir);
+
+	if (settingsFiles.length === 0) {
+		return {
+			id: "hook-command-paths",
+			name: "Hook Command Paths",
+			group: "claudekit",
+			priority: "standard",
+			status: "info",
+			message: "No Claude settings files",
+			autoFixable: false,
+		};
+	}
+
+	const findings: HookCommandFinding[] = [];
+	for (const settingsFile of settingsFiles) {
+		const settings = await SettingsMerger.readSettingsFile(settingsFile.path);
+		if (!settings) {
+			continue;
+		}
+		findings.push(...collectHookCommandFindings(settings, settingsFile));
+	}
+
+	if (findings.length === 0) {
+		return {
+			id: "hook-command-paths",
+			name: "Hook Command Paths",
+			group: "claudekit",
+			priority: "standard",
+			status: "pass",
+			message: `${settingsFiles.length} settings file(s) canonical`,
+			autoFixable: false,
+		};
+	}
+
+	const details = findings
+		.slice(0, 5)
+		.map((finding) => {
+			const matcher = finding.matcher ? ` [${finding.matcher}]` : "";
+			return `${finding.label} :: ${finding.eventName}${matcher} :: ${finding.issue} :: ${finding.command}`;
+		})
+		.join("\n");
+
+	return {
+		id: "hook-command-paths",
+		name: "Hook Command Paths",
+		group: "claudekit",
+		priority: "standard",
+		status: "fail",
+		message: `${findings.length} stale hook command path(s)`,
+		details,
+		suggestion: "Run: ck doctor --fix",
+		autoFixable: true,
+		fix: {
+			id: "fix-hook-command-paths",
+			description: "Canonicalize stale .claude hook command paths in settings files",
+			execute: async () => {
+				try {
+					let repaired = 0;
+					for (const settingsFile of settingsFiles) {
+						repaired += await repairHookCommandsInSettingsFile(settingsFile);
+					}
+					if (repaired === 0) {
+						return {
+							success: true,
+							message: "No stale hook command paths needed repair",
+						};
+					}
+					return {
+						success: true,
+						message: `Repaired ${repaired} stale hook command path(s)`,
+					};
+				} catch (error) {
+					return {
+						success: false,
+						message: `Failed to repair hook command paths: ${error}`,
+					};
+				}
+			},
+		},
+	};
+}
+
+interface MissingHookReference {
+	path: string;
+	label: string;
+	eventName: string;
+	matcher?: string;
+	command: string;
+	scriptPath: string;
+	resolvedPath: string;
+}
+
+function escapeRegex(value: string): string {
+	return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/**
+ * Extract Claude hook file references from commands managed by ClaudeKit.
+ *
+ * Handles legacy direct node hooks and the current bash runner form:
+ * - `node .claude/hooks/foo.cjs`
+ * - `bash .claude/hooks/node-hook-runner.sh .claude/hooks/foo.cjs`
+ */
+function extractHookReferencePaths(cmd: string | null | undefined): string[] {
+	if (!cmd) return [];
+
+	const normalized = cmd.replace(/["']/g, "").replace(/\\/g, "/");
+	const isNodeHook = /^\s*node\s+/.test(normalized) && normalized.includes(".claude/");
+	const isRunnerHook =
+		/^\s*bash\s+/.test(normalized) && normalized.includes(".claude/hooks/node-hook-runner.sh");
+
+	if (!isNodeHook && !isRunnerHook) return [];
+
+	const extensionPattern = HOOK_EXTENSIONS.map((ext) => escapeRegex(ext)).join("|");
+	const candidatePattern = new RegExp(
+		`(?:^|\\s)(\\S*?\\.claude/\\S+?(?:${extensionPattern}))(?=\\s|$)`,
+		"g",
+	);
+	const paths: string[] = [];
+	for (const match of normalized.matchAll(candidatePattern)) {
+		if (!match[1]) continue;
+		paths.push(match[1]);
+	}
+
+	return Array.from(new Set(paths));
+}
+
+/**
+ * Resolve a hook script path token into an absolute filesystem path.
+ * Handles $HOME, $CLAUDE_PROJECT_DIR, ~, %USERPROFILE%, %CLAUDE_PROJECT_DIR%,
+ * and bare `.claude/...` relative forms.
+ */
+function resolveHookScriptPath(scriptPath: string, projectDir: string): string {
+	let resolved = scriptPath.replace(/\\/g, "/");
+	const home = homedir();
+	resolved = resolved.replace(/^\$\{?HOME\}?/, home);
+	resolved = resolved.replace(/^\$\{?CLAUDE_PROJECT_DIR\}?/, projectDir);
+	resolved = resolved.replace(/^%USERPROFILE%/, home);
+	resolved = resolved.replace(/^%CLAUDE_PROJECT_DIR%/, projectDir);
+	resolved = resolved.replace(/^~\//, `${home}/`);
+	if (resolved.startsWith(".claude/") || resolved === ".claude") {
+		resolved = join(projectDir, resolved);
+	}
+	return resolve(resolved);
+}
+
+function collectMissingHookReferences(
+	settings: SettingsJson,
+	settingsFile: ClaudeSettingsFile,
+	projectDir: string,
+): MissingHookReference[] {
+	const findings: MissingHookReference[] = [];
+	const seen = new Set<string>();
+
+	const consider = (
+		eventName: string,
+		command: string | undefined,
+		matcher: string | undefined,
+	) => {
+		if (!command) return;
+		for (const scriptPath of extractHookReferencePaths(command)) {
+			const resolvedPath = resolveHookScriptPath(scriptPath, projectDir);
+			if (existsSync(resolvedPath)) continue;
+			const key = `${settingsFile.path}::${eventName}::${matcher ?? ""}::${scriptPath}`;
+			if (seen.has(key)) continue;
+			seen.add(key);
+			findings.push({
+				path: settingsFile.path,
+				label: settingsFile.label,
+				eventName,
+				matcher,
+				command,
+				scriptPath,
+				resolvedPath,
+			});
+		}
+	};
+
+	const statusLine = settings.statusLine as { command?: unknown } | undefined;
+	if (typeof statusLine?.command === "string") {
+		consider("statusLine", statusLine.command, undefined);
+	}
+
+	if (!settings.hooks) return findings;
+
+	for (const [eventName, entries] of Object.entries(settings.hooks)) {
+		for (const entry of entries) {
+			if ("command" in entry && typeof entry.command === "string") {
+				consider(eventName, entry.command, undefined);
+			}
+			if ("hooks" in entry && entry.hooks) {
+				const matcher = "matcher" in entry ? entry.matcher : undefined;
+				for (const hook of entry.hooks) {
+					consider(eventName, hook.command, matcher);
+				}
+			}
+		}
+	}
+
+	return findings;
+}
+
+async function pruneMissingHookReferencesInSettingsFile(
+	settingsFile: ClaudeSettingsFile,
+	projectDir: string,
+): Promise<number> {
+	const settings = await SettingsMerger.readSettingsFile(settingsFile.path);
+	if (!settings) return 0;
+
+	let pruned = 0;
+
+	const hookFileMissing = (command: string | undefined): boolean => {
+		if (!command) return false;
+		const scriptPaths = extractHookReferencePaths(command);
+		if (scriptPaths.length === 0) return false;
+		return scriptPaths.some(
+			(scriptPath) => !existsSync(resolveHookScriptPath(scriptPath, projectDir)),
+		);
+	};
+
+	const statusLine = settings.statusLine as { command?: unknown } | undefined;
+	if (typeof statusLine?.command === "string" && hookFileMissing(statusLine.command)) {
+		// biome-ignore lint/performance/noDelete: settings cleanup should remove the stale key
+		delete (settings as Record<string, unknown>).statusLine;
+		pruned++;
+	}
+
+	if (settings.hooks) {
+		const hooksRecord = settings.hooks as Record<string, unknown[]>;
+		for (const [eventName, entries] of Object.entries(hooksRecord)) {
+			const filteredEntries: unknown[] = [];
+			for (const entry of entries) {
+				const e = entry as { command?: string; hooks?: Array<{ command?: string }> };
+				// Flat command entry
+				if (typeof e.command === "string") {
+					if (hookFileMissing(e.command)) {
+						pruned++;
+						continue;
+					}
+					filteredEntries.push(entry);
+					continue;
+				}
+
+				// Matcher entry with nested hooks[]
+				if (Array.isArray(e.hooks)) {
+					const keptHooks = e.hooks.filter((h) => {
+						if (hookFileMissing(h.command)) {
+							pruned++;
+							return false;
+						}
+						return true;
+					});
+					if (keptHooks.length === 0) {
+						continue;
+					}
+					filteredEntries.push({ ...e, hooks: keptHooks });
+					continue;
+				}
+
+				filteredEntries.push(entry);
+			}
+			if (filteredEntries.length === 0) {
+				delete hooksRecord[eventName];
+			} else {
+				hooksRecord[eventName] = filteredEntries;
+			}
+		}
+
+		if (Object.keys(hooksRecord).length === 0) {
+			// biome-ignore lint/performance/noDelete: clearer semantics than = undefined for key removal
+			delete (settings as Record<string, unknown>).hooks;
+		}
+	}
+
+	if (pruned > 0) {
+		await SettingsMerger.writeSettingsFile(settingsFile.path, settings);
+	}
+
+	return pruned;
+}
+
+/**
+ * Validate that hook commands in Claude settings reference files that exist on disk.
+ * Catches stale references that produce MODULE_NOT_FOUND at Claude Code runtime.
+ */
+export async function checkHookFileReferences(projectDir: string): Promise<CheckResult> {
+	const settingsFiles = getClaudeSettingsFiles(projectDir);
+
+	if (settingsFiles.length === 0) {
+		return {
+			id: "hook-file-references",
+			name: "Hook File References",
+			group: "claudekit",
+			priority: "critical",
+			status: "info",
+			message: "No Claude settings files",
+			autoFixable: false,
+		};
+	}
+
+	const findings: MissingHookReference[] = [];
+	for (const settingsFile of settingsFiles) {
+		const settings = await SettingsMerger.readSettingsFile(settingsFile.path);
+		if (!settings) continue;
+		findings.push(...collectMissingHookReferences(settings, settingsFile, projectDir));
+	}
+
+	if (findings.length === 0) {
+		return {
+			id: "hook-file-references",
+			name: "Hook File References",
+			group: "claudekit",
+			priority: "critical",
+			status: "pass",
+			message: "All referenced hook files exist",
+			autoFixable: false,
+		};
+	}
+
+	const details = findings
+		.slice(0, 8)
+		.map((f) => {
+			const matcher = f.matcher ? ` [${f.matcher}]` : "";
+			return `${f.label} :: ${f.eventName}${matcher} :: missing ${f.scriptPath}`;
+		})
+		.join("\n");
+
+	return {
+		id: "hook-file-references",
+		name: "Hook File References",
+		group: "claudekit",
+		priority: "critical",
+		status: "fail",
+		message: `${findings.length} settings hook(s) reference missing file(s)`,
+		details,
+		suggestion: "Run: ck doctor --fix (prunes stale entries), then 'ck init' to restore hooks",
+		autoFixable: true,
+		fix: {
+			id: "fix-hook-file-references",
+			description: "Prune stale hook entries whose script files are missing",
+			execute: async () => {
+				try {
+					let pruned = 0;
+					for (const settingsFile of settingsFiles) {
+						pruned += await pruneMissingHookReferencesInSettingsFile(settingsFile, projectDir);
+					}
+					if (pruned === 0) {
+						return { success: true, message: "No stale hook entries needed pruning" };
+					}
+					return {
+						success: true,
+						message: `Pruned ${pruned} stale hook entry(ies). Run 'ck init' to restore hooks if needed.`,
+					};
+				} catch (error) {
+					return {
+						success: false,
+						message: `Failed to prune stale hook entries: ${error}`,
+					};
+				}
+			},
+		},
+	};
+}
+
+/**
  * Check hook configuration validity
  */
 export async function checkHookConfig(projectDir: string): Promise<CheckResult> {
@@ -717,6 +1332,19 @@ export async function checkHookLogs(projectDir: string): Promise<CheckResult> {
  */
 export async function checkCliVersion(): Promise<CheckResult> {
 	try {
+		if (process.env.NODE_ENV === "test" || process.env.CK_TEST_HOME) {
+			logger.verbose("ClaudekitChecker: Skipping CLI version check in test mode");
+			return {
+				id: "cli-version",
+				name: "CLI Version",
+				group: "claudekit",
+				priority: "critical",
+				status: "pass",
+				message: "Test Mode (skipped)",
+				autoFixable: false,
+			};
+		}
+
 		// Try to get installed version from ck -V command
 		const versionResult = spawnSync("ck", ["-V"], {
 			timeout: HOOK_CHECK_TIMEOUT_MS,

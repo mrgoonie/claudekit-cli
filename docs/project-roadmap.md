@@ -1,7 +1,7 @@
 # Project Roadmap: ClaudeKit CLI
 
 **Last Updated**: 2026-05-20
-**Version**: 3.40.3-dev.2
+**Version**: 4.3.1-dev.2
 **Repository**: https://github.com/mrgoonie/claudekit-cli
 
 ---
@@ -11,8 +11,6 @@
 ClaudeKit CLI (`ck`) is a command-line tool for bootstrapping and updating ClaudeKit projects from private GitHub releases. Built with Bun and TypeScript, provides fast, secure project setup and maintenance with cross-platform support.
 
 **Current Status**: Active Development / Maintenance Phase
-
----
 
 ## Release Timeline
 

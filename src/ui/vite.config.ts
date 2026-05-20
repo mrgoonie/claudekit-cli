@@ -12,7 +12,7 @@ export default defineConfig(({ mode }) => ({
 		globals: true,
 		environment: "jsdom",
 		setupFiles: ["./src/test-setup.ts"],
-		include: ["src/**/*.{test,spec}.{ts,tsx}"],
+		include: ["src/**/*.{test,spec,vitest}.{ts,tsx}"],
 		coverage: {
 			provider: "v8",
 			reporter: ["text", "html"],
@@ -46,8 +46,10 @@ export default defineConfig(({ mode }) => ({
 	},
 
 	server: {
+		// Standalone `bun run ui:dev` port. The combo server (`bun run dashboard:dev`)
+		// embeds Vite in middleware mode behind the Express backend on :3456.
 		port: 5173,
-		strictPort: false,
+		strictPort: true,
 		proxy: {
 			"/api": {
 				target: "http://localhost:3456",

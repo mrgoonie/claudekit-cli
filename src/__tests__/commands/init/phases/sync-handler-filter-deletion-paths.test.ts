@@ -70,6 +70,22 @@ describe("filterDeletionPaths", () => {
 			const result = filterDeletionPaths(files, deletions);
 			expect(result).toHaveLength(1);
 		});
+
+		it("filters legacy prefixed command paths for engineer installs", () => {
+			const files = [
+				createTrackedFile("commands/ck/ask.md"),
+				createTrackedFile("commands/ck/bootstrap.md"),
+				createTrackedFile("skills/ask/SKILL.md"),
+			];
+			const deletions = ["commands/ask.md"];
+
+			const result = filterDeletionPaths(files, deletions, "engineer");
+			expect(result).toHaveLength(2);
+			expect(result.map((f) => f.path)).toEqual([
+				"commands/ck/bootstrap.md",
+				"skills/ask/SKILL.md",
+			]);
+		});
 	});
 
 	describe("glob pattern matching", () => {
@@ -126,6 +142,19 @@ describe("filterDeletionPaths", () => {
 			const result = filterDeletionPaths(files, deletions);
 			expect(result).toHaveLength(1);
 			expect(result[0].path).toBe("skills/debug/index.md");
+		});
+
+		it("filters legacy prefixed command globs for engineer installs", () => {
+			const files = [
+				createTrackedFile("commands/ck/plan/archive.md"),
+				createTrackedFile("commands/ck/plan/fast.md"),
+				createTrackedFile("commands/ck/review/codebase.md"),
+			];
+			const deletions = ["commands/plan/**"];
+
+			const result = filterDeletionPaths(files, deletions, "engineer");
+			expect(result).toHaveLength(1);
+			expect(result[0].path).toBe("commands/ck/review/codebase.md");
 		});
 	});
 

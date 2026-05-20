@@ -121,7 +121,7 @@ describe("DEFAULT_HELP_OPTIONS", () => {
 	test("has correct default values", () => {
 		expect(DEFAULT_HELP_OPTIONS.showBanner).toBe(true);
 		expect(DEFAULT_HELP_OPTIONS.showExamples).toBe(true);
-		expect(DEFAULT_HELP_OPTIONS.maxExamples).toBe(2);
+		expect(DEFAULT_HELP_OPTIONS.maxExamples).toBe(3);
 		expect(DEFAULT_HELP_OPTIONS.interactive).toBe(false);
 	});
 
@@ -325,17 +325,15 @@ describe("renderHelp", () => {
 });
 
 describe("renderHelp - examples limit", () => {
-	test("limits examples to maxExamples (default 2)", () => {
+	test("limits examples to maxExamples (default 3)", () => {
 		const help = createMockCommandHelp(); // Has 3 examples
 		const output = renderHelp(help);
 		const stripped = stripColors(output);
 
-		// Should show first 2 examples
+		// Default maxExamples=3 shows all 3
 		expect(stripped).toContain("ck test --verbose");
 		expect(stripped).toContain("ck test --dry-run");
-
-		// Should NOT show 3rd example
-		expect(stripped).not.toContain("ck test --format json");
+		expect(stripped).toContain("ck test --format json");
 	});
 
 	test("respects custom maxExamples value", () => {

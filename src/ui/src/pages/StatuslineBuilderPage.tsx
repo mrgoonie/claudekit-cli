@@ -19,7 +19,7 @@ import { StatuslineTerminalPreview } from "../components/statusline-builder/stat
 import { StatuslineThemePicker } from "../components/statusline-builder/statusline-theme-picker";
 import { useResizable } from "../hooks/useResizable";
 import { useI18n } from "../i18n";
-import { updateCkConfigField } from "../services/ck-config-api";
+import { fetchCkConfigScope, updateCkConfigField } from "../services/ck-config-api";
 
 // Settings tab removed (YAGNI — baseMode/breakpoint/agentRows/todoTruncation
 // don't affect preview yet, renderer needs follow-up PR first)
@@ -74,11 +74,7 @@ const StatuslineBuilderPage: React.FC = () => {
 	// Load existing config on mount
 	useEffect(() => {
 		let cancelled = false;
-		fetch("/api/ck-config?scope=global")
-			.then((res) => {
-				if (!res.ok) throw new Error(`Failed to fetch config: ${res.status}`);
-				return res.json() as Promise<{ config: Record<string, unknown> }>;
-			})
+		void fetchCkConfigScope("global")
 			.then((res) => {
 				if (cancelled) return;
 				const raw = res.config.statuslineLayout as RawStatuslineLayout | undefined;
@@ -101,7 +97,7 @@ const StatuslineBuilderPage: React.FC = () => {
 		setSaveError(null);
 		setSaveSuccess(false);
 		try {
-			// Use PATCH to update only statuslineLayout — avoids read-modify-write race condition
+			// Update only the statuslineLayout field within the selected scope config.
 			await updateCkConfigField("statuslineLayout", layout, "global");
 			setSaveSuccess(true);
 			setTimeout(() => setSaveSuccess(false), 3000);

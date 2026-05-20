@@ -1,14 +1,44 @@
 import { existsSync } from "node:fs";
-import { cp, mkdir, rename, rm } from "node:fs/promises";
-import { join, resolve } from "node:path";
+import { cp, mkdir, realpath, rename, rm } from "node:fs/promises";
+import { dirname, join, resolve } from "node:path";
 import { addPortableInstallation } from "../portable/portable-registry.js";
 import { providers } from "../portable/provider-registry.js";
 import type { PortableInstallResult, ProviderType } from "../portable/types.js";
 import type { SkillInfo } from "../skills/types.js";
 
 /**
+ * Resolve a path to its canonical form, following symlinks. Falls back to the
+ * canonical parent + basename when the leaf itself doesn't exist yet so that
+ * not-yet-created paths inside symlinked parents still canonicalise correctly.
+ */
+async function canonicalize(path: string): Promise<string> {
+	try {
+		return await realpath(path);
+	} catch {
+		const parent = dirname(path);
+		if (parent === path) {
+			return resolve(path);
+		}
+		try {
+			const canonicalParent = await realpath(parent);
+			const absPath = resolve(path);
+			const absParent = resolve(parent);
+			const basename = absPath.slice(absParent.length + 1) || "";
+			return join(canonicalParent, basename);
+		} catch {
+			return resolve(path);
+		}
+	}
+}
+
+/**
  * Install skill directories preserving full structure (scripts, assets, references/).
  * Warns when overwriting existing skill directories (#406).
+ *
+ * Handles symlinked target directories (#817): if the provider's skills base
+ * path resolves (via realpath) to the same canonical directory as the source
+ * root, every per-skill copy would clobber its own source. Detect once at the
+ * basePath level, emit one clear skip per skill, and avoid destructive rename+copy.
  *
  * Note: Provider path collision warnings (#450) are handled by annotateCollisions()
  * in migration-result-utils.ts after all results are collected — single source of truth.
@@ -47,11 +77,48 @@ export async function installSkillDirectories(
 			continue;
 		}
 
+		// Detect basePath-level symlink loop: if the target skills directory
+		// resolves to the same canonical path as the source root, per-skill
+		// rename+copy would clobber the source itself. Skip the whole provider
+		// cleanly so the user gets one clear message per skill, not 79 ENOENTs.
+		//
+		// Invariant: all skills in a single batch share the same parent directory
+		// (callers build batches from a single source root per migration run).
+		// We sample skills[0] as a proxy for the batch's source root — this is
+		// an optimisation; the per-skill canonical check below still catches any
+		// mixed-batch outlier safely (just without the single-message UX win).
+		const sourceRoot = skills.length > 0 ? dirname(skills[0].path) : null;
+		const canonicalBase = existsSync(basePath) ? await canonicalize(basePath) : null;
+		const canonicalSourceRoot = sourceRoot ? await canonicalize(sourceRoot) : null;
+		const basePathIsSymlinkedToSource =
+			canonicalBase !== null &&
+			canonicalSourceRoot !== null &&
+			canonicalBase === canonicalSourceRoot &&
+			resolve(basePath) !== resolve(sourceRoot ?? "");
+
+		if (basePathIsSymlinkedToSource) {
+			for (const skill of skills) {
+				results.push({
+					provider,
+					providerDisplayName: config.displayName,
+					success: true,
+					path: join(basePath, skill.name),
+					skipped: true,
+					skipReason: `Skills directory ${basePath} is symlinked to source (${canonicalBase}); already in place`,
+				});
+			}
+			continue;
+		}
+
 		for (const skill of skills) {
 			const targetDir = join(basePath, skill.name);
 
-			// Skip when source and destination are identical (common in Claude Code project scope)
-			if (resolve(skill.path) === resolve(targetDir)) {
+			// Canonical (symlink-aware) comparison — catches per-skill cases where
+			// individual skills happen to point at the same inode regardless of
+			// basePath identity (e.g. Claude Code project scope).
+			const canonicalSource = await canonicalize(skill.path);
+			const canonicalTarget = await canonicalize(targetDir);
+			if (canonicalSource === canonicalTarget) {
 				results.push({
 					provider,
 					providerDisplayName: config.displayName,

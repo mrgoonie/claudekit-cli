@@ -67,11 +67,11 @@ describe("convertFmToCodexToml", () => {
 		expect(result.warnings).toEqual([]);
 	});
 
-	it("resolves known model via taxonomy (opus → gpt-5.4, effort commented)", () => {
+	it("resolves known model via taxonomy (opus → gpt-5.4, reasoning effort)", () => {
 		const result = convertFmToCodexToml(makeItem());
 		expect(result.content).toContain('model = "gpt-5.4"');
-		// effort is commented out — Codex doesn't support this field yet
-		expect(result.content).toContain('# effort = "xhigh"');
+		expect(result.content).toContain('model_reasoning_effort = "xhigh"');
+		expect(result.content).not.toContain("# effort");
 		expect(result.content).not.toMatch(/\neffort = /);
 		expect(result.content).not.toContain('# model = "opus"');
 		expect(result.warnings).toEqual([]);
@@ -233,11 +233,73 @@ describe("mergeConfigToml", () => {
 		expect(result).not.toContain("[agents.two]");
 	});
 
+	it("collapses multiple managed blocks after inline repair shifts offsets", () => {
+		const existing = [
+			'trust_level = "trusted"[agents.legacy_inline]',
+			'description = "Legacy inline"',
+			'config_file = "agents/legacy_inline.toml"',
+			"",
+			"# --- ck-managed-agents-start ---",
+			"[agents.one]",
+			'description = "one"',
+			'config_file = "agents/one.toml"',
+			"# --- ck-managed-agents-end ---",
+			"",
+			"# --- ck-managed-agents-start ---",
+			"[agents.two]",
+			'description = "two"',
+			'config_file = "agents/two.toml"',
+			"# --- ck-managed-agents-end ---",
+		].join("\n");
+		const result = mergeConfigTomlWithDiagnostics(existing, block);
+
+		expect(result.error).toBeUndefined();
+		expect((result.content.match(/# --- ck-managed-agents-start ---/g) ?? []).length).toBe(1);
+		expect(result.content).toContain('trust_level = "trusted"\n[agents.legacy_inline]');
+		expect(result.content).toContain("[agents.test]");
+		expect(result.content).not.toContain("[agents.one]");
+		expect(result.content).not.toContain("[agents.two]");
+	});
+
 	it("preserves CRLF line endings", () => {
 		const existing = 'model = "gpt-5.3-codex"\r\n\r\n[features]\r\nmulti_agent = true\r\n';
 		const result = mergeConfigToml(existing, block);
 		expect(result).toContain("\r\n# --- ck-managed-agents-start ---\r\n");
 		expect(result.includes("\n# --- ck-managed-agents-start ---\n")).toBe(false);
+	});
+
+	it("repairs inline legacy agent table headers before merging", () => {
+		const existing = [
+			'model = "gpt-5.3-codex"',
+			'trust_level = "trusted"[agents.code_simplifier]',
+			'description = "Simplify code"',
+			'config_file = "agents/code_simplifier.toml"',
+		].join("\n");
+		const result = mergeConfigTomlWithDiagnostics(existing, block);
+
+		expect(result.error).toBeUndefined();
+		expect(result.content).toContain('trust_level = "trusted"\n[agents.code_simplifier]');
+		expect(result.content).not.toContain('"trusted"[agents');
+		expect(result.content).toContain("[agents.test]");
+		expect(result.warnings.some((warning) => warning.includes("inline [agents.*]"))).toBe(true);
+	});
+
+	it("does not rewrite agent-like text inside string values", () => {
+		const existing = 'notice = "see [agents.code_simplifier] before editing"\n';
+		const result = mergeConfigTomlWithDiagnostics(existing, block);
+
+		expect(result.content).toContain(existing.trimEnd());
+		expect(result.content).not.toContain("see \n[agents.code_simplifier]");
+		expect(result.warnings.some((warning) => warning.includes("inline [agents.*]"))).toBe(false);
+	});
+
+	it("does not rewrite agent-like text at the end of string values", () => {
+		const existing = 'notice = "[agents.code_simplifier]"\n';
+		const result = mergeConfigTomlWithDiagnostics(existing, block);
+
+		expect(result.content).toContain(existing.trimEnd());
+		expect(result.content).not.toContain('notice = "\n[agents.code_simplifier]');
+		expect(result.warnings.some((warning) => warning.includes("inline [agents.*]"))).toBe(false);
 	});
 
 	it("returns diagnostic error for malformed unmatched sentinels", () => {

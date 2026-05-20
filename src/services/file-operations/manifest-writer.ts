@@ -18,6 +18,7 @@ import {
 	readKitManifest,
 	readManifest,
 	removeKitFromManifest,
+	retainTrackedFilesInManifest,
 	writeManifest,
 } from "./manifest/index.js";
 
@@ -143,7 +144,22 @@ export class ManifestWriter {
 	/**
 	 * Remove a kit from metadata.json (for kit-scoped uninstall)
 	 */
-	static async removeKitFromManifest(claudeDir: string, kit: KitType): Promise<boolean> {
-		return removeKitFromManifest(claudeDir, kit);
+	static async removeKitFromManifest(
+		claudeDir: string,
+		kit: KitType,
+		options?: { lockHeld?: boolean },
+	): Promise<boolean> {
+		return removeKitFromManifest(claudeDir, kit, options);
+	}
+
+	/**
+	 * Rewrite metadata.json so only retained tracked files remain.
+	 */
+	static async retainTrackedFilesInManifest(
+		claudeDir: string,
+		retainedPaths: string[],
+		options?: { excludeKit?: KitType; lockHeld?: boolean },
+	): Promise<boolean> {
+		return retainTrackedFilesInManifest(claudeDir, retainedPaths, options);
 	}
 }

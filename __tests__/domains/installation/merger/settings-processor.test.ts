@@ -1,8 +1,9 @@
-import { afterEach, beforeEach, describe, expect, it } from "bun:test";
+import { afterEach, beforeEach, describe, expect, it, spyOn } from "bun:test";
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { SettingsProcessor } from "@/domains/installation/merger/settings-processor.js";
+import { logger } from "@/shared/logger.js";
 
 const HOME_VAR = "$HOME";
 const PROJECT_VAR = "$CLAUDE_PROJECT_DIR";
@@ -11,8 +12,23 @@ describe("SettingsProcessor", () => {
 	let testDir: string;
 	let sourceDir: string;
 	let destDir: string;
+	let savedConfigDir: string | undefined;
+	let savedTestHome: string | undefined;
 
 	beforeEach(async () => {
+		// Drop env vars that PathResolver respects in production but that
+		// these tests must not pick up — otherwise a parent shell exporting
+		// CLAUDE_CONFIG_DIR (e.g. CCS sessions) leaks into $HOME-based path
+		// substitution and breaks every "global $HOME" assertion.
+		savedConfigDir = process.env.CLAUDE_CONFIG_DIR;
+		savedTestHome = process.env.CK_TEST_HOME;
+		// Use `delete` (not `= undefined`) — assigning `undefined` to
+		// process.env.KEY coerces to the string "undefined" in standard Node.
+		// biome-ignore lint/performance/noDelete: env var must be unset, not coerced to "undefined" string
+		delete process.env.CLAUDE_CONFIG_DIR;
+		// biome-ignore lint/performance/noDelete: env var must be unset, not coerced to "undefined" string
+		delete process.env.CK_TEST_HOME;
+
 		testDir = join(tmpdir(), `settings-processor-test-${Date.now()}`);
 		sourceDir = join(testDir, "source");
 		destDir = join(testDir, "dest");
@@ -22,6 +38,8 @@ describe("SettingsProcessor", () => {
 
 	afterEach(async () => {
 		await rm(testDir, { recursive: true, force: true });
+		if (savedConfigDir !== undefined) process.env.CLAUDE_CONFIG_DIR = savedConfigDir;
+		if (savedTestHome !== undefined) process.env.CK_TEST_HOME = savedTestHome;
 	});
 
 	describe("global path normalization during merge", () => {
@@ -1065,7 +1083,41 @@ describe("SettingsProcessor", () => {
 			expect(cmd).toBe('node "$HOME/.claude/hooks/session-init.cjs" compact');
 		});
 
-		it("should produce full-path-quoted format for local install", async () => {
+		it("should quote bash node-hook-runner paths for global install", async () => {
+			const sourceSettings = {
+				hooks: {
+					UserPromptSubmit: [
+						{
+							hooks: [
+								{
+									type: "command",
+									command:
+										"bash .claude/hooks/node-hook-runner.sh .claude/hooks/dev-rules-reminder.cjs",
+								},
+							],
+						},
+					],
+				},
+			};
+			const sourceFile = join(sourceDir, "settings.json");
+			await writeFile(sourceFile, JSON.stringify(sourceSettings), "utf-8");
+
+			const destFile = join(destDir, "settings.json");
+
+			const processor = new SettingsProcessor();
+			processor.setGlobalFlag(true);
+			processor.setProjectDir(destDir);
+			await processor.processSettingsJson(sourceFile, destFile);
+
+			const result = JSON.parse(await readFile(destFile, "utf-8"));
+			const cmd = result.hooks.UserPromptSubmit[0].hooks[0].command;
+
+			expect(cmd).toBe(
+				'bash "$HOME/.claude/hooks/node-hook-runner.sh" "$HOME/.claude/hooks/dev-rules-reminder.cjs"',
+			);
+		});
+
+		it("should keep .claude outside the quoted project dir for local install", async () => {
 			const sourceSettings = {
 				hooks: {
 					SessionStart: [{ type: "command", command: "node .claude/hooks/session-init.cjs" }],
@@ -1084,7 +1136,40 @@ describe("SettingsProcessor", () => {
 			const result = JSON.parse(await readFile(destFile, "utf-8"));
 			const cmd = result.hooks.SessionStart[0].command;
 
-			expect(cmd).toBe('node "$CLAUDE_PROJECT_DIR/.claude/hooks/session-init.cjs"');
+			expect(cmd).toBe('node "$CLAUDE_PROJECT_DIR"/.claude/hooks/session-init.cjs');
+		});
+
+		it("should keep .claude outside the quoted project dir for local bash runner hooks", async () => {
+			const sourceSettings = {
+				hooks: {
+					SessionStart: [
+						{
+							hooks: [
+								{
+									type: "command",
+									command: "bash .claude/hooks/node-hook-runner.sh .claude/hooks/session-init.cjs",
+								},
+							],
+						},
+					],
+				},
+			};
+			const sourceFile = join(sourceDir, "settings.json");
+			await writeFile(sourceFile, JSON.stringify(sourceSettings), "utf-8");
+
+			const destFile = join(destDir, "settings.json");
+
+			const processor = new SettingsProcessor();
+			processor.setGlobalFlag(false);
+			processor.setProjectDir(destDir);
+			await processor.processSettingsJson(sourceFile, destFile);
+
+			const result = JSON.parse(await readFile(destFile, "utf-8"));
+			const cmd = result.hooks.SessionStart[0].hooks[0].command;
+
+			expect(cmd).toBe(
+				'bash "$CLAUDE_PROJECT_DIR"/.claude/hooks/node-hook-runner.sh "$CLAUDE_PROJECT_DIR"/.claude/hooks/session-init.cjs',
+			);
 		});
 	});
 
@@ -1197,6 +1282,105 @@ describe("SettingsProcessor", () => {
 			expect(cmd).toMatch(/^node\s+"[^"]+\.claude\/[^"]+"/);
 		});
 
+		it("should self-heal unquoted bash node-hook-runner paths already present in destination", async () => {
+			const destSettings = {
+				hooks: {
+					UserPromptSubmit: [
+						{
+							hooks: [
+								{
+									type: "command",
+									command:
+										"bash $HOME/.claude/hooks/node-hook-runner.sh $HOME/.claude/hooks/dev-rules-reminder.cjs",
+								},
+							],
+						},
+					],
+				},
+			};
+			const destFile = join(destDir, "settings.json");
+			await writeFile(destFile, JSON.stringify(destSettings), "utf-8");
+
+			const sourceSettings = {
+				hooks: {
+					UserPromptSubmit: [
+						{
+							hooks: [
+								{
+									type: "command",
+									command:
+										"bash .claude/hooks/node-hook-runner.sh .claude/hooks/dev-rules-reminder.cjs",
+								},
+							],
+						},
+					],
+				},
+			};
+			const sourceFile = join(sourceDir, "settings.json");
+			await writeFile(sourceFile, JSON.stringify(sourceSettings), "utf-8");
+
+			const processor = new SettingsProcessor();
+			processor.setGlobalFlag(true);
+			processor.setProjectDir(destDir);
+			await processor.processSettingsJson(sourceFile, destFile);
+
+			const result = JSON.parse(await readFile(destFile, "utf-8"));
+			const cmd = result.hooks.UserPromptSubmit[0].hooks[0].command;
+
+			expect(cmd).toBe(
+				'bash "$HOME/.claude/hooks/node-hook-runner.sh" "$HOME/.claude/hooks/dev-rules-reminder.cjs"',
+			);
+		});
+
+		it("should self-heal unquoted local bash node-hook-runner paths already present in destination", async () => {
+			const destSettings = {
+				hooks: {
+					SessionStart: [
+						{
+							hooks: [
+								{
+									type: "command",
+									command:
+										"bash $CLAUDE_PROJECT_DIR/.claude/hooks/node-hook-runner.sh $CLAUDE_PROJECT_DIR/.claude/hooks/session-init.cjs",
+								},
+							],
+						},
+					],
+				},
+			};
+			const destFile = join(destDir, "settings.json");
+			await writeFile(destFile, JSON.stringify(destSettings), "utf-8");
+
+			const sourceSettings = {
+				hooks: {
+					SessionStart: [
+						{
+							hooks: [
+								{
+									type: "command",
+									command: "bash .claude/hooks/node-hook-runner.sh .claude/hooks/session-init.cjs",
+								},
+							],
+						},
+					],
+				},
+			};
+			const sourceFile = join(sourceDir, "settings.json");
+			await writeFile(sourceFile, JSON.stringify(sourceSettings), "utf-8");
+
+			const processor = new SettingsProcessor();
+			processor.setGlobalFlag(false);
+			processor.setProjectDir(destDir);
+			await processor.processSettingsJson(sourceFile, destFile);
+
+			const result = JSON.parse(await readFile(destFile, "utf-8"));
+			const cmd = result.hooks.SessionStart[0].hooks[0].command;
+
+			expect(cmd).toBe(
+				'bash "$CLAUDE_PROJECT_DIR"/.claude/hooks/node-hook-runner.sh "$CLAUDE_PROJECT_DIR"/.claude/hooks/session-init.cjs',
+			);
+		});
+
 		it("should fix nested hooks with matcher", async () => {
 			const destSettings = {
 				hooks: {
@@ -1291,8 +1475,7 @@ describe("SettingsProcessor", () => {
 			expect(result.statusLine.command).not.toMatch(/"[^"]*"\/\.claude/);
 		});
 
-		it("should preserve $CLAUDE_PROJECT_DIR variable in local-install hooks", async () => {
-			// Destination with variable-only quoting using $CLAUDE_PROJECT_DIR
+		it("should preserve variable-only quoting for local-install hooks", async () => {
 			const destSettings = {
 				hooks: {
 					SessionStart: [
@@ -1328,8 +1511,186 @@ describe("SettingsProcessor", () => {
 			// Must keep $CLAUDE_PROJECT_DIR, NOT convert to $HOME
 			expect(cmd).toContain("$CLAUDE_PROJECT_DIR");
 			expect(cmd).not.toContain("$HOME");
-			// Must have full-path quoting
-			expect(cmd).toMatch(/^node\s+"[^"]+\.claude\/[^"]+"/);
+			expect(cmd).toBe('node "$CLAUDE_PROJECT_DIR"/.claude/hooks/session-init.cjs compact');
+		});
+
+		it("should rewrite embedded local full-path quoting back to variable-only quoting", async () => {
+			const destSettings = {
+				hooks: {
+					Stop: [
+						{
+							hooks: [
+								{
+									type: "command",
+									command: 'node "$CLAUDE_PROJECT_DIR/.claude/hooks/session-state.cjs"',
+								},
+							],
+						},
+					],
+				},
+			};
+			const destFile = join(destDir, "settings.json");
+			await writeFile(destFile, JSON.stringify(destSettings), "utf-8");
+
+			const sourceSettings = {
+				hooks: {
+					Stop: [
+						{
+							hooks: [{ type: "command", command: "node .claude/hooks/session-state.cjs" }],
+						},
+					],
+				},
+			};
+			const sourceFile = join(sourceDir, "settings.json");
+			await writeFile(sourceFile, JSON.stringify(sourceSettings), "utf-8");
+
+			const processor = new SettingsProcessor();
+			processor.setGlobalFlag(false);
+			processor.setProjectDir(destDir);
+			await processor.processSettingsJson(sourceFile, destFile);
+
+			const result = JSON.parse(await readFile(destFile, "utf-8"));
+			expect(result.hooks.Stop[0].hooks[0].command).toBe(
+				'node "$CLAUDE_PROJECT_DIR"/.claude/hooks/session-state.cjs',
+			);
+		});
+	});
+
+	describe("hook command self-heal logging", () => {
+		const REPAIR_RE = /Repaired (\d+) hook command path\(s\) to canonical quoted format/;
+
+		it("emits a count-bearing log when fresh install repairs paths", async () => {
+			const sourceSettings = {
+				hooks: {
+					UserPromptSubmit: [
+						{
+							hooks: [
+								{
+									type: "command",
+									command:
+										"bash .claude/hooks/node-hook-runner.sh .claude/hooks/dev-rules-reminder.cjs",
+								},
+							],
+						},
+					],
+				},
+			};
+			const sourceFile = join(sourceDir, "settings.json");
+			await writeFile(sourceFile, JSON.stringify(sourceSettings), "utf-8");
+
+			const destFile = join(destDir, "settings.json");
+			const infoSpy = spyOn(logger, "info").mockImplementation(() => {});
+
+			try {
+				const processor = new SettingsProcessor();
+				processor.setGlobalFlag(true);
+				processor.setProjectDir(destDir);
+				await processor.processSettingsJson(sourceFile, destFile);
+
+				const repairCalls = infoSpy.mock.calls.filter((call) => String(call[0]).match(REPAIR_RE));
+				expect(repairCalls.length).toBeGreaterThan(0);
+				const match = String(repairCalls[0]?.[0]).match(REPAIR_RE);
+				expect(match).not.toBeNull();
+				// Count must be >= 1 — exact count depends on whether normalize sweeps run first
+				expect(Number.parseInt(match?.[1] ?? "0", 10)).toBeGreaterThan(0);
+			} finally {
+				infoSpy.mockRestore();
+			}
+		});
+
+		it("does NOT emit the repair log when commands are already canonical", async () => {
+			const sourceSettings = {
+				hooks: {
+					UserPromptSubmit: [
+						{
+							hooks: [
+								{
+									type: "command",
+									command:
+										'bash "$HOME/.claude/hooks/node-hook-runner.sh" "$HOME/.claude/hooks/dev-rules-reminder.cjs"',
+								},
+							],
+						},
+					],
+				},
+			};
+			const sourceFile = join(sourceDir, "settings.json");
+			await writeFile(sourceFile, JSON.stringify(sourceSettings), "utf-8");
+
+			const destFile = join(destDir, "settings.json");
+			const infoSpy = spyOn(logger, "info").mockImplementation(() => {});
+
+			try {
+				const processor = new SettingsProcessor();
+				processor.setGlobalFlag(true);
+				processor.setProjectDir(destDir);
+				await processor.processSettingsJson(sourceFile, destFile);
+
+				const repairCalls = infoSpy.mock.calls.filter((call) => String(call[0]).match(REPAIR_RE));
+				expect(repairCalls.length).toBe(0);
+			} finally {
+				infoSpy.mockRestore();
+			}
+		});
+
+		it("emits the repair log when selective merge fixes a pre-existing unquoted command", async () => {
+			// Destination has an unquoted hook runner command (the Bean-bug shape)
+			const destSettings = {
+				hooks: {
+					SessionStart: [
+						{
+							hooks: [
+								{
+									type: "command",
+									command:
+										"bash $HOME/.claude/hooks/node-hook-runner.sh $HOME/.claude/hooks/session-init.cjs",
+								},
+							],
+						},
+					],
+				},
+			};
+			const destFile = join(destDir, "settings.json");
+			await writeFile(destFile, JSON.stringify(destSettings), "utf-8");
+
+			// Source with same hook in fresh format — triggers selective merge path
+			const sourceSettings = {
+				hooks: {
+					SessionStart: [
+						{
+							hooks: [
+								{
+									type: "command",
+									command: "bash .claude/hooks/node-hook-runner.sh .claude/hooks/session-init.cjs",
+								},
+							],
+						},
+					],
+				},
+			};
+			const sourceFile = join(sourceDir, "settings.json");
+			await writeFile(sourceFile, JSON.stringify(sourceSettings), "utf-8");
+
+			const infoSpy = spyOn(logger, "info").mockImplementation(() => {});
+
+			try {
+				const processor = new SettingsProcessor();
+				processor.setGlobalFlag(true);
+				processor.setProjectDir(destDir);
+				await processor.processSettingsJson(sourceFile, destFile);
+
+				const repairCalls = infoSpy.mock.calls.filter((call) => String(call[0]).match(REPAIR_RE));
+				expect(repairCalls.length).toBeGreaterThan(0);
+
+				// Verify the merged file ends up canonical
+				const result = JSON.parse(await readFile(destFile, "utf-8"));
+				const cmd = result.hooks.SessionStart[0].hooks[0].command;
+				expect(cmd).toBe(
+					'bash "$HOME/.claude/hooks/node-hook-runner.sh" "$HOME/.claude/hooks/session-init.cjs"',
+				);
+			} finally {
+				infoSpy.mockRestore();
+			}
 		});
 	});
 });

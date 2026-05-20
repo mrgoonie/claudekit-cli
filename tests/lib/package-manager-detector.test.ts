@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test";
 import { existsSync, mkdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -658,16 +658,21 @@ describe("PackageManagerDetector", () => {
 			const cacheDir = join(testHomeDir, ".claudekit");
 			mkdirSync(cacheDir, { recursive: true });
 
-			// Just inside 30 days should still be valid. Keep enough margin for filesystem I/O
-			// so the fixture does not cross the boundary before readCachedPm() checks it.
+			const now = 1_800_000_000_000;
+			const nowSpy = spyOn(Date, "now").mockImplementation(() => now);
 			const exactlyThirtyDays = {
 				packageManager: "npm",
-				detectedAt: Date.now() - 30 * 24 * 60 * 60 * 1000 + 5000,
+				detectedAt: now - 30 * 24 * 60 * 60 * 1000,
 			};
 			writeFileSync(join(cacheDir, "install-info.json"), JSON.stringify(exactlyThirtyDays));
 
-			const result = await PackageManagerDetector.readCachedPm();
-			expect(result).toBe("npm");
+			try {
+				const result = await PackageManagerDetector.readCachedPm();
+				// Should be valid at exactly 30 days (expires AFTER 30 days)
+				expect(result).toBe("npm");
+			} finally {
+				nowSpy.mockRestore();
+			}
 		});
 
 		test("handles cache boundary - just over 30 days old", async () => {

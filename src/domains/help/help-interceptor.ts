@@ -22,7 +22,7 @@ function getHelpOptions(): HelpOptions {
 		...DEFAULT_HELP_OPTIONS,
 		showBanner: isTTY, // Hide banner in pipes/CI
 		showExamples: true,
-		maxExamples: 2,
+		maxExamples: 3,
 		interactive: isTTY, // Enable interactive mode for TTY
 		width,
 		noColor,
@@ -30,30 +30,31 @@ function getHelpOptions(): HelpOptions {
 }
 
 /**
- * Extract command name from process.argv
- * CAC args may be empty when command is matched, so we parse argv directly
- * Returns null for global help or invalid commands
+ * Extract command chain from process.argv.
+ * Returns up to 2 non-option tokens: [topLevelCommand, candidateSubcommand?].
+ * Backward-compatible: single-token case still returns a 1-element array.
+ * Returns empty array for global help (no matching top-level command).
  */
-function getCommandFromArgv(): string | null {
-	// process.argv: ['node', 'ck', 'command', '--help']
-	// Find first non-option argument after the script name
+export function getCommandChainFromArgv(): string[] {
+	// process.argv: ['node', 'ck', 'command', 'subcommand', '--help']
 	const argv = process.argv.slice(2); // Remove 'node' and script path
+	const tokens = argv.filter((arg) => !arg.startsWith("-"));
 
-	for (const arg of argv) {
-		// Skip options (start with -)
-		if (arg.startsWith("-")) {
-			continue;
-		}
-		// Found a potential command
-		if (hasCommand(arg)) {
-			return arg;
-		}
-		// Invalid command - return null to show global help or let CAC handle
-		return null;
+	const [first, second] = tokens;
+
+	if (!first || !hasCommand(first)) {
+		// No valid top-level command — global help or let CAC handle
+		return [];
 	}
 
-	// No command found - global help
-	return null;
+	const chain: string[] = [first];
+
+	// Capture a candidate subcommand token (may or may not exist in registry)
+	if (second) {
+		chain.push(second);
+	}
+
+	return chain;
 }
 
 /**
@@ -63,18 +64,36 @@ function getCommandFromArgv(): string | null {
 export async function handleHelp(_args: readonly string[]): Promise<void> {
 	try {
 		const options = getHelpOptions();
-		const command = getCommandFromArgv();
+		const chain = getCommandChainFromArgv();
 
 		let output: string;
 
-		if (command === null) {
+		if (chain.length === 0) {
 			// Global help: ck --help
 			output = renderGlobalHelp(HELP_REGISTRY, options);
 		} else {
-			// Command help: ck <command> --help
-			const help = HELP_REGISTRY[command];
-			output = renderHelp(help, {
-				command,
+			const [parentCmd, subCmd] = chain;
+			const parentHelp = HELP_REGISTRY[parentCmd];
+
+			// Attempt subcommand resolution: ck <parent> <sub> --help
+			if (subCmd && parentHelp.subcommands) {
+				const subHelp = parentHelp.subcommands.find((s) => s.name === subCmd);
+				if (subHelp) {
+					output = renderHelp(subHelp, {
+						command: subCmd,
+						globalHelp: false,
+						options,
+						parentName: parentCmd,
+					});
+					await displayHelp(output, options);
+					process.exitCode = 0;
+					return;
+				}
+			}
+
+			// Fallback to parent help (unknown subcommand or no subcommands)
+			output = renderHelp(parentHelp, {
+				command: parentCmd,
 				globalHelp: false,
 				options,
 			});

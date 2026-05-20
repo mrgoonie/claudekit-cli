@@ -125,14 +125,76 @@ describe("generatePlanMd", () => {
 		expect(data.issue).toBeUndefined();
 	});
 
-	test("includes created date in frontmatter", () => {
+	test("includes created timestamp in frontmatter", () => {
 		const output = generatePlanMd(baseOptions);
 		const { data } = matter(output);
-		// gray-matter parses unquoted YYYY-MM-DD as a Date object
-		const created =
-			data.created instanceof Date ? data.created.toISOString().slice(0, 10) : String(data.created);
-		// Should be YYYY-MM-DD format
-		expect(created).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+		// created is now a full ISO timestamp string (CLI-strict tracking)
+		const created = String(data.created);
+		// Should be full ISO timestamp format (YYYY-MM-DDTHH:mm:ss.sssZ)
+		expect(created).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/);
+	});
+
+	test("includes createdBy=ck-cli by default", () => {
+		const output = generatePlanMd(baseOptions);
+		const { data } = matter(output);
+		expect(data.createdBy).toBe("ck-cli");
+	});
+
+	test("includes source=cli by default", () => {
+		const output = generatePlanMd(baseOptions);
+		const { data } = matter(output);
+		expect(data.source).toBe("cli");
+	});
+
+	test("sets createdBy=ck:plan when source=skill", () => {
+		const output = generatePlanMd({ ...baseOptions, source: "skill" });
+		const { data } = matter(output);
+		expect(data.createdBy).toBe("ck:plan");
+		expect(data.source).toBe("skill");
+	});
+
+	test("sets createdBy=dashboard when source=dashboard", () => {
+		const output = generatePlanMd({ ...baseOptions, source: "dashboard" });
+		const { data } = matter(output);
+		expect(data.createdBy).toBe("dashboard");
+		expect(data.source).toBe("dashboard");
+	});
+
+	test("includes sessionId when provided", () => {
+		const output = generatePlanMd({ ...baseOptions, source: "skill", sessionId: "abc123" });
+		const { data } = matter(output);
+		expect(data.sessionId).toBe("abc123");
+	});
+
+	test("omits sessionId when not provided", () => {
+		const output = generatePlanMd(baseOptions);
+		const { data } = matter(output);
+		expect(data.sessionId).toBeUndefined();
+	});
+
+	test("includes branch frontmatter field", () => {
+		const output = generatePlanMd(baseOptions);
+		const { data } = matter(output);
+		expect(data).toHaveProperty("branch");
+		expect(typeof data.branch).toBe("string");
+	});
+
+	test("includes empty tags array in frontmatter", () => {
+		const output = generatePlanMd(baseOptions);
+		const { data } = matter(output);
+		expect(data.tags).toEqual([]);
+	});
+
+	test("includes empty blockedBy array in frontmatter", () => {
+		const output = generatePlanMd(baseOptions);
+		const { data } = matter(output);
+		expect(data.blockedBy).toEqual([]);
+	});
+
+	test("includes empty blocks array in frontmatter", () => {
+		const output = generatePlanMd(baseOptions);
+		const { data } = matter(output);
+		expect(data.blocks).toEqual([]);
 	});
 
 	test("phases table is 3-column canonical format | Phase | Name | Status |", () => {
@@ -281,6 +343,20 @@ describe("scaffoldPlan", () => {
 		expect(phaseFiles).toHaveLength(2);
 		expect(phaseFiles[0]).toBe(join(testDir, "phase-01-setup.md"));
 		expect(phaseFiles[1]).toBe(join(testDir, "phase-02-build.md"));
+	});
+
+	test("returns resolved phaseIds matching the generated files", () => {
+		const { phaseIds, phaseFiles } = scaffold("Tracking Plan", [
+			{ name: "Setup" },
+			{ name: "Build" },
+			{ id: "4b", name: "Review" },
+		]);
+		expect(phaseIds).toEqual(["1", "2", "4b"]);
+		expect(phaseFiles.map((file) => file.split("/").at(-1))).toEqual([
+			"phase-01-setup.md",
+			"phase-02-build.md",
+			"phase-04b-review.md",
+		]);
 	});
 
 	test("idempotent: second call overwrites cleanly", () => {

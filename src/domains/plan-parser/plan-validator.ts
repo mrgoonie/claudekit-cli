@@ -15,13 +15,17 @@ import type { ValidationIssue, ValidationResult } from "./plan-types.js";
  * @param strict - If true, warnings become errors for critical checks
  */
 export function validatePlanFile(filePath: string, strict = false): ValidationResult {
-	const content = readFileSync(filePath, "utf8");
+	const rawContent = readFileSync(filePath, "utf8");
+	// Normalize CRLF to LF for consistent line handling on Windows
+	const content = rawContent.replace(/\r\n/g, "\n");
 	const dir = dirname(filePath);
 	const issues: ValidationIssue[] = [];
 	const lines = content.split("\n");
 
 	// Check 1: YAML frontmatter present — reuse stripped body to avoid double-parse
-	const { data: frontmatter, content: body } = matter(content);
+	const { data: frontmatter, content: body } = matter(content, {
+		engines: { javascript: { parse: () => ({}) } },
+	});
 	if (!frontmatter || Object.keys(frontmatter).length === 0) {
 		issues.push({
 			line: 1,

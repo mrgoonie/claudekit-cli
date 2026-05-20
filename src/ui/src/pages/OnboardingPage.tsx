@@ -50,7 +50,7 @@ const KitCard: React.FC<KitCardProps> = ({ kit, selected, onSelect, features }) 
 	);
 };
 
-const OnboardingPage: React.FC = () => {
+const OnboardingPageContent: React.FC = () => {
 	const { t } = useI18n();
 	const navigate = useNavigate();
 	const [selectedKit, setSelectedKit] = useState<KitType | null>(null);
@@ -140,6 +140,10 @@ const OnboardingPage: React.FC = () => {
 			)}
 		</div>
 	);
+};
+
+const OnboardingPage: React.FC = () => {
+	return <OnboardingPageContent />;
 };
 
 export default OnboardingPage;

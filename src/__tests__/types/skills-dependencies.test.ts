@@ -26,7 +26,12 @@ describe("skills-dependencies", () => {
 		it("includes google-genai in python deps", () => {
 			const googleGenai = SKILLS_DEPENDENCIES.python.find((d) => d.name.includes("google-genai"));
 			expect(googleGenai).toBeDefined();
-			expect(googleGenai?.description).toContain("ai-multimodal");
+			expect(googleGenai?.description).toContain("Gemini provider");
+		});
+
+		it("includes requests in python dependency messaging", () => {
+			const requestsLine = SKILLS_DEPENDENCIES.python.find((d) => d.name.includes("requests"));
+			expect(requestsLine).toBeDefined();
 		});
 
 		it("includes ffmpeg in system deps", () => {

@@ -7,10 +7,10 @@ import {
 
 describe("Provider Registry", () => {
 	describe("getAllProviderTypes", () => {
-		it("returns all 15 providers", () => {
+		it("returns all 16 providers", () => {
 			const allProviders = getAllProviderTypes();
 
-			expect(allProviders).toHaveLength(15);
+			expect(allProviders).toHaveLength(16);
 			expect(allProviders).toContain("claude-code");
 			expect(allProviders).toContain("opencode");
 			expect(allProviders).toContain("github-copilot");
@@ -19,6 +19,7 @@ describe("Provider Registry", () => {
 			expect(allProviders).toContain("cursor");
 			expect(allProviders).toContain("roo");
 			expect(allProviders).toContain("kilo");
+			expect(allProviders).toContain("kiro");
 			expect(allProviders).toContain("windsurf");
 			expect(allProviders).toContain("goose");
 			expect(allProviders).toContain("gemini-cli");
@@ -46,8 +47,9 @@ describe("Provider Registry", () => {
 		it("returns providers with non-null agents config", () => {
 			const withAgents = getProvidersSupporting("agents");
 
-			// All 15 providers support agents
+			// 15 of 16 providers support agents (antigravity has agents=null)
 			expect(withAgents).toHaveLength(15);
+			expect(withAgents).not.toContain("antigravity");
 
 			// Verify each has non-null agents config
 			for (const provider of withAgents) {
@@ -77,7 +79,7 @@ describe("Provider Registry", () => {
 			const withSkills = getProvidersSupporting("skills");
 
 			// All providers that support agents also support skills
-			expect(withSkills).toHaveLength(15);
+			expect(withSkills).toHaveLength(16);
 
 			// Verify each has non-null skills config
 			for (const provider of withSkills) {
@@ -159,8 +161,13 @@ describe("Provider Registry", () => {
 			const agentProviders = getProvidersSupporting("agents");
 			const skillProviders = getProvidersSupporting("skills");
 
-			// All agent providers should support skills
-			expect(agentProviders.sort()).toEqual(skillProviders.sort());
+			// Every agent provider must also support skills (skills is a superset)
+			for (const p of agentProviders) {
+				expect(skillProviders).toContain(p);
+			}
+			// Antigravity supports skills but not agents (agents ARE skills in Antigravity)
+			expect(skillProviders).toContain("antigravity");
+			expect(agentProviders).not.toContain("antigravity");
 		});
 
 		it("skills paths align with agents for providers", () => {
@@ -176,7 +183,7 @@ describe("Provider Registry", () => {
 	});
 
 	describe("Subagent support field", () => {
-		it("all 15 providers have a subagents field", () => {
+		it("all 16 providers have a subagents field", () => {
 			const allProviders = getAllProviderTypes();
 			for (const providerType of allProviders) {
 				const config = providers[providerType];
@@ -215,6 +222,10 @@ describe("Provider Registry", () => {
 				expect(providers[p].subagents).toBe("full");
 			}
 		});
+
+		it("kiro has subagents: none (steering context, not delegation)", () => {
+			expect(providers.kiro.subagents).toBe("none");
+		});
 	});
 
 	describe("Specific provider configurations", () => {
@@ -231,12 +242,31 @@ describe("Provider Registry", () => {
 			expect(config.agents?.charLimit).toBe(12000);
 		});
 
-		it("antigravity commands use workflows path", () => {
+		it("antigravity has no agents (agents are skills in Antigravity)", () => {
 			const config = providers.antigravity;
+			expect(config.agents).toBeNull();
+		});
+
+		it("antigravity uses correct paths for commands, skills, config, rules", () => {
+			const config = providers.antigravity;
+			// Commands (workflows): project only, no verified global path
 			expect(config.commands).not.toBeNull();
 			expect(config.commands?.projectPath).toBe(".agent/workflows");
-			const globalPath = config.commands?.globalPath?.replace(/\\/g, "/") ?? "";
-			expect(globalPath).toContain(".gemini/antigravity/global_workflows");
+			expect(config.commands?.globalPath).toBeNull();
+
+			// Skills: project .agent/skills/, global ~/.gemini/antigravity/skills
+			expect(config.skills?.projectPath).toBe(".agent/skills");
+			const skillsGlobal = config.skills?.globalPath?.replace(/\\/g, "/") ?? "";
+			expect(skillsGlobal).toContain(".gemini/antigravity/skills");
+
+			// Rules: project .agent/rules/, no verified global path
+			expect(config.rules?.projectPath).toBe(".agent/rules");
+			expect(config.rules?.globalPath).toBeNull();
+
+			// Config: GEMINI.md → ~/.gemini/GEMINI.md (shared with Gemini CLI)
+			expect(config.config?.projectPath).toBe("GEMINI.md");
+			const configGlobal = config.config?.globalPath?.replace(/\\/g, "/") ?? "";
+			expect(configGlobal).toMatch(/\.gemini\/GEMINI\.md$/);
 		});
 
 		it("windsurf commands use workflows path", () => {
@@ -247,12 +277,13 @@ describe("Provider Registry", () => {
 			expect(globalPath).toContain(".codeium/windsurf/workflows");
 		});
 
-		it("codex has global-only commands", () => {
+		it("codex commands install as project/global skills", () => {
 			const config = providers.codex;
-			expect(config.commands?.projectPath).toBeNull();
+			expect(config.commands?.projectPath).toBe(".agents/skills");
+			expect(config.commands?.format).toBe("command-to-codex-skill");
 			// path.join uses OS-specific separators, so normalize for comparison
 			const globalPath = config.commands?.globalPath?.replace(/\\/g, "/") ?? "";
-			expect(globalPath).toContain(".codex/prompts");
+			expect(globalPath).toContain(".agents/skills");
 		});
 
 		it("codex global rules merge into AGENTS.md", () => {

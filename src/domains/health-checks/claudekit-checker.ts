@@ -10,8 +10,10 @@ import {
 	checkGlobalDirReadable,
 	checkGlobalDirWritable,
 	checkGlobalInstall,
+	checkHookCommandPaths,
 	checkHookConfig,
 	checkHookDeps,
+	checkHookFileReferences,
 	checkHookLogs,
 	checkHookRuntime,
 	checkHookSyntax,
@@ -21,6 +23,7 @@ import {
 	checkProjectInstall,
 	checkPythonVenv,
 	checkSettingsValid,
+	checkSkillBudget,
 	checkSkillsScripts,
 } from "./checkers/index.js";
 import type { CheckResult, Checker } from "./types.js";
@@ -72,6 +75,8 @@ export class ClaudekitChecker implements Checker {
 		results.push(...checkSkillsScripts(setup));
 		logger.verbose("ClaudekitChecker: Checking component counts");
 		results.push(checkComponentCounts(setup));
+		logger.verbose("ClaudekitChecker: Checking skill budget");
+		results.push(...(await checkSkillBudget(setup, this.projectDir)));
 
 		// Environment keys check
 		logger.verbose("ClaudekitChecker: Checking required environment keys");
@@ -94,6 +99,10 @@ export class ClaudekitChecker implements Checker {
 		results.push(await checkHookDeps(this.projectDir));
 		logger.verbose("ClaudekitChecker: Checking hook runtime");
 		results.push(await checkHookRuntime(this.projectDir));
+		logger.verbose("ClaudekitChecker: Checking hook command paths");
+		results.push(await checkHookCommandPaths(this.projectDir));
+		logger.verbose("ClaudekitChecker: Checking hook file references");
+		results.push(await checkHookFileReferences(this.projectDir));
 		logger.verbose("ClaudekitChecker: Checking hook config");
 		results.push(await checkHookConfig(this.projectDir));
 		logger.verbose("ClaudekitChecker: Checking hook crash logs");

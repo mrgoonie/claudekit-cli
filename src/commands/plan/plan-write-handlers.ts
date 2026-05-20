@@ -3,12 +3,48 @@
  * Subcommands: create, check, uncheck, add-phase
  * Uses ASCII indicators [OK] [!] [X] [i] — no emojis
  */
-import { basename, relative, resolve } from "node:path";
-import { addPhase, scaffoldPlan, updatePhaseStatus } from "@/domains/plan-parser/index.js";
+import { basename, dirname, relative, resolve } from "node:path";
+import {
+	addPhase,
+	buildPlanSummary,
+	scaffoldPlan,
+	updatePhaseStatus,
+} from "@/domains/plan-parser/index.js";
+import {
+	trackPhaseChecked,
+	trackPhaseUnchecked,
+	trackPlanCompleted,
+	trackPlanCreated,
+} from "@/domains/plan-parser/plan-telemetry.js";
+import {
+	findProjectRoot,
+	registerNewPlan,
+	updateRegistryAddPhase,
+	updateRegistryPhaseStatus,
+} from "@/domains/plan-parser/plans-registry.js";
 import { output } from "@/shared/output-manager.js";
 import pc from "picocolors";
 import type { PlanCommandOptions } from "./plan-command.js";
 import { isJsonOutput, resolvePlanFile } from "./plan-command.js";
+import { getGlobalPlansDirFromCwd, resolveTargetFromBase } from "./plan-scope-context.js";
+
+function quoteReadTarget(filePath: string): string {
+	return `"${filePath.replace(/\\/g, "/").replace(/"/g, '\\"')}"`;
+}
+
+export function buildPlanCreateReadReminder(
+	planFile: string,
+	phaseFiles: string[],
+	cwd = process.cwd(),
+): string[] {
+	const files = [planFile, ...phaseFiles].map((file) => quoteReadTarget(relative(cwd, file)));
+
+	return [
+		"  [i] Claude Code agents: read plan.md and every phase-*.md before editing.",
+		"      These files already exist; Write/Edit without Read may be rejected after wasting tokens.",
+		`      cat ${files.join(" ")}`,
+	];
+}
 
 // ─── Handlers ────────────────────────────────────────────────────────────────
 
@@ -60,13 +96,46 @@ export async function handleCreate(
 		return;
 	}
 
+	const globalBaseDir = options.global ? await getGlobalPlansDirFromCwd() : undefined;
+	const resolvedDir = globalBaseDir ? resolveTargetFromBase(dir, globalBaseDir) : resolve(dir);
+	if (globalBaseDir && !resolvedDir) {
+		output.error("[X] Target directory must stay within the configured global plans root");
+		process.exitCode = 1;
+		return;
+	}
+	const safeResolvedDir = resolvedDir ?? resolve(dir);
 	const result = scaffoldPlan({
 		title: options.title,
 		phases: phaseNames.map((name) => ({ name })),
-		dir: resolve(dir),
+		dir: safeResolvedDir,
 		priority: priority as "P1" | "P2" | "P3",
 		issue: options.issue ? Number(options.issue) : undefined,
+		source: options.source ?? "cli",
+		sessionId: options.sessionId,
 	});
+
+	// Register plan in global plans registry (~/.claude/plans-registries/)
+	const source = options.source ?? "cli";
+	try {
+		const projectRoot = findProjectRoot(safeResolvedDir);
+		registerNewPlan({
+			dir: safeResolvedDir,
+			title: options.title,
+			priority: priority as "P1" | "P2" | "P3",
+			source,
+			phases: result.phaseIds,
+			cwd: projectRoot,
+		});
+	} catch {
+		// Registry update is non-critical; continue silently
+	}
+
+	// Telemetry (no-op stub, debug logging when CK_TELEMETRY=1)
+	try {
+		trackPlanCreated(safeResolvedDir, source);
+	} catch {
+		// Telemetry is non-critical; continue silently
+	}
 
 	if (isJsonOutput(options)) {
 		const cwd = process.cwd();
@@ -85,10 +154,13 @@ export async function handleCreate(
 
 	console.log();
 	console.log(pc.bold(`  [OK] Plan created: ${options.title}`));
-	console.log(`  Directory: ${resolve(dir)}`);
+	console.log(`  Directory: ${safeResolvedDir}`);
 	console.log(`  Phases: ${result.phaseFiles.length}`);
 	for (const f of result.phaseFiles) {
 		console.log(`    [ ] ${basename(f)}`);
+	}
+	for (const line of buildPlanCreateReadReminder(result.planFile, result.phaseFiles)) {
+		console.log(line);
 	}
 	console.log();
 }
@@ -121,6 +193,33 @@ export async function handleCheck(
 		output.error(`[X] ${err instanceof Error ? err.message : String(err)}`);
 		process.exitCode = 1;
 		return;
+	}
+
+	// Update registry with new status and progress
+	const planDir = dirname(planFile);
+	let planStatus = "pending";
+	try {
+		const projectRoot = findProjectRoot(planDir);
+		const summary = buildPlanSummary(planFile);
+		planStatus = summary.status ?? "pending";
+		updateRegistryPhaseStatus({
+			planDir,
+			planStatus,
+			progressPct: summary.progressPct,
+			cwd: projectRoot,
+		});
+	} catch {
+		// Registry update is non-critical; continue silently
+	}
+
+	// Telemetry (no-op stub, debug logging when CK_TELEMETRY=1)
+	try {
+		trackPhaseChecked(planDir, target, options.source ?? "cli");
+		if (planStatus === "done") {
+			trackPlanCompleted(planDir, options.source ?? "cli");
+		}
+	} catch {
+		// Telemetry is non-critical; continue silently
 	}
 
 	if (isJsonOutput(options)) {
@@ -167,6 +266,28 @@ export async function handleUncheck(
 		return;
 	}
 
+	// Update registry with new status and progress
+	const planDir = dirname(planFile);
+	try {
+		const projectRoot = findProjectRoot(planDir);
+		const summary = buildPlanSummary(planFile);
+		updateRegistryPhaseStatus({
+			planDir,
+			planStatus: summary.status ?? "pending",
+			progressPct: summary.progressPct,
+			cwd: projectRoot,
+		});
+	} catch {
+		// Registry update is non-critical; continue silently
+	}
+
+	// Telemetry (no-op stub, debug logging when CK_TELEMETRY=1)
+	try {
+		trackPhaseUnchecked(planDir, target, options.source ?? "cli");
+	} catch {
+		// Telemetry is non-critical; continue silently
+	}
+
 	if (isJsonOutput(options)) {
 		console.log(
 			JSON.stringify({
@@ -204,6 +325,19 @@ export async function handleAddPhase(
 
 	try {
 		const result = addPhase(planFile, target, options.after);
+
+		// Update registry with new phase
+		try {
+			const planDir = dirname(planFile);
+			const projectRoot = findProjectRoot(planDir);
+			updateRegistryAddPhase({
+				planDir,
+				phaseId: result.phaseId,
+				cwd: projectRoot,
+			});
+		} catch {
+			// Registry update is non-critical; continue silently
+		}
 
 		if (isJsonOutput(options)) {
 			console.log(

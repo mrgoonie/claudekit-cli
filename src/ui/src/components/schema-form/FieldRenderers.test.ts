@@ -1,6 +1,6 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, test } from "vitest";
 import ckConfigSchema from "../../../../schemas/ck-config.schema.json" with { type: "json" };
-import { GeminiModelSchema } from "../../../../types/ck-config.js";
+import { GEMINI_MODEL_VALUES } from "../../../../types/ck-config.js";
 import { CONFIG_FIELD_DOCS } from "../../services/configFieldDocs";
 import {
 	formatStringArrayUnionDisplayValue,
@@ -86,7 +86,7 @@ describe("update pipeline field docs", () => {
 	});
 
 	test("keeps curated enum metadata aligned with schema", () => {
-		expect(CONFIG_FIELD_DOCS["gemini.model"]?.validValues).toEqual([...GeminiModelSchema.options]);
+		expect(CONFIG_FIELD_DOCS["gemini.model"]?.validValues).toEqual([...GEMINI_MODEL_VALUES]);
 
 		for (const [path, fieldDoc] of Object.entries(CONFIG_FIELD_DOCS)) {
 			if (!fieldDoc?.validValues) continue;

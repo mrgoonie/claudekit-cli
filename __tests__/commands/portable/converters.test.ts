@@ -160,6 +160,49 @@ describe("fm-strip converter", () => {
 		});
 	});
 
+	describe("gemini-cli (body rewriting)", () => {
+		it("rewrites Claude tool names in body text", () => {
+			const item = makeItem({
+				frontmatter: { name: "Gemini Agent" },
+				body: "Use the Read tool to read files. Use the Bash tool for commands.",
+			});
+			const result = convertFmStrip(item, "gemini-cli");
+
+			expect(result.content).toContain("## Agent: Gemini Agent");
+			expect(result.content).toContain("file reading");
+			expect(result.content).toContain("terminal/shell");
+			expect(result.content).not.toContain("Read tool");
+			expect(result.content).not.toContain("Bash tool");
+		});
+
+		it("rewrites CLAUDE.md references to GEMINI.md", () => {
+			const item = makeItem({
+				frontmatter: { name: "Config Agent" },
+				body: "Check the project CLAUDE.md for instructions.",
+			});
+			const result = convertFmStrip(item, "gemini-cli");
+
+			expect(result.content).toContain("GEMINI.md");
+			expect(result.content).not.toContain("CLAUDE.md");
+		});
+
+		it("does not rewrite body for non-Gemini merge providers", () => {
+			const item = makeItem({
+				frontmatter: { name: "Goose Agent" },
+				body: "Use the Read tool to read files.",
+			});
+			const result = convertFmStrip(item, "goose");
+
+			expect(result.content).toContain("Read tool");
+		});
+
+		it("filename is AGENTS.md (merge-single)", () => {
+			const item = makeItem();
+			const result = convertFmStrip(item, "gemini-cli");
+			expect(result.filename).toBe("AGENTS.md");
+		});
+	});
+
 	describe("buildMergedAgentsMd", () => {
 		it("builds header + sections separated by ---", () => {
 			const sections = ["## Agent: First\n\nFirst body", "## Agent: Second\n\nSecond body"];

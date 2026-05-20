@@ -41,25 +41,75 @@ CLI tool (`ck`) for bootstrapping/updating ClaudeKit projects from GitHub releas
 **MUST pass before ANY commit/PR. No exceptions.**
 
 ```bash
-bun run validate
-# Equivalent to: bun run typecheck && bun run lint && bun test && bun run build
-# Note: validate uses lint (read-only check), not lint:fix. Run lint:fix manually first.
+bun run ci:local
 ```
 
-**Enforced by git hooks** — `pre-commit` runs typecheck+lint+build, `pre-push` adds tests. Hooks auto-install on `bun install`. If hooks are missing, run `bun run install:hooks`.
+`bun run ci:local` is the **single source of truth** for what passing CI means. It runs the exact same 7 steps as the `Test` job in `.github/workflows/ci.yml`, in the same order, with the same env vars. If `ci:local` passes, the CI `Test` job will pass — modulo network/env quirks.
 
-**AI agents: NEVER use `--no-verify` to bypass hooks. NEVER set `SKIP_HOOKS=true`. If the hook rejects your commit, fix the code — do not skip the gate. This rule is NON-NEGOTIABLE.**
+The pre-push git hook calls into the same script, so hook ↔ CI parity can never silently drift. **AI sessions MUST run `bun run ci:local` before pushing.**
 
-**Human bypass (emergencies only):** `SKIP_HOOKS=true git commit -m "..."` or `SKIP_HOOKS=true git push`.
+### What `ci:local` checks (mirrors CI `Test` job)
+
+| # | Step | Catches |
+|---|------|---------|
+| 1 | `typecheck` (`tsc --noEmit`) | Type errors |
+| 2 | `lint` (`biome check`) | Style + auto-fixable issues |
+| 3 | `build` (`bun build src/index.ts`) | Bundle errors |
+| 4 | `test` (`bun test`) | Unit/integration test failures |
+| 5 | **`help:check-parity` + `manifest:generate` + `docs:generate` drift check** | Stale `cli-manifest.json` / `docs/cli-reference.md` |
+| 6 | `ui:build` (`tsc -b` + vite) | UI type errors stricter than `tsc --noEmit` (unused vars, ES lib methods like `Array.at()`) |
+| 7 | `prepublish-check` (`node scripts/prepublish-check.js`) | Packaged CLI shape |
+
+### Common upstream drift class (self-heal)
+
+| Symptom (CI error) | Cause | One-liner self-heal |
+|---|---|---|
+| `cli-manifest.json or docs/cli-reference.md is stale` | Release commit on `main` bumped `package.json` but skipped regenerating the manifest/docs (step 5 above) | `bun run manifest:generate && bun run docs:generate && git add cli-manifest.json docs/cli-reference.md && git commit -m "chore: regenerate cli-manifest and docs"` — MUST use `chore:` (never `fix:`/`hotfix:`) so this commit does NOT trigger a release |
+| `[X] CAC <-> HELP_REGISTRY parity check failed` | Added a command or flag without updating the help registry | Update the relevant entry in the help-command source, rerun `bun run help:check-parity` |
+| `tsc -b` errors only in `ui:build`, not `typecheck` | UI tsconfig is stricter (unused vars, ES lib methods) | Run `bun run ui:build` from the repo root, fix the errors |
+| `Prepublish check failed` | `package.json` `files`/`bin` arrays missing a path | Audit `package.json` `files` against `bin/`, `dist/`, `cli-manifest.json` |
+
+Use `chore:` (NOT `hotfix:` or `fix:`) for the manifest-regen commit — version-sync commits must NOT trigger releases.
+
+**Note:** Step 5 always regenerates `cli-manifest.json` / `docs/cli-reference.md`, which updates the `generatedAt` timestamp every run. After a passing `ci:local`, **timestamp-only diffs on those two files are safe to ignore or `git checkout`** — the drift check explicitly excludes `generatedAt` / `<!-- generated:` lines.
+
+### `validate` vs `ci:local`
+
+| Command | Use for | Includes |
+|---|---|---|
+| `bun run validate` | Fast inner-loop dev check | typecheck + lint + bun test + ui:test + build |
+| `bun run ci:local` | **Pre-push / pre-PR / mirror CI exactly** | typecheck + lint + build + bun test + **help-parity drift** + **ui:build** + **prepublish-check** |
+
+`validate` is FASTER but does NOT catch the parity-drift class. **Use `ci:local` before pushing.**
+
+### Other CI workflows (not gated by `ci:local`)
+
+| Workflow | Trigger | What it does |
+|---|---|---|
+| `CI / Metadata Deletions Check` | every PR | `scripts/check-metadata-deletions.js` — guards command-archive deletions metadata |
+| `CI / Release Dry-Run Check` | PRs touching release-related files only | semantic-release dry-run; auto-skipped otherwise |
+| `Claude Code Review` | every PR | AI bot review (severity-tagged) — feeds the maintainer review-loop |
+| `release.yml` / `release-dev.yml` | merge to `main` / `dev` | semantic-release publishes npm package |
+| `sync-dev-after-release.yml` | post-release on `main` | opens `chore: merge main into dev` PR |
+
+`ci:local` does NOT mirror `Metadata Deletions Check` or `Release Dry-Run Check` (both require git-history context and rarely fail). If you're touching release config or deletions metadata, also run the matching script manually: `node scripts/check-metadata-deletions.js` or `node scripts/check-release-dry-run.js`.
+
+### Pre-push hook (auto-installed)
+
+`pre-push` calls `scripts/ci-local.sh`, then adds `bun run ui:test` (vitest suite that CI's Test job does NOT run). Hooks auto-install on `bun install`; if missing run `bun run install:hooks`. The hook works in both normal repos and worktrees.
+
+**AI agents: NEVER use `--no-verify` to bypass hooks. NEVER set `SKIP_HOOKS=true`.** If the hook rejects, fix the code — do not skip the gate. This rule is NON-NEGOTIABLE.
+
+**Human bypass (emergencies only):** `SKIP_HOOKS=true git push`.
 
 **Why:** AI-generated code historically failed CI in 80%+ of PRs, causing 3-6 fix-up commits each. The hooks exist to catch these failures locally before they waste CI cycles and pollute git history.
 
-**Worktree support:** Hooks work in both normal repos and worktrees. The install script uses `core.hooksPath` with a relative path (`.githooks`) that resolves from each worktree's root. After creating a worktree, run `bun install` or `bun run install:hooks` from the worktree root.
+### Common pitfalls
 
-**Common pitfalls:**
 - Web server deps (`express`, `ws`, `chokidar`, `get-port`, `open`) must be in `package.json` — not just transitive
 - UI component files must pass biome formatting (long JSX lines auto-wrapped)
 - Express 5 types `req.params`/`req.query` as `string | string[]` — cast with `String()`
+- Don't `git pull` from `main` into a feature branch — use `git merge origin/main` and resolve with `git checkout --ours CHANGELOG.md package.json` (see Release Workflow below)
 
 ## Quick Commands
 
@@ -134,6 +184,33 @@ tests/                # Additional test suites
 - **Cross-platform paths**: `services/transformers/global-path-transformer.ts`
 - **Domain-Driven**: Business logic grouped by domain in `domains/`
 - **Path Aliases**: `@/` maps to `src/` for cleaner imports
+
+## Quality Gate Rules
+
+### Path Safety (MANDATORY)
+All file paths MUST use `path.join()`, `path.resolve()`, or `path.normalize()` — never concatenate with string `+` or template literals. Quote all paths in shell commands with double quotes. Test with spaces in directory names before committing path-handling code.
+
+**Watch files:** `settings-processor.ts`, `global-path-transformer.ts`, `command-normalizer.ts`, `process-lock.ts`
+
+### Release Config Freeze
+NEVER modify `.releaserc.js`, `release*.yml`, or `scripts/*build*` without running `bun run build && npm pack --dry-run` to verify package contents. Dev and main release configs MUST stay functionally equivalent — if you change one, verify the other. Always run `npx semantic-release --dry-run` on release config PRs.
+
+### Migration Test Requirement
+Changes to `migrate-command.ts`, `provider-registry.ts`, or `reconciler.ts` MUST include a fixture-based integration test covering the new provider/state path. Test both fresh-install and upgrade-from-previous-version scenarios.
+
+### Update Command Decision Matrix
+Before modifying `update-cli.ts`, consult this truth table:
+
+| User Flag | npm Channel | Registry Source | Expected Behavior |
+|-----------|-------------|-----------------|-------------------|
+| (none) | stable | npm latest | Update to latest stable |
+| --dev | dev | npm @dev tag | Update to latest dev |
+| --yes | (any) | (any) | Non-interactive, skip kit selection |
+| --yes + prerelease installed | dev | npm @dev tag | Stay on dev channel |
+
+All paths must be covered by tests in `update-cli.test.ts`.
+
+---
 
 ## Idempotent Migration (`ck migrate`)
 
@@ -213,3 +290,24 @@ Detailed docs in `docs/`:
 - `code-standards.md` - Coding conventions
 - `system-architecture.md` - Technical details
 - `deployment-guide.md` - Release procedures
+
+## Agent Quick Reference
+
+Machine-readable CLI manifest: [`cli-manifest.json`](./cli-manifest.json)
+Human/LLM reference: [`docs/cli-reference.md`](./docs/cli-reference.md)
+
+Top-level commands (all support `ck <cmd> --help`):
+- `ck new` — bootstrap a new ClaudeKit project
+- `ck init` — initialize/update a ClaudeKit project
+- `ck update` — update the CLI itself
+- `ck doctor` — health check
+- `ck uninstall`, `ck backups`, `ck versions`, `ck setup`
+- `ck config`, `ck projects`, `ck skills`, `ck agents`, `ck commands`, `ck migrate`
+- `ck api`, `ck plan`, `ck content`, `ck watch`
+
+Two-level help also works: `ck <cmd> <subcommand> --help`.
+
+Pitfalls:
+- `ck init --force` does NOT do a fresh install — use `--fresh` for that.
+- `ck update --kit` is deprecated — use `ck init --kit` instead.
+- `ck migrate --dry-run` first to preview before writing.

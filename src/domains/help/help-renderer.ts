@@ -14,6 +14,7 @@ import type {
 	HelpOptions,
 	HelpRenderContext,
 	OptionGroup,
+	SubcommandHelp,
 } from "./help-types.js";
 
 /**
@@ -22,7 +23,7 @@ import type {
 export const DEFAULT_HELP_OPTIONS: HelpOptions = {
 	showBanner: true,
 	showExamples: true,
-	maxExamples: 2,
+	maxExamples: 3,
 	interactive: false,
 	width: process.stdout.columns || 80,
 	theme: defaultTheme,
@@ -53,10 +54,33 @@ function renderCommandHeader(help: CommandHelp, theme: ColorTheme): string {
 }
 
 /**
- * Render usage section
+ * Render usage section.
+ * Subcommand `usage` fields are fully qualified (e.g. "ck plan parse [target] [--json]"),
+ * so we always use `help.usage` directly. `parentName` is accepted for symmetry with the
+ * context chain but no longer overrides — trusting the registry preserves per-subcommand
+ * argument syntax.
  */
-function renderUsage(help: CommandHelp, theme: ColorTheme): string {
+function renderUsage(help: CommandHelp, theme: ColorTheme, _parentName?: string): string {
 	return [theme.heading("Usage:"), `  ${theme.example(help.usage)}`, ""].join("\n");
+}
+
+/**
+ * Render subcommand list section.
+ * Aligned like option flags for visual consistency.
+ */
+function renderSubcommandList(subcommands: SubcommandHelp[], theme: ColorTheme): string {
+	if (subcommands.length === 0) return "";
+
+	const maxNameWidth = Math.max(...subcommands.map((s) => s.name.length));
+	const lines: string[] = [theme.heading("Subcommands:")];
+
+	for (const sub of subcommands) {
+		const namePart = `  ${padEnd(theme.command(sub.name), maxNameWidth + 4)}`;
+		lines.push(`${namePart}${theme.description(sub.description)}`);
+	}
+	lines.push("");
+
+	return lines.join("\n");
 }
 
 /**
@@ -160,7 +184,8 @@ function renderDeprecationWarning(help: CommandHelp, theme: ColorTheme): string 
 }
 
 /**
- * Render complete help for a single command
+ * Render complete help for a single command.
+ * Accepts optional `parentName` in context to render subcommand usage prefix.
  */
 export function renderHelp(
 	help: CommandHelp,
@@ -168,14 +193,17 @@ export function renderHelp(
 ): string {
 	const options = { ...DEFAULT_HELP_OPTIONS, ...context.options };
 	const theme = options.theme;
+	const { parentName } = context;
 
 	const sections = [
 		renderBanner(options),
 		renderDeprecationWarning(help, theme),
 		renderCommandHeader(help, theme),
 		"",
-		renderUsage(help, theme),
+		renderUsage(help, theme, parentName),
 		renderExamples(help, options),
+		// Subcommands appear before option groups — top-level navigation first
+		help.subcommands?.length ? renderSubcommandList(help.subcommands, theme) : "",
 		renderOptionGroups(help, theme),
 		renderSections(help, theme),
 	];

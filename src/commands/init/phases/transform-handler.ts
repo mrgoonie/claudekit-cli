@@ -30,6 +30,7 @@ export async function handleTransforms(ctx: InitContext): Promise<InitContext> {
 	if (ctx.options.global) {
 		logger.info("Transforming paths for global installation...");
 		const transformResult = await transformPathsForGlobalInstall(ctx.extractDir, {
+			targetClaudeDir: ctx.resolvedDir,
 			verbose: logger.isVerbose(),
 		});
 		logger.success(

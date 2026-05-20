@@ -15,11 +15,7 @@ import {
 	installSkill,
 	uninstallSkill,
 } from "../services/api";
-import {
-	CATEGORY_COLORS,
-	CATEGORY_ORDER,
-	SKILL_CATEGORY_OVERRIDES,
-} from "../types/skills-dashboard-types";
+import { CATEGORY_COLORS, CATEGORY_MAP, CATEGORY_ORDER } from "../types/skills-dashboard-types";
 
 const SkillsPage: React.FC = () => {
 	const { t } = useI18n();
@@ -69,13 +65,12 @@ const SkillsPage: React.FC = () => {
 		loadData();
 	}, [loadData]);
 
-	// Apply category overrides to skills
+	// Map frontmatter categories to dashboard display names
 	const remappedSkills = useMemo(() => {
 		return skills.map((s) => ({
 			...s,
-			// Use directory id as display name for consistency (kebab-case)
 			name: s.id,
-			category: SKILL_CATEGORY_OVERRIDES[s.id] || s.category,
+			category: CATEGORY_MAP[s.category] || s.category,
 		}));
 	}, [skills]);
 

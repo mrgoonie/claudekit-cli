@@ -117,7 +117,7 @@ const SystemHookDiagnosticsCard: React.FC = () => {
 
 	return (
 		<section className="dash-panel p-4 space-y-4">
-			<div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+			<div className="flex flex-col gap-3">
 				<div className="space-y-1 min-w-0">
 					<h3 className="text-sm font-semibold uppercase tracking-wide text-dash-text">
 						{t("hookDiagnosticsTitle")}
@@ -171,7 +171,7 @@ const SystemHookDiagnosticsCard: React.FC = () => {
 			)}
 
 			{summary && (summary.parseErrors > 0 || summary.truncated) && (
-				<div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
+				<div className="rounded-lg border border-amber-300 dark:border-amber-500/30 bg-amber-100 dark:bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-200">
 					{summary.parseErrors > 0 && (
 						<p>
 							{t("hookDiagnosticsParseErrorsNotice").replace(

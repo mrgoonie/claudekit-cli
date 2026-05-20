@@ -3,13 +3,18 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
  * Tests for portable registry v3.0 migration (Phase 1)
  * Note: These tests use the real ~/.claudekit/ directory
  */
+import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import {
 	type PortableRegistryV3,
+	addPortableInstallation,
 	readPortableRegistry,
+	removeInstallationsByFilter,
+	removePortableInstallation,
+	updateAppliedManifestVersion,
 	writePortableRegistry,
 } from "../portable-registry.js";
 
@@ -18,6 +23,7 @@ const MIGRATION_LOCK_PATH = join(homedir(), ".claudekit", ".migration.lock");
 let backupContent: string | null = null;
 let backupMigrationLockContent: string | null = null;
 let hadMigrationLock = false;
+let testFilesToRemove: string[] = [];
 
 beforeEach(async () => {
 	// Backup existing registry if present
@@ -48,6 +54,12 @@ afterEach(async () => {
 	} else if (existsSync(MIGRATION_LOCK_PATH)) {
 		await rm(MIGRATION_LOCK_PATH, { force: true });
 	}
+
+	for (const path of testFilesToRemove) {
+		await rm(path, { force: true });
+	}
+	testFilesToRemove = [];
+
 	hadMigrationLock = false;
 	backupMigrationLockContent = null;
 });
@@ -262,6 +274,191 @@ describe("v2.0 to v3.0 migration", () => {
 	});
 });
 
+describe("stale v3.0 registry repair", () => {
+	test("repairs v3.0 entries missing idempotency fields", async () => {
+		const staleRegistry = {
+			version: "3.0",
+			installations: [
+				{
+					item: "scout",
+					type: "skill",
+					provider: "codex",
+					global: true,
+					path: "/path/to/scout",
+					installedAt: "2026-05-09T00:00:00.000Z",
+					sourcePath: "/source/scout",
+				},
+				{
+					item: "review",
+					type: "command",
+					provider: "claude-code",
+					global: false,
+					path: "/path/to/review",
+					installedAt: "2026-05-09T00:00:00.000Z",
+					sourcePath: "/source/review",
+					sourceChecksum: "existing-source",
+					targetChecksum: "existing-target",
+					installSource: "manual",
+					ownedSections: ["frontmatter"],
+				},
+			],
+			lastReconciled: "2026-05-09T00:00:00.000Z",
+			customTopLevel: "preserved",
+		};
+
+		await writeFile(REGISTRY_PATH, JSON.stringify(staleRegistry, null, 2), "utf-8");
+
+		const loaded = await readPortableRegistry();
+
+		expect(loaded.version).toBe("3.0");
+		expect(loaded.installations).toHaveLength(2);
+		expect(loaded.installations[0].sourceChecksum).toBe("unknown");
+		expect(loaded.installations[0].targetChecksum).toBe("unknown");
+		expect(loaded.installations[0].installSource).toBe("kit");
+		expect(loaded.installations[1].sourceChecksum).toBe("existing-source");
+		expect(loaded.installations[1].targetChecksum).toBe("existing-target");
+		expect(loaded.installations[1].installSource).toBe("manual");
+		expect(loaded.installations[1].ownedSections).toEqual(["frontmatter"]);
+		expect(loaded.lastReconciled).toBe("2026-05-09T00:00:00.000Z");
+
+		const persistedRaw = JSON.parse(await readFile(REGISTRY_PATH, "utf-8")) as {
+			customTopLevel?: string;
+			installations: Array<{
+				sourceChecksum?: string;
+				targetChecksum?: string;
+				installSource?: string;
+			}>;
+		};
+		expect(persistedRaw.customTopLevel).toBe("preserved");
+		expect(persistedRaw.installations[0].sourceChecksum).toBe("unknown");
+		expect(persistedRaw.installations[0].targetChecksum).toBe("unknown");
+		expect(persistedRaw.installations[0].installSource).toBe("kit");
+	});
+
+	test("computes target checksum from disk while repairing stale v3.0 entries", async () => {
+		const targetPath = join(homedir(), ".claudekit", `test-stale-v3-target-${process.pid}.md`);
+		testFilesToRemove.push(targetPath);
+		await mkdir(join(homedir(), ".claudekit"), { recursive: true });
+		const targetContent = "# Existing target\n\nContent on disk";
+		const expectedChecksum = createHash("sha256").update(targetContent, "utf-8").digest("hex");
+		await writeFile(targetPath, targetContent, "utf-8");
+
+		const staleRegistry = {
+			version: "3.0",
+			installations: [
+				{
+					item: "disk-backed-skill",
+					type: "skill",
+					provider: "codex",
+					global: true,
+					path: targetPath,
+					installedAt: "2026-05-09T00:00:00.000Z",
+					sourcePath: "/source/disk-backed-skill",
+				},
+			],
+		};
+
+		await writeFile(REGISTRY_PATH, JSON.stringify(staleRegistry, null, 2), "utf-8");
+
+		const loaded = await readPortableRegistry();
+
+		expect(loaded.installations[0].targetChecksum).toBe(expectedChecksum);
+		expect(loaded.installations[0].targetChecksum).toMatch(/^[a-f0-9]{64}$/);
+
+		const persistedRaw = JSON.parse(await readFile(REGISTRY_PATH, "utf-8")) as {
+			installations: Array<{ targetChecksum?: string }>;
+		};
+		expect(persistedRaw.installations[0].targetChecksum).toBe(
+			loaded.installations[0].targetChecksum,
+		);
+	});
+
+	test("returns repaired view without persisting when migration lock is active", async () => {
+		const staleRegistry = {
+			version: "3.0",
+			installations: [
+				{
+					item: "scout",
+					type: "skill",
+					provider: "codex",
+					global: true,
+					path: "/path/to/scout",
+					installedAt: "2026-05-09T00:00:00.000Z",
+					sourcePath: "/source/scout",
+				},
+			],
+		};
+
+		await writeFile(REGISTRY_PATH, JSON.stringify(staleRegistry, null, 2), "utf-8");
+		await writeFile(MIGRATION_LOCK_PATH, String(Date.now()), "utf-8");
+
+		const loaded = await readPortableRegistry();
+
+		expect(loaded.installations[0].sourceChecksum).toBe("unknown");
+		expect(loaded.installations[0].targetChecksum).toBe("unknown");
+		expect(loaded.installations[0].installSource).toBe("kit");
+
+		const persistedRaw = JSON.parse(await readFile(REGISTRY_PATH, "utf-8")) as {
+			installations: Array<{
+				sourceChecksum?: string;
+				targetChecksum?: string;
+				installSource?: string;
+			}>;
+		};
+		expect(persistedRaw.installations[0].sourceChecksum).toBeUndefined();
+		expect(persistedRaw.installations[0].targetChecksum).toBeUndefined();
+		expect(persistedRaw.installations[0].installSource).toBeUndefined();
+	});
+
+	test("rejects corrupted v3.0 idempotency fields", async () => {
+		const corruptedRegistry = {
+			version: "3.0",
+			installations: [
+				{
+					item: "scout",
+					type: "skill",
+					provider: "codex",
+					global: true,
+					path: "/path/to/scout",
+					installedAt: "2026-05-09T00:00:00.000Z",
+					sourcePath: "/source/scout",
+					sourceChecksum: "source",
+					targetChecksum: "target",
+					installSource: "local",
+				},
+			],
+		};
+
+		await writeFile(REGISTRY_PATH, JSON.stringify(corruptedRegistry, null, 2), "utf-8");
+
+		await expect(readPortableRegistry()).rejects.toThrow(
+			"portable-registry.json has unsupported schema/version",
+		);
+	});
+});
+
+describe("invalid registry handling", () => {
+	test("keeps invalid JSON fatal", async () => {
+		await writeFile(REGISTRY_PATH, "{ invalid json", "utf-8");
+
+		await expect(readPortableRegistry()).rejects.toThrow(
+			"portable-registry.json is not valid JSON",
+		);
+	});
+
+	test("keeps unsupported top-level versions fatal", async () => {
+		await writeFile(
+			REGISTRY_PATH,
+			JSON.stringify({ version: "4.0", installations: [] }, null, 2),
+			"utf-8",
+		);
+
+		await expect(readPortableRegistry()).rejects.toThrow(
+			"portable-registry.json has unsupported schema/version",
+		);
+	});
+});
+
 describe("migration lock handling", () => {
 	test("treats invalid lock timestamp as active lock and skips persisted migration", async () => {
 		const v2Registry = {
@@ -328,6 +525,261 @@ describe("empty registry initialization", () => {
 		expect(loaded.installations).toEqual([]);
 		expect(loaded.lastReconciled).toBeUndefined();
 		expect(loaded.appliedManifestVersion).toBeUndefined();
+	});
+});
+
+// Phase 04: appliedManifestVersion advancement and stale entry cleanup
+describe("updateAppliedManifestVersion", () => {
+	test("writes appliedManifestVersion to registry atomically", async () => {
+		// Start with empty registry
+		await writePortableRegistry({ version: "3.0", installations: [] });
+
+		await updateAppliedManifestVersion("3.43.0");
+
+		const loaded = await readPortableRegistry();
+		expect(loaded.appliedManifestVersion).toBe("3.43.0");
+	});
+
+	test("overwrites previous appliedManifestVersion on re-run (idempotency)", async () => {
+		await writePortableRegistry({
+			version: "3.0",
+			installations: [],
+			appliedManifestVersion: "3.42.2",
+		});
+
+		await updateAppliedManifestVersion("3.43.0");
+
+		const loaded = await readPortableRegistry();
+		// Must advance from old value to new value — re-run is safe
+		expect(loaded.appliedManifestVersion).toBe("3.43.0");
+	});
+
+	test("preserves existing installations when updating appliedManifestVersion", async () => {
+		await writePortableRegistry({
+			version: "3.0",
+			installations: [
+				{
+					item: "scout",
+					type: "skill",
+					provider: "cursor",
+					global: false,
+					path: ".cursor/skills/scout",
+					installedAt: new Date().toISOString(),
+					sourcePath: ".claude/skills/scout",
+					sourceChecksum: "a".repeat(64),
+					targetChecksum: "b".repeat(64),
+					installSource: "kit",
+				},
+			],
+		});
+
+		await updateAppliedManifestVersion("3.43.0");
+
+		const loaded = await readPortableRegistry();
+		expect(loaded.appliedManifestVersion).toBe("3.43.0");
+		expect(loaded.installations).toHaveLength(1);
+		expect(loaded.installations[0].item).toBe("scout");
+	});
+});
+
+describe("removeInstallationsByFilter (stale entry cleanup)", () => {
+	test("removes stale registry entry at old path (.agents/skills) leaving new-path entry intact", async () => {
+		await writePortableRegistry({
+			version: "3.0",
+			installations: [
+				{
+					item: "scout",
+					type: "skill",
+					provider: "cursor",
+					global: false,
+					// stale entry: old .agents/skills path
+					path: ".agents/skills/scout",
+					installedAt: new Date().toISOString(),
+					sourcePath: ".claude/skills/scout",
+					sourceChecksum: "a".repeat(64),
+					targetChecksum: "b".repeat(64),
+					installSource: "kit",
+				},
+				{
+					item: "debug",
+					type: "skill",
+					provider: "windsurf",
+					global: false,
+					// current entry: new native path
+					path: ".windsurf/skills/debug",
+					installedAt: new Date().toISOString(),
+					sourcePath: ".claude/skills/debug",
+					sourceChecksum: "c".repeat(64),
+					targetChecksum: "d".repeat(64),
+					installSource: "kit",
+				},
+			],
+		});
+
+		// Simulate detectPathMigrations delete action: remove entries at stale path
+		const removed = await removeInstallationsByFilter((entry) =>
+			entry.path.includes(".agents/skills"),
+		);
+
+		expect(removed).toHaveLength(1);
+		expect(removed[0].item).toBe("scout");
+
+		const loaded = await readPortableRegistry();
+		// stale entry gone
+		expect(loaded.installations.some((i) => i.path.includes(".agents/skills"))).toBe(false);
+		// new-path entry survives
+		expect(loaded.installations).toHaveLength(1);
+		expect(loaded.installations[0].item).toBe("debug");
+	});
+
+	test("returns empty array when no entries match filter", async () => {
+		await writePortableRegistry({
+			version: "3.0",
+			installations: [
+				{
+					item: "scout",
+					type: "skill",
+					provider: "cursor",
+					global: false,
+					path: ".cursor/skills/scout",
+					installedAt: new Date().toISOString(),
+					sourcePath: ".claude/skills/scout",
+					sourceChecksum: "a".repeat(64),
+					targetChecksum: "b".repeat(64),
+					installSource: "kit",
+				},
+			],
+		});
+
+		const removed = await removeInstallationsByFilter((entry) =>
+			entry.path.includes(".agents/skills"),
+		);
+
+		expect(removed).toHaveLength(0);
+
+		const loaded = await readPortableRegistry();
+		expect(loaded.installations).toHaveLength(1);
+	});
+});
+
+describe("addPortableInstallation (path alignment for cursor/windsurf)", () => {
+	test("records cursor skill at .cursor/skills/<name> path", async () => {
+		await writePortableRegistry({ version: "3.0", installations: [] });
+
+		await addPortableInstallation(
+			"scout",
+			"skill",
+			"cursor",
+			false,
+			".cursor/skills/scout",
+			".claude/skills/scout",
+		);
+
+		const loaded = await readPortableRegistry();
+		const entry = loaded.installations.find((i) => i.item === "scout");
+		expect(entry).toBeDefined();
+		expect(entry?.path).toBe(".cursor/skills/scout");
+		expect(entry?.provider).toBe("cursor");
+		expect(entry?.type).toBe("skill");
+	});
+
+	test("records windsurf skill at .windsurf/skills/<name> path (project scope)", async () => {
+		await writePortableRegistry({ version: "3.0", installations: [] });
+
+		await addPortableInstallation(
+			"debug",
+			"skill",
+			"windsurf",
+			false,
+			".windsurf/skills/debug",
+			".claude/skills/debug",
+		);
+
+		const loaded = await readPortableRegistry();
+		const entry = loaded.installations.find((i) => i.item === "debug");
+		expect(entry).toBeDefined();
+		expect(entry?.path).toBe(".windsurf/skills/debug");
+		expect(entry?.provider).toBe("windsurf");
+		expect(entry?.global).toBe(false);
+	});
+
+	test("records windsurf skill at ~/.codeium/windsurf/skills/<name> path (global scope)", async () => {
+		await writePortableRegistry({ version: "3.0", installations: [] });
+
+		const globalPath = join(homedir(), ".codeium", "windsurf", "skills", "debug");
+		await addPortableInstallation(
+			"debug",
+			"skill",
+			"windsurf",
+			true,
+			globalPath,
+			".claude/skills/debug",
+		);
+
+		const loaded = await readPortableRegistry();
+		const entry = loaded.installations.find((i) => i.item === "debug" && i.global === true);
+		expect(entry).toBeDefined();
+		expect(entry?.path).toBe(globalPath);
+		expect(entry?.global).toBe(true);
+	});
+});
+
+describe("removePortableInstallation path guard", () => {
+	test("does not remove a reinstalled identity when the stored path changed", async () => {
+		await writePortableRegistry({
+			version: "3.0",
+			installations: [
+				{
+					item: "local",
+					type: "command",
+					provider: "codex",
+					global: false,
+					path: ".agents/skills/source-command-local/SKILL.md",
+					installedAt: new Date().toISOString(),
+					sourcePath: ".claude/commands/local.md",
+					sourceChecksum: "new-source",
+					targetChecksum: "new-target",
+					installSource: "kit",
+				},
+			],
+		});
+
+		const removed = await removePortableInstallation("local", "command", "codex", false, {
+			path: ".codex/prompts/local.md",
+		});
+
+		expect(removed).toBeNull();
+		const loaded = await readPortableRegistry();
+		expect(loaded.installations).toHaveLength(1);
+		expect(loaded.installations[0]?.path).toBe(".agents/skills/source-command-local/SKILL.md");
+	});
+
+	test("removes the matching identity when the expected path matches", async () => {
+		await writePortableRegistry({
+			version: "3.0",
+			installations: [
+				{
+					item: "local",
+					type: "command",
+					provider: "codex",
+					global: false,
+					path: ".codex/prompts/local.md",
+					installedAt: new Date().toISOString(),
+					sourcePath: ".claude/commands/local.md",
+					sourceChecksum: "old-source",
+					targetChecksum: "old-target",
+					installSource: "kit",
+				},
+			],
+		});
+
+		const removed = await removePortableInstallation("local", "command", "codex", false, {
+			path: ".codex/prompts/local.md",
+		});
+
+		expect(removed?.path).toBe(".codex/prompts/local.md");
+		const loaded = await readPortableRegistry();
+		expect(loaded.installations).toHaveLength(0);
 	});
 });
 

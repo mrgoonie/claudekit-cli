@@ -3,6 +3,7 @@
  * Generates canonical plan.md and phase file templates.
  * All output is Format 0: 3-column | Phase | Name | Status | table.
  */
+import { execSync } from "node:child_process";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { existsSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
@@ -39,18 +40,42 @@ export function phaseNameToFilename(id: string, name: string): string {
 
 // ─── Content Generators ───────────────────────────────────────────────────────
 
+function getCurrentBranch(): string {
+	try {
+		return execSync("git branch --show-current", {
+			encoding: "utf8",
+			stdio: ["ignore", "pipe", "ignore"],
+		}).trim();
+	} catch {
+		return "";
+	}
+}
+
 /**
  * Generate canonical plan.md content with YAML frontmatter + 3-column phase table.
  * Uses Format 0: | Phase | Name | Status |
  */
 export function generatePlanMd(options: CreatePlanOptions): string {
-	const { title, description = "", priority = "P2", issue, phases } = options;
-	const created = new Date().toISOString().slice(0, 10);
+	const {
+		title,
+		description = "",
+		priority = "P2",
+		issue,
+		phases,
+		source = "cli",
+		sessionId,
+	} = options;
+	const created = new Date().toISOString();
 
 	// Build YAML frontmatter lines
 	// Escape quotes in YAML strings to prevent injection
 	const escYaml = (s: string) =>
 		s.replace(/\\/g, "\\\\").replace(/"/g, '\\"').replace(/\n/g, "\\n");
+
+	// Determine createdBy based on source
+	const createdBy =
+		source === "skill" ? "ck:plan" : source === "dashboard" ? "dashboard" : "ck-cli";
+	const branch = getCurrentBranch();
 
 	const frontmatterLines: string[] = [
 		`title: "${escYaml(title)}"`,
@@ -61,7 +86,17 @@ export function generatePlanMd(options: CreatePlanOptions): string {
 	if (issue !== undefined) {
 		frontmatterLines.push(`issue: ${issue}`);
 	}
-	frontmatterLines.push(`created: ${created}`);
+	frontmatterLines.push(`branch: "${escYaml(branch)}"`);
+	frontmatterLines.push("tags: []");
+	frontmatterLines.push("blockedBy: []");
+	frontmatterLines.push("blocks: []");
+	// Tracking metadata (CLI-strict plan tracking)
+	frontmatterLines.push(`created: "${created}"`);
+	frontmatterLines.push(`createdBy: "${createdBy}"`);
+	frontmatterLines.push(`source: ${source}`);
+	if (sessionId) {
+		frontmatterLines.push(`sessionId: "${escYaml(sessionId)}"`);
+	}
 
 	const frontmatter = `---\n${frontmatterLines.join("\n")}\n---`;
 
@@ -168,6 +203,7 @@ function resolvePhaseIds(
 export function scaffoldPlan(options: CreatePlanOptions): {
 	planFile: string;
 	phaseFiles: string[];
+	phaseIds: string[];
 } {
 	const { dir } = options;
 
@@ -189,7 +225,11 @@ export function scaffoldPlan(options: CreatePlanOptions): {
 		phaseFiles.push(phaseFile);
 	}
 
-	return { planFile, phaseFiles };
+	return {
+		planFile,
+		phaseFiles,
+		phaseIds: resolvedPhases.map((phase) => phase.id),
+	};
 }
 
 // ─── Sub-phase ID Computation ─────────────────────────────────────────────────
@@ -251,7 +291,9 @@ export function updatePhaseStatus(
 		return;
 	}
 
-	const { data: frontmatter, content: body } = matter(raw);
+	const { data: frontmatter, content: body } = matter(raw, {
+		engines: { javascript: { parse: () => ({}) } },
+	});
 
 	// Map status to display string (title case for table)
 	const statusDisplay: Record<string, string> = {
@@ -330,7 +372,9 @@ function updatePhaseFileFrontmatter(
 	newStatus: "pending" | "in-progress" | "completed",
 ): void {
 	const raw = readFileSync(phaseFile, "utf8");
-	const { data: frontmatter, content: body } = matter(raw);
+	const { data: frontmatter, content: body } = matter(raw, {
+		engines: { javascript: { parse: () => ({}) } },
+	});
 	const updated = { ...frontmatter, status: newStatus };
 	writeFileSync(phaseFile, matter.stringify(body, updated), "utf8");
 }
@@ -355,7 +399,9 @@ export function addPhase(
 		throw new Error("Non-canonical plan.md — cannot add phase");
 	}
 
-	const { data: frontmatter, content: body } = matter(raw);
+	const { data: frontmatter, content: body } = matter(raw, {
+		engines: { javascript: { parse: () => ({}) } },
+	});
 	const planDir = dirname(planFile);
 
 	// Collect existing phase IDs from table

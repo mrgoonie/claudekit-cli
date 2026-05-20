@@ -46,6 +46,7 @@ export { ClaudekitChecker } from "./claudekit-checker.js";
 export { AuthChecker } from "./auth-checker.js";
 export { PlatformChecker } from "./platform-checker.js";
 export { NetworkChecker } from "./network-checker.js";
+export { GitHubReachabilityChecker } from "./checkers/github-reachability-checker.js";
 
 // Re-export AutoHealer
 export { AutoHealer } from "./auto-healer.js";

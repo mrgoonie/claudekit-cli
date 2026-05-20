@@ -7,11 +7,13 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import packageInfo from "../../package.json" assert { type: "json" };
+import { ConfigVersionChecker } from "../domains/sync/config-version-checker.js";
 import { CliVersionChecker, VersionChecker } from "../domains/versioning/version-checker.js";
 import { logger } from "../shared/logger.js";
 import { PathResolver } from "../shared/path-resolver.js";
 import type { KitType, Metadata } from "../types/index.js";
 import { MetadataSchema } from "../types/index.js";
+import { AVAILABLE_KITS } from "../types/index.js";
 
 const packageVersion = packageInfo.version;
 
@@ -48,16 +50,64 @@ function getInstalledKitTypes(metadata: Metadata): KitType[] {
 }
 
 /**
- * Get version for first installed kit (for update check)
- * Handles type safety for accessing metadata.kits with KitType keys
+ * Best-effort legacy inference for installs that predate the multi-kit metadata shape.
+ * If the root name field doesn't mention marketing, fall back to engineer.
  */
-function getFirstKitVersion(metadata: Metadata): string | null {
-	const kitTypes = getInstalledKitTypes(metadata);
-	if (kitTypes.length === 0) {
-		return metadata.version ?? null;
+export function inferLegacyKitType(metadata: Metadata): KitType {
+	if (/\bmarketing\b/i.test(metadata.name ?? "")) {
+		return "marketing";
 	}
-	const firstKit = kitTypes[0];
-	return metadata.kits?.[firstKit]?.version ?? null;
+
+	return "engineer";
+}
+
+export function getInstalledKitVersions(
+	metadata: Metadata,
+): Array<{ kit: KitType; version: string }> {
+	const kitTypes = getInstalledKitTypes(metadata);
+	if (kitTypes.length > 0) {
+		return kitTypes
+			.map((kit) => ({
+				kit,
+				version: metadata.kits?.[kit]?.version ?? "",
+			}))
+			.filter(({ version }) => version.trim() !== "");
+	}
+
+	if (metadata.version?.trim()) {
+		return [{ kit: inferLegacyKitType(metadata), version: metadata.version }];
+	}
+
+	return [];
+}
+
+async function maybeDisplayKitUpdateNotifications(
+	installedKits: Array<{ kit: KitType; version: string }>,
+	isGlobal: boolean,
+): Promise<void> {
+	const updateChecks = await Promise.all(
+		installedKits.map(async ({ kit, version }) => ({
+			kit,
+			updateCheck: await ConfigVersionChecker.checkForUpdates(kit, version, isGlobal),
+		})),
+	);
+
+	for (const { kit, updateCheck } of updateChecks) {
+		if (!updateCheck.hasUpdates) {
+			continue;
+		}
+
+		const releaseUrl = `https://github.com/${AVAILABLE_KITS[kit].owner}/${AVAILABLE_KITS[kit].repo}/releases/tag/v${updateCheck.latestVersion.replace(/^v/i, "")}`;
+		VersionChecker.displayNotification(
+			{
+				currentVersion: updateCheck.currentVersion,
+				latestVersion: updateCheck.latestVersion,
+				updateAvailable: true,
+				releaseUrl,
+			},
+			{ isGlobal, kitName: kit },
+		);
+	}
 }
 
 /**
@@ -68,8 +118,8 @@ export async function displayVersion(): Promise<void> {
 	console.log(`CLI Version: ${packageVersion}`);
 
 	let foundAnyKit = false;
-	let localKitVersion: string | null = null;
-	let isGlobalOnlyKit = false; // Track if only global kit exists (no local)
+	let localInstalledKits: Array<{ kit: KitType; version: string }> = [];
+	let globalInstalledKits: Array<{ kit: KitType; version: string }> = [];
 
 	// Determine paths
 	const globalKitDir = PathResolver.getGlobalKitDir();
@@ -91,7 +141,7 @@ export async function displayVersion(): Promise<void> {
 			const kitsDisplay = formatInstalledKits(metadata);
 			if (kitsDisplay) {
 				console.log(`Local Kit Version: ${kitsDisplay}`);
-				localKitVersion = getFirstKitVersion(metadata);
+				localInstalledKits = getInstalledKitVersions(metadata);
 				foundAnyKit = true;
 			}
 		} catch (error) {
@@ -109,11 +159,7 @@ export async function displayVersion(): Promise<void> {
 			const kitsDisplay = formatInstalledKits(metadata);
 			if (kitsDisplay) {
 				console.log(`Global Kit Version: ${kitsDisplay}`);
-				// Use global version if no local version found
-				if (!localKitVersion) {
-					localKitVersion = getFirstKitVersion(metadata);
-					isGlobalOnlyKit = true; // Only global kit found, no local
-				}
+				globalInstalledKits = getInstalledKitVersions(metadata);
 				foundAnyKit = true;
 			}
 		} catch (error) {
@@ -140,12 +186,10 @@ export async function displayVersion(): Promise<void> {
 	}
 
 	// Check for kit updates (non-blocking)
-	if (localKitVersion) {
+	if (localInstalledKits.length > 0 || globalInstalledKits.length > 0) {
 		try {
-			const updateCheck = await VersionChecker.check(localKitVersion);
-			if (updateCheck?.updateAvailable) {
-				VersionChecker.displayNotification(updateCheck, { isGlobal: isGlobalOnlyKit });
-			}
+			await maybeDisplayKitUpdateNotifications(localInstalledKits, false);
+			await maybeDisplayKitUpdateNotifications(globalInstalledKits, true);
 		} catch (error) {
 			// Silent failure - don't block version display
 			logger.debug(`Kit version check failed: ${error}`);

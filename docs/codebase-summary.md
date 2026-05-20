@@ -12,7 +12,7 @@ ClaudeKit CLI is a command-line tool for bootstrapping and updating ClaudeKit pr
 **Version**: 3.36.0-dev.7 (next stable: 3.36.0)
 **Architecture**: Modular domain-driven with facade patterns + reconciliation engine + React dashboard
 **Total TypeScript Files**: 548 source files, ~60K LOC
-**Commands**: 19 command groups (new, init, config, doctor, version, update-cli, setup, agents, commands, skills, migrate, projects, portable, uninstall, api, and sub-commands)
+**Commands**: 20 command groups (new, init, app, config, doctor, version, update-cli, setup, agents, commands, skills, migrate, projects, portable, uninstall, api, and sub-commands)
 **Domains**: 17 domain modules with facade pattern
 **Services**: 4 cross-domain services
 
@@ -48,12 +48,12 @@ The codebase underwent a major modularization refactor, reducing 24 large files 
 ### Development Tools
 - **Biome**: Fast linting and formatting
 - **Semantic Release**: Automated versioning and publishing
-- **GitHub Actions**: CI/CD automation with multi-platform binary builds
+- **GitHub Actions**: CI/CD automation with multi-platform binary builds (CLI + Desktop)
 
 ### Target Platforms
-- **macOS** (arm64, x64)
-- **Linux** (x64)
-- **Windows** (x64)
+- **macOS** (arm64, x64) — CLI binary
+- **Linux** (x64) — CLI binary
+- **Windows** (x64) — CLI binary
 
 ## Project Structure
 
@@ -388,7 +388,7 @@ Multi-daemon for monitoring Git repos and publishing social content via Claude C
 3-phase RECONCILE → EXECUTE → REPORT pipeline for safe repeated migrations. Pure reconciler (zero I/O, 8-case decision matrix), Registry v3.0 with SHA-256 checksums, portable manifest for cross-version evolution. Interactive CLI conflict resolution with diff preview. Dashboard UI with plan viewer and conflict resolver. Migration lock (30s) prevents registry corruption. See `docs/reconciliation-architecture.md`.
 
 #### doctor/ - Health Check System
-Parallel checkers: system (Node, npm, Python, git, gh), auth (token scopes, rate limit), GitHub API, ClaudeKit (installs, versions, skills), platform, network. Auto-healer for common issues.
+Parallel checkers: system (Node, npm, Python, git, gh), auth (token scopes, rate limit), GitHub API, ClaudeKit (installs, versions, skills, skill listing budget), platform, network. Auto-healer for common issues.
 
 #### agents/, commands/, projects/ - Agent/Command/Project Management
 Agent installation to Claude config. Command discovery & installation. Project registry UI with dashboard integration.
@@ -557,6 +557,19 @@ installation/
 `file-merger.ts` (ENHANCED):
 - Facade exports `setMultiKitContext()` method
 - Wires multi-kit context through to CopyExecutor
+
+**Hook command self-heal contract:**
+
+`ck init`, `ck install`, and `ck doctor --fix` all canonicalize hook command paths in user `settings.json` to the quoted form
+`bash "$HOME/.claude/hooks/node-hook-runner.sh" "$HOME/.claude/hooks/<script>.cjs"`. This protects Windows Git Bash users whose
+`$HOME` contains a space (e.g. `/c/Users/Tran Family`) — unquoted, the shell word-splits the path and bash emits
+`syntax error near unexpected token '('` because it tries to execute the first split fragment as a script.
+
+- Logic: `src/shared/command-normalizer.ts → repairClaudeHookCommandPath`
+- Doctor surface: `src/domains/health-checks/checkers/hook-health-checker.ts → checkHookCommandPaths` (id `hook-command-paths`)
+- Install rewrite: `src/domains/installation/merger/settings-processor.ts → fixHookCommandPaths` — emits `logger.info("Repaired N hook command path(s)...")` per call site when N > 0
+- Recognized inputs per arg: bare relative `.claude/...`, `$HOME` / `${HOME}` / `$CLAUDE_PROJECT_DIR` / `${CLAUDE_PROJECT_DIR}`, `%USERPROFILE%` / `%CLAUDE_PROJECT_DIR%`, `~/`, raw absolute (remapped to `$HOME` when under home)
+- `ck doctor` (without `--fix`) reports findings as fail; `ck doctor --fix` rewrites them
 
 #### skills/ - Skills Management
 Facades: customization-scanner, detector, migrator. Submodules: customization (comparison, hashing, scanning), detection (config, dependency, script), migrator (executor, validator).

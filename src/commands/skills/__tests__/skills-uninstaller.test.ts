@@ -72,6 +72,26 @@ describe("skill-uninstaller", () => {
 			expect(result.success).toBe(true);
 			expect(result.wasOrphaned).toBe(true);
 		});
+
+		it("preserves shared skill directory when another agent uses the same path", async () => {
+			const skillPath = join(claudeSkillsPath, "shared-opencode-test");
+			mkdirSync(skillPath, { recursive: true });
+			writeFileSync(join(skillPath, "SKILL.md"), "# Shared Test");
+			await addInstallation("shared-opencode-test", "claude-code", true, skillPath, "/src");
+			await addInstallation("shared-opencode-test", "opencode", true, skillPath, "/src");
+
+			try {
+				const result = await uninstallSkillFromAgent("shared-opencode-test", "opencode", true);
+
+				expect(result.success).toBe(true);
+				expect(existsSync(skillPath)).toBe(true);
+
+				const installed = await getInstalledSkills("claude-code", true);
+				expect(installed.find((i) => i.skill === "shared-opencode-test")).toBeDefined();
+			} finally {
+				await uninstallSkillFromAgent("shared-opencode-test", "claude-code", true);
+			}
+		});
 	});
 
 	describe("forceUninstallSkill", () => {
@@ -108,6 +128,26 @@ describe("skill-uninstaller", () => {
 			// Verify registry was also cleaned
 			const installed = await getInstalledSkills("claude-code", true);
 			expect(installed.find((i) => i.skill === "force-with-registry")).toBeUndefined();
+		});
+
+		it("preserves shared skill directory when another agent uses the same path", async () => {
+			const skillPath = join(claudeSkillsPath, "force-shared-opencode-test");
+			mkdirSync(skillPath, { recursive: true });
+			writeFileSync(join(skillPath, "SKILL.md"), "# Force Shared Test");
+			await addInstallation("force-shared-opencode-test", "claude-code", true, skillPath, "/src");
+			await addInstallation("force-shared-opencode-test", "opencode", true, skillPath, "/src");
+
+			try {
+				const result = await forceUninstallSkill("force-shared-opencode-test", "opencode", true);
+
+				expect(result.success).toBe(true);
+				expect(existsSync(skillPath)).toBe(true);
+
+				const installed = await getInstalledSkills("claude-code", true);
+				expect(installed.find((i) => i.skill === "force-shared-opencode-test")).toBeDefined();
+			} finally {
+				await uninstallSkillFromAgent("force-shared-opencode-test", "claude-code", true);
+			}
 		});
 	});
 

@@ -1,28 +1,30 @@
 /**
- * Agents discovery — finds available agents from ~/.claude/agents/*.md
+ * Agents discovery — finds available agents from project/global Claude Code agent directories
  */
-import { existsSync } from "node:fs";
 import { readdir } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
+import { findFirstExistingPath, getProjectLayoutCandidates } from "@/shared/kit-layout.js";
 import { logger } from "../../shared/logger.js";
 import { parseFrontmatterFile } from "../portable/frontmatter-parser.js";
 import type { PortableItem } from "../portable/types.js";
 
-const home = homedir();
-
 /**
- * Get the agent source directory
- * Priority: project .claude/agents > global ~/.claude/agents
+ * Get the agent source directory.
+ *
+ * @param globalOnly When true, skip project (CWD) candidates and resolve directly
+ *   to ~/.claude/agents. Used by `ck migrate -g` so SOURCE follows DESTINATION scope.
+ *   Defaults to false: project .claude/agents > global ~/.claude/agents.
  */
-export function getAgentSourcePath(): string | null {
-	const paths = [join(process.cwd(), ".claude/agents"), join(home, ".claude/agents")];
-
-	for (const p of paths) {
-		if (existsSync(p)) return p;
+export function getAgentSourcePath(globalOnly = false): string | null {
+	const globalPath = join(homedir(), ".claude/agents");
+	if (globalOnly) {
+		return findFirstExistingPath([globalPath]);
 	}
-
-	return null;
+	return findFirstExistingPath([
+		...getProjectLayoutCandidates(process.cwd(), "agents"),
+		globalPath,
+	]);
 }
 
 /**

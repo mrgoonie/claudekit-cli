@@ -59,6 +59,10 @@ export const projectsCommandHelp: CommandHelp = {
 					description: "Custom alias for project (add)",
 				},
 				{
+					flags: "--pinned",
+					description: "Pin this project (add)",
+				},
+				{
 					flags: "--tags <tags>",
 					description: "Comma-separated tags (add)",
 				},
@@ -67,6 +71,31 @@ export const projectsCommandHelp: CommandHelp = {
 					description: "Remove by project ID (remove)",
 				},
 			],
+		},
+	],
+	subcommands: [
+		{
+			name: "list",
+			description: "List projects in registry",
+			usage: "ck projects list [--json] [--pinned]",
+			examples: [],
+			optionGroups: [],
+			aliases: ["ls"],
+		},
+		{
+			name: "add",
+			description: "Add project path to registry",
+			usage: "ck projects add <path> [--alias <alias>] [--pinned] [--tags <tags>]",
+			examples: [],
+			optionGroups: [],
+		},
+		{
+			name: "remove",
+			description: "Remove project by alias or ID",
+			usage: "ck projects remove [alias] [--id <id>]",
+			examples: [],
+			optionGroups: [],
+			aliases: ["rm"],
 		},
 	],
 };

@@ -49,6 +49,20 @@ describe("setup-wizard", () => {
 			expect(content).toContain("DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/test");
 		});
 
+		test("should preserve alternative provider keys and image provider selection", async () => {
+			const values = {
+				OPENROUTER_API_KEY: "sk-or-v1-abcdefghijklmnopqrstuvwxyz123456",
+				MINIMAX_API_KEY: "minimax_test_key_1234567890",
+				IMAGE_GEN_PROVIDER: "openrouter",
+			};
+			await generateEnvFile(tempDir, values);
+
+			const content = await readFile(join(tempDir, ".env"), "utf-8");
+			expect(content).toContain("OPENROUTER_API_KEY=sk-or-v1-abcdefghijklmnopqrstuvwxyz123456");
+			expect(content).toContain("MINIMAX_API_KEY=minimax_test_key_1234567890");
+			expect(content).toContain("IMAGE_GEN_PROVIDER=openrouter");
+		});
+
 		test("should skip empty values", async () => {
 			const values = {
 				GEMINI_API_KEY: "test-key",

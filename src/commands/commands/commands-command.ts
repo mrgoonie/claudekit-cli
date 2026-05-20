@@ -7,7 +7,11 @@ import * as p from "@clack/prompts";
 import pc from "picocolors";
 import { logger } from "../../shared/logger.js";
 import { installPortableItems } from "../portable/portable-installer.js";
-import { readPortableRegistry, syncPortableRegistry } from "../portable/portable-registry.js";
+import {
+	readPortableRegistry,
+	removePortableInstallation,
+	syncPortableRegistry,
+} from "../portable/portable-registry.js";
 import {
 	detectInstalledProviders,
 	getProvidersSupporting,
@@ -21,17 +25,44 @@ import type {
 import { PortableCommandOptionsSchema } from "../portable/types.js";
 import { discoverCommands, findCommandByName, getCommandSourcePath } from "./commands-discovery.js";
 import {
+	type CommandRegistryDeps,
 	forceUninstallCommandFromProvider,
 	getInstalledCommands,
 	uninstallCommandFromProvider,
 } from "./commands-uninstaller.js";
 
+interface CommandsRegistryDeps extends CommandRegistryDeps {
+	syncPortableRegistry: typeof syncPortableRegistry;
+}
+
+interface CommandsCommandTestDeps {
+	registry?: Partial<CommandsRegistryDeps>;
+}
+
+type CommandsCommandOptions = PortableCommandOptions & CommandsCommandTestDeps;
+
+const defaultCommandsRegistryDeps: CommandsRegistryDeps = {
+	readPortableRegistry,
+	removePortableInstallation,
+	syncPortableRegistry,
+};
+
+function resolveCommandsRegistryDeps(options?: CommandsCommandTestDeps): CommandsRegistryDeps {
+	return {
+		...defaultCommandsRegistryDeps,
+		...options?.registry,
+	};
+}
+
 /**
  * List available or installed commands
  */
-async function listCommands(showInstalled: boolean): Promise<void> {
+async function listCommands(
+	showInstalled: boolean,
+	registryDeps: CommandRegistryDeps,
+): Promise<void> {
 	if (showInstalled) {
-		const installations = await getInstalledCommands();
+		const installations = await getInstalledCommands(undefined, undefined, registryDeps);
 		if (installations.length === 0) {
 			p.log.warn("No commands installed via ck commands.");
 			return;
@@ -99,9 +130,12 @@ async function listCommands(showInstalled: boolean): Promise<void> {
 /**
  * Handle uninstall flow
  */
-async function handleUninstall(options: PortableCommandOptions): Promise<void> {
+async function handleUninstall(
+	options: PortableCommandOptions,
+	registryDeps: CommandsRegistryDeps,
+): Promise<void> {
 	if (!options.name) {
-		const installations = await getInstalledCommands();
+		const installations = await getInstalledCommands(undefined, undefined, registryDeps);
 		if (installations.length === 0) {
 			p.log.warn("No commands installed via ck commands.");
 			return;
@@ -140,7 +174,12 @@ async function handleUninstall(options: PortableCommandOptions): Promise<void> {
 		spinner.start("Uninstalling...");
 
 		for (const inst of toUninstall) {
-			await uninstallCommandFromProvider(inst.item, inst.provider as ProviderType, inst.global);
+			await uninstallCommandFromProvider(
+				inst.item,
+				inst.provider as ProviderType,
+				inst.global,
+				registryDeps,
+			);
 		}
 
 		spinner.stop("Uninstall complete");
@@ -180,7 +219,8 @@ async function handleUninstall(options: PortableCommandOptions): Promise<void> {
 				forceUninstallCommandFromProvider(
 					trimmedName,
 					provider,
-					options.global ?? provider === "codex",
+					options.global ?? false,
+					registryDeps,
 				),
 			),
 		);
@@ -204,7 +244,7 @@ async function handleUninstall(options: PortableCommandOptions): Promise<void> {
 		return true;
 	};
 
-	const registry = await readPortableRegistry();
+	const registry = await registryDeps.readPortableRegistry();
 	const matches = registry.installations.filter(
 		(i) => i.type === "command" && i.item.toLowerCase() === trimmedName.toLowerCase(),
 	);
@@ -261,6 +301,7 @@ async function handleUninstall(options: PortableCommandOptions): Promise<void> {
 			inst.item,
 			inst.provider as ProviderType,
 			inst.global,
+			registryDeps,
 		);
 		if (result.success) successCount++;
 	}
@@ -272,18 +313,19 @@ async function handleUninstall(options: PortableCommandOptions): Promise<void> {
 /**
  * Main commands command handler
  */
-export async function commandsCommand(options: PortableCommandOptions): Promise<void> {
+export async function commandsCommand(options: CommandsCommandOptions): Promise<void> {
 	console.log();
 	p.intro(pc.bgCyan(pc.black(" ck commands ")));
 
 	try {
+		const registryDeps = resolveCommandsRegistryDeps(options);
 		const validOptions = PortableCommandOptionsSchema.parse(options);
 
 		// Handle sync
 		if (validOptions.sync) {
 			const spinner = p.spinner();
 			spinner.start("Syncing registry...");
-			const { removed } = await syncPortableRegistry();
+			const { removed } = await registryDeps.syncPortableRegistry();
 			spinner.stop("Sync complete");
 			if (removed.length > 0) {
 				const cmdRemoved = removed.filter((r) => r.type === "command");
@@ -297,14 +339,14 @@ export async function commandsCommand(options: PortableCommandOptions): Promise<
 
 		// Handle uninstall
 		if (validOptions.uninstall) {
-			await handleUninstall(validOptions);
+			await handleUninstall(validOptions, registryDeps);
 			p.outro(pc.green("Done!"));
 			return;
 		}
 
 		// Handle list
 		if (validOptions.list) {
-			await listCommands(validOptions.installed ?? false);
+			await listCommands(validOptions.installed ?? false, registryDeps);
 			p.outro(pc.dim("Use --name <command> to install a specific command"));
 			return;
 		}
@@ -489,15 +531,6 @@ export async function commandsCommand(options: PortableCommandOptions): Promise<
 			}
 
 			installGlobally = scope as boolean;
-		}
-
-		if (selectedProviders.includes("codex") && !installGlobally) {
-			installGlobally = true;
-			p.log.warn(
-				pc.yellow(
-					"[!] Codex commands are global-only (~/.codex/prompts/). Scope forced to Global.",
-				),
-			);
 		}
 
 		// Phase 4: Summary

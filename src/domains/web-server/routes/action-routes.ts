@@ -782,6 +782,26 @@ async function isActionPathAllowed(dirPath: string, projectId?: string): Promise
 		return resolve(project.path) === dirPath;
 	}
 
+	// Discovered projects encode their path in the ID (base64url after "discovered-" prefix).
+	// Decode and verify the requested path matches the encoded path.
+	// Security: also verify the decoded path is within cwd or homedir bounds
+	// to prevent forged discovered-* IDs from opening arbitrary directories.
+	if (projectId?.startsWith("discovered-")) {
+		try {
+			const encodedPath = projectId.slice("discovered-".length);
+			const discoveredPath = resolve(Buffer.from(encodedPath, "base64url").toString("utf-8"));
+			if (
+				discoveredPath === dirPath &&
+				(isPathInsideBase(discoveredPath, process.cwd()) ||
+					isPathInsideBase(discoveredPath, homedir()))
+			) {
+				return true;
+			}
+		} catch {
+			// Invalid base64 — fall through to other checks
+		}
+	}
+
 	const registeredProjects = await ProjectsRegistryManager.listProjects();
 	if (registeredProjects.some((project) => resolve(project.path) === dirPath)) {
 		return true;

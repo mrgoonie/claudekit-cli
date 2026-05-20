@@ -4,7 +4,7 @@
  * Uses ASCII indicators [OK] [!] [X] [i] — no emojis
  */
 import { existsSync, statSync } from "node:fs";
-import { dirname, join, parse, resolve } from "node:path";
+import { dirname, isAbsolute, join, parse, resolve } from "node:path";
 import type { PlanPhase } from "@/domains/plan-parser/plan-types.js";
 import { output } from "@/shared/output-manager.js";
 import { handleKanban, handleParse, handleStatus, handleValidate } from "./plan-read-handlers.js";
@@ -18,6 +18,7 @@ export interface PlanCommandOptions {
 	port?: number;
 	open?: boolean;
 	dev?: boolean;
+	global?: boolean;
 	// Write command options:
 	title?: string;
 	phases?: string;
@@ -26,6 +27,9 @@ export interface PlanCommandOptions {
 	issue?: string;
 	after?: string;
 	start?: boolean;
+	// Tracking metadata (for CLI-strict plan tracking):
+	source?: "skill" | "cli" | "dashboard";
+	sessionId?: string;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -35,8 +39,29 @@ export interface PlanCommandOptions {
  * If target is a directory, looks for plan.md inside it.
  * If no target given, walks up parent directories to find plan.md.
  */
-export function resolvePlanFile(target?: string): string | null {
-	const t = target ? resolve(target) : process.cwd();
+function resolveTargetPath(target: string, baseDir?: string): string {
+	if (!baseDir) {
+		return resolve(target);
+	}
+
+	if (isAbsolute(target)) {
+		return resolve(target);
+	}
+
+	const cwdCandidate = resolve(target);
+	if (existsSync(cwdCandidate)) {
+		return cwdCandidate;
+	}
+
+	return resolve(baseDir, target);
+}
+
+export function resolvePlanFile(target?: string, baseDir?: string): string | null {
+	const t = target
+		? resolveTargetPath(target, baseDir)
+		: baseDir
+			? resolve(baseDir)
+			: process.cwd();
 
 	if (existsSync(t)) {
 		const stat = statSync(t);
@@ -47,7 +72,7 @@ export function resolvePlanFile(target?: string): string | null {
 	}
 
 	// Walk up parent directories (only when no explicit target)
-	if (!target) {
+	if (!target && !baseDir) {
 		let dir = process.cwd();
 		const root = parse(dir).root;
 		while (dir !== root) {

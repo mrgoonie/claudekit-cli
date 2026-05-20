@@ -1,6 +1,5 @@
+import type { HealthStatus, KitType } from "@/types";
 import type {
-	HealthStatus,
-	KitType,
 	MigrationDiscovery,
 	MigrationExecutionResponse,
 	MigrationIncludeOptions,
@@ -9,6 +8,8 @@ import type {
 	Session,
 	Skill,
 } from "@/types";
+import type { ProjectActivePlan } from "@/types/plan-types";
+import type { InstallDiscoveryResponse } from "@/types/reconcile-types";
 
 const API_BASE = "/api";
 
@@ -25,7 +26,6 @@ export class ServerUnavailableError extends Error {
 
 /**
  * Check if backend is available. Throws ServerUnavailableError if not.
- * Per validation: Remove mock entirely, require backend.
  */
 async function requireBackend(): Promise<void> {
 	try {
@@ -53,6 +53,13 @@ interface ApiProject {
 	tags?: string[];
 	addedAt?: string;
 	lastOpened?: string;
+	planSettings?: {
+		scope: "project" | "global";
+		plansDir: string;
+		validationMode: "prompt" | "auto" | "strict" | "none";
+		activePlanCount: number;
+	};
+	activePlans?: ProjectActivePlan[];
 	preferences?: {
 		terminalApp?: string;
 		editorApp?: string;
@@ -74,6 +81,8 @@ function transformApiProject(p: ApiProject): Project {
 		tags: p.tags,
 		addedAt: p.addedAt,
 		lastOpened: p.lastOpened,
+		planSettings: p.planSettings,
+		activePlans: p.activePlans,
 		preferences: p.preferences,
 	};
 }
@@ -84,6 +93,37 @@ export async function fetchProjects(): Promise<Project[]> {
 	if (!res.ok) throw new Error("Failed to fetch projects");
 	const apiProjects: ApiProject[] = await res.json();
 	return apiProjects.map(transformApiProject);
+}
+
+// Simple cache to avoid duplicate fetches during same render cycle
+const projectCache = new Map<string, { data: Project; timestamp: number }>();
+const PROJECT_CACHE_TTL_MS = 5000; // 5 seconds
+
+export async function fetchProject(id: string): Promise<Project> {
+	// Check cache first
+	const cached = projectCache.get(id);
+	if (cached && Date.now() - cached.timestamp < PROJECT_CACHE_TTL_MS) {
+		return cached.data;
+	}
+
+	await requireBackend();
+	const res = await fetch(`${API_BASE}/projects/${encodeURIComponent(id)}`);
+	if (!res.ok) throw new Error("Failed to fetch project");
+	const apiProject: ApiProject = await res.json();
+	const project = transformApiProject(apiProject);
+
+	// Cache the result
+	projectCache.set(id, { data: project, timestamp: Date.now() });
+	return project;
+}
+
+/** Invalidate project cache (call after mutations) */
+export function invalidateProjectCache(id?: string): void {
+	if (id) {
+		projectCache.delete(id);
+	} else {
+		projectCache.clear();
+	}
 }
 
 export async function checkHealth(): Promise<boolean> {
@@ -106,8 +146,6 @@ export async function fetchSkills(): Promise<Skill[]> {
 
 /**
  * Fetch sessions for a project.
- * Per validation: Sessions return empty array when backend unavailable (future scope).
- * Sessions API not yet implemented on backend.
  */
 export async function fetchSessions(projectId: string, limit?: number): Promise<Session[]> {
 	try {
@@ -119,6 +157,31 @@ export async function fetchSessions(projectId: string, limit?: number): Promise<
 	} catch {
 		return [];
 	}
+}
+
+export async function fetchProjectSessionsDetail(
+	projectId: string,
+	sessionId: string,
+	limit?: number,
+	offset?: number,
+): Promise<Record<string, unknown>> {
+	await requireBackend();
+	const params = new URLSearchParams();
+	if (limit !== undefined) params.set("limit", String(limit));
+	if (offset !== undefined) params.set("offset", String(offset));
+	const res = await fetch(
+		`${API_BASE}/sessions/${encodeURIComponent(projectId)}/${encodeURIComponent(sessionId)}?${params.toString()}`,
+	);
+	if (!res.ok) throw new Error("Failed to fetch session detail");
+	return res.json();
+}
+
+export async function fetchSessionActivity(period?: string): Promise<Record<string, unknown>> {
+	await requireBackend();
+	const params = period ? `?period=${period}` : "";
+	const res = await fetch(`${API_BASE}/sessions/activity${params}`);
+	if (!res.ok) throw new Error("Failed to fetch session activity");
+	return res.json();
 }
 
 export interface ActionAppOption {
@@ -373,6 +436,7 @@ export async function removeProject(id: string): Promise<void> {
 		const error = await res.text();
 		throw new Error(error || "Failed to remove project");
 	}
+	invalidateProjectCache(id);
 }
 
 export async function updateProject(id: string, updates: UpdateProjectRequest): Promise<Project> {
@@ -388,6 +452,7 @@ export async function updateProject(id: string, updates: UpdateProjectRequest): 
 		throw new Error(error || "Failed to update project");
 	}
 
+	invalidateProjectCache(id);
 	const apiProject: ApiProject = await res.json();
 	return transformApiProject(apiProject);
 }
@@ -400,6 +465,51 @@ export async function fetchGlobalMetadata(): Promise<Record<string, unknown>> {
 		console.error("Failed to fetch global metadata");
 		return {};
 	}
+	return res.json();
+}
+
+// Plans operations (New in Phase 2E)
+
+export async function fetchPlans(
+	dir: string,
+	projectId?: string,
+	limit?: number,
+	offset?: number,
+): Promise<Record<string, unknown>> {
+	await requireBackend();
+	const params = new URLSearchParams();
+	params.set("dir", dir);
+	if (projectId) params.set("projectId", projectId);
+	if (limit !== undefined) params.set("limit", String(limit));
+	if (offset !== undefined) params.set("offset", String(offset));
+	const res = await fetch(`${API_BASE}/plan/list?${params.toString()}`);
+	if (!res.ok) throw new Error("Failed to fetch plans");
+	return res.json();
+}
+
+export async function parsePlan(
+	file: string,
+	projectId?: string,
+): Promise<Record<string, unknown>> {
+	await requireBackend();
+	const params = new URLSearchParams();
+	params.set("file", file);
+	if (projectId) params.set("projectId", projectId);
+	const res = await fetch(`${API_BASE}/plan/parse?${params.toString()}`);
+	if (!res.ok) throw new Error("Failed to parse plan");
+	return res.json();
+}
+
+export async function fetchPlanSummary(
+	file: string,
+	projectId?: string,
+): Promise<Record<string, unknown>> {
+	await requireBackend();
+	const params = new URLSearchParams();
+	params.set("file", file);
+	if (projectId) params.set("projectId", projectId);
+	const res = await fetch(`${API_BASE}/plan/summary?${params.toString()}`);
+	if (!res.ok) throw new Error("Failed to fetch plan summary");
 	return res.json();
 }
 
@@ -424,6 +534,43 @@ export async function fetchAgents(): Promise<FetchAgentsResponse> {
 	await requireBackend();
 	const res = await fetch(`${API_BASE}/agents`);
 	if (!res.ok) throw new Error("Failed to fetch agents");
+	return res.json();
+}
+
+// Dashboard & System operations
+
+export async function fetchDashboardStats(): Promise<Record<string, unknown>> {
+	await requireBackend();
+	const res = await fetch(`${API_BASE}/dashboard/stats`);
+	if (!res.ok) throw new Error("Failed to fetch dashboard stats");
+	return res.json();
+}
+
+export async function fetchDashboardAgents(): Promise<Record<string, unknown>[]> {
+	await requireBackend();
+	const res = await fetch(`${API_BASE}/dashboard/agents`);
+	if (!res.ok) throw new Error("Failed to fetch dashboard agents");
+	return res.json();
+}
+
+export async function fetchSuggestions(): Promise<Record<string, unknown>[]> {
+	await requireBackend();
+	const res = await fetch(`${API_BASE}/dashboard/suggestions`);
+	if (!res.ok) throw new Error("Failed to fetch suggestions");
+	return res.json();
+}
+
+export async function getSystemInfo(): Promise<Record<string, unknown>> {
+	await requireBackend();
+	const res = await fetch(`${API_BASE}/system/info`);
+	if (!res.ok) throw new Error("Failed to fetch system info");
+	return res.json();
+}
+
+export async function getHealth(): Promise<Record<string, unknown>> {
+	await requireBackend();
+	const res = await fetch(`${API_BASE}/system/health`);
+	if (!res.ok) throw new Error("Failed to fetch health");
 	return res.json();
 }
 
@@ -567,5 +714,110 @@ export async function executeMigration(
 		const parsedMessage = extractMigrationErrorMessage(raw);
 		throw new Error(parsedMessage || "Failed to execute migration");
 	}
+	return res.json();
+}
+
+// ---------------------------------------------------------------------------
+// P2: Reconcile plan fetcher (typed, with new params)
+// ---------------------------------------------------------------------------
+
+export interface FetchReconcilePlanParams {
+	providers: string[];
+	global?: boolean;
+	source?: string;
+	agents?: boolean;
+	commands?: boolean;
+	skills?: boolean;
+	config?: boolean;
+	rules?: boolean;
+	hooks?: boolean;
+	/** Default: true. Pass false to suppress empty-dir reinstall override. */
+	reinstallEmptyDirs?: boolean;
+	/** Default: false. Pass true to suppress reinstall of empty dirs. */
+	respectDeletions?: boolean;
+	/** Default: 'reconcile'. */
+	mode?: "reconcile" | "install";
+}
+
+export interface FetchReconcilePlanResponse {
+	plan: unknown; // Typed by UI once ReconcilePlan shape is consumed
+	suggestedMode: "reconcile" | "install";
+}
+
+/**
+ * Fetch a reconcile plan from the server.
+ * Wraps GET /api/migrate/reconcile with P2 params.
+ */
+export async function fetchReconcilePlan(
+	params: FetchReconcilePlanParams,
+): Promise<FetchReconcilePlanResponse> {
+	await requireBackend();
+	const qs = new URLSearchParams();
+	for (const p of params.providers) {
+		qs.append("providers", p);
+	}
+	if (params.global !== undefined) qs.set("global", String(params.global));
+	if (params.source) qs.set("source", params.source);
+	if (params.agents !== undefined) qs.set("agents", String(params.agents));
+	if (params.commands !== undefined) qs.set("commands", String(params.commands));
+	if (params.skills !== undefined) qs.set("skills", String(params.skills));
+	if (params.config !== undefined) qs.set("config", String(params.config));
+	if (params.rules !== undefined) qs.set("rules", String(params.rules));
+	if (params.hooks !== undefined) qs.set("hooks", String(params.hooks));
+	if (params.reinstallEmptyDirs !== undefined)
+		qs.set("reinstallEmptyDirs", String(params.reinstallEmptyDirs));
+	if (params.respectDeletions !== undefined)
+		qs.set("respectDeletions", String(params.respectDeletions));
+	if (params.mode) qs.set("mode", params.mode);
+
+	const res = await fetch(`${API_BASE}/migrate/reconcile?${qs.toString()}`);
+	if (!res.ok) {
+		const raw = await res.text();
+		const parsedMessage = extractMigrationErrorMessage(raw);
+		throw new Error(parsedMessage || "Failed to fetch reconcile plan");
+	}
+	return res.json();
+}
+
+// ---------------------------------------------------------------------------
+// P2: Install discovery (Install mode picker)
+// ---------------------------------------------------------------------------
+
+export interface FetchInstallCandidatesParams {
+	providers: string[];
+	global?: boolean;
+	source?: string;
+	agents?: boolean;
+	commands?: boolean;
+	skills?: boolean;
+	config?: boolean;
+	rules?: boolean;
+	hooks?: boolean;
+}
+
+/**
+ * Fetch install candidates for Install mode without running reconcile.
+ * Wraps GET /api/migrate/install-discovery.
+ * Fast — no checksum computation.
+ */
+export async function fetchInstallCandidates(
+	params: FetchInstallCandidatesParams,
+): Promise<InstallDiscoveryResponse> {
+	await requireBackend();
+	const qs = new URLSearchParams();
+	for (const p of params.providers) {
+		qs.append("providers", p);
+	}
+	if (params.global !== undefined) qs.set("global", String(params.global));
+	if (params.source) qs.set("source", params.source);
+	if (params.agents !== undefined) qs.set("agents", String(params.agents));
+	if (params.commands !== undefined) qs.set("commands", String(params.commands));
+	if (params.skills !== undefined) qs.set("skills", String(params.skills));
+	if (params.config !== undefined) qs.set("config", String(params.config));
+	if (params.rules !== undefined) qs.set("rules", String(params.rules));
+	if (params.hooks !== undefined) qs.set("hooks", String(params.hooks));
+
+	const res = await fetch(`${API_BASE}/migrate/install-discovery?${qs.toString()}`);
+	if (!res.ok) throw new Error("Failed to fetch install candidates");
 	return res.json();
 }

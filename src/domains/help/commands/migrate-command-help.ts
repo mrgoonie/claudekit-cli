@@ -8,23 +8,49 @@ import type { CommandHelp } from "../help-types.js";
 
 export const migrateCommandHelp: CommandHelp = {
 	name: "migrate",
-	description: "Migrate agents, commands, skills, config, rules, and hooks to other providers",
+	description:
+		"Migrate Claude Code agents, commands, skills, config, rules, and hooks to other providers",
 	usage: "ck migrate [options]",
 	examples: [
 		{
-			command: "ck migrate --agent droid --agent codex",
-			description: "Migrate to specific providers",
+			command: "ck migrate --install",
+			description: "Pick items to install interactively (install picker mode)",
 		},
 		{
-			command: "ck migrate --all --global",
-			description: "Migrate globally to all supported providers",
+			command: "ck migrate --agent codex --dry-run",
+			description: "Preview the destination-aware reconcile plan before writing files",
 		},
 		{
-			command: "ck migrate --dry-run",
-			description: "Preview migration plan without writing files",
+			command: "ck migrate --respect-deletions",
+			description: "Preserve empty directories — do not auto-reinstall deleted items",
 		},
 	],
 	optionGroups: [
+		{
+			title: "Mode Options",
+			options: [
+				{
+					flags: "--install",
+					description:
+						"Opt-in install picker mode — interactively select which items to install (default when registry is empty or has unknown checksums)",
+				},
+				{
+					flags: "--reconcile",
+					description:
+						"Force reconcile mode — compute diff vs registry and apply only changes (default when registry is valid)",
+				},
+				{
+					flags: "--reinstall-empty-dirs",
+					description:
+						"Reinstall all items when their type directory is empty or missing (default: true). Use --respect-deletions to disable.",
+				},
+				{
+					flags: "--respect-deletions",
+					description:
+						"Preserve deletion even when a type directory is empty — skip reinstall heuristic. Mutually exclusive with --reinstall-empty-dirs.",
+				},
+			],
+		},
 		{
 			title: "Target Options",
 			options: [
@@ -38,25 +64,37 @@ export const migrateCommandHelp: CommandHelp = {
 				},
 				{
 					flags: "-g, --global",
-					description: "Install globally instead of project-level",
+					description: "Install globally instead of the default project-level scope",
 				},
 				{
 					flags: "-y, --yes",
-					description: "Skip confirmation prompts",
+					description: "Skip confirmation prompts after the pre-flight summary",
 				},
 				{
 					flags: "-f, --force",
-					description: "Force reinstall deleted/edited items",
+					description: "Force reinstall deleted or edited managed items",
 				},
 				{
 					flags: "--dry-run",
-					description: "Preview plan without writing files",
+					description: "Preview plan, destinations, and next steps without writing files",
 				},
 			],
 		},
 		{
 			title: "Content Selection",
 			options: [
+				{
+					flags: "--only-agents",
+					description: "Migrate agents only",
+				},
+				{
+					flags: "--only-commands",
+					description: "Migrate commands only",
+				},
+				{
+					flags: "--only-skills",
+					description: "Migrate skills only",
+				},
 				{
 					flags: "--config",
 					description: "Migrate CLAUDE.md config only",
@@ -68,6 +106,18 @@ export const migrateCommandHelp: CommandHelp = {
 				{
 					flags: "--hooks",
 					description: "Migrate .claude/hooks only",
+				},
+				{
+					flags: "--skip-agents",
+					description: "Skip agents migration",
+				},
+				{
+					flags: "--skip-commands",
+					description: "Skip commands migration",
+				},
+				{
+					flags: "--skip-skills",
+					description: "Skip skills migration (preserve symlinks/custom layouts)",
 				},
 				{
 					flags: "--skip-config",
@@ -86,6 +136,19 @@ export const migrateCommandHelp: CommandHelp = {
 					description: "Custom CLAUDE.md source path",
 				},
 			],
+		},
+	],
+	sections: [
+		{
+			title: "Gotchas",
+			content: [
+				"  --install and --reconcile are mutually exclusive — pass only one",
+				"  --reinstall-empty-dirs and --respect-deletions are mutually exclusive — pass only one",
+				"  Default mode is smart-detected: no/stale registry → install, valid registry → reconcile",
+				"  --respect-deletions disables the auto-reinstall heuristic for empty directories",
+				"  --force overrides skip decisions per item; --reinstall-empty-dirs is a per-directory heuristic",
+				"  Codex commands migrate as skills: project scope writes .agents/skills, global scope writes ~/.agents/skills",
+			].join("\n"),
 		},
 	],
 };

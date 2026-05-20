@@ -77,6 +77,49 @@ describe("StatuslineLayoutSchema", () => {
 			});
 			expect(result.success).toBe(true);
 		});
+
+		// TDD Red: quotaLow/quotaHigh missing from StatuslineThemeSchema — fields get stripped silently
+		it("accepts quotaLow and quotaHigh in theme", () => {
+			const result = StatuslineLayoutSchema.safeParse({
+				theme: { quotaLow: "green", quotaHigh: "yellow" },
+			});
+			expect(result.success).toBe(true);
+			// These assertions fail because Zod strips unknown fields
+			if (result.success) {
+				expect(result.data.theme?.quotaLow).toBe("green");
+				expect(result.data.theme?.quotaHigh).toBe("yellow");
+			}
+		});
+
+		// TDD Red: fields stripped when routed through CkConfigSchema
+		it("preserves quotaLow/quotaHigh through CkConfigSchema parse", () => {
+			const result = CkConfigSchema.safeParse({
+				statuslineLayout: {
+					theme: { quotaLow: "cyan", quotaHigh: "red" },
+				},
+			});
+			expect(result.success).toBe(true);
+			if (result.success) {
+				expect(result.data.statuslineLayout?.theme?.quotaLow).toBe("cyan");
+				expect(result.data.statuslineLayout?.theme?.quotaHigh).toBe("red");
+			}
+		});
+
+		// TDD Red: non-alphabetic quotaLow should be rejected (currently ignored — schema doesn't know the field)
+		it("rejects non-alphabetic quotaLow", () => {
+			const result = StatuslineLayoutSchema.safeParse({
+				theme: { quotaLow: "#ff0000" },
+			});
+			expect(result.success).toBe(false);
+		});
+
+		// Regression guard: must still pass after schema fix
+		it("accepts theme without quotaLow/quotaHigh (backward compat)", () => {
+			const result = StatuslineLayoutSchema.safeParse({
+				theme: { contextLow: "green" },
+			});
+			expect(result.success).toBe(true);
+		});
 	});
 });
 

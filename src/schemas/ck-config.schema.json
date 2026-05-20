@@ -141,6 +141,11 @@
 					"type": "string",
 					"default": "plans",
 					"description": "Path to plans directory"
+				},
+				"globalPlans": {
+					"type": "string",
+					"default": "plans",
+					"description": "Path to global plans directory (relative to ~/.claude or absolute)"
 				}
 			},
 			"additionalProperties": false
@@ -479,10 +484,64 @@
 					"default": true,
 					"description": "PreToolUse hook - blocks sensitive files"
 				},
-				"post-edit-simplify-reminder": {
+				"simplify-gate": {
 					"type": "boolean",
 					"default": true,
-					"description": "PostToolUse hook - simplify reminder after edits"
+					"description": "UserPromptSubmit hook - hard-blocks ship/merge/pr/deploy/publish and soft-warns commit/finalize/release when live diff exceeds simplify thresholds. Bypass via CK_SIMPLIFY_DISABLED=1."
+				}
+			},
+			"additionalProperties": false
+		},
+		"simplify": {
+			"type": "object",
+			"description": "Signal-driven simplifier orchestration. Live git diff thresholds + verb-based gate.",
+			"properties": {
+				"threshold": {
+					"type": "object",
+					"description": "LOC/file thresholds that trip the gate. Nested object stays open for forward-compat fields.",
+					"properties": {
+						"locDelta": {
+							"type": "integer",
+							"minimum": 0,
+							"default": 400,
+							"description": "Total LOC change (across all files) above which the gate fires."
+						},
+						"fileCount": {
+							"type": "integer",
+							"minimum": 0,
+							"default": 8,
+							"description": "Number of changed files above which the gate fires."
+						},
+						"singleFileLoc": {
+							"type": "integer",
+							"minimum": 0,
+							"default": 200,
+							"description": "Per-file LOC change above which the gate fires."
+						}
+					}
+				},
+				"gate": {
+					"type": "object",
+					"description": "UserPromptSubmit gate behavior. Nested object stays open for forward-compat fields.",
+					"properties": {
+						"enabled": {
+							"type": "boolean",
+							"default": false,
+							"description": "Master toggle. Off by default (opt-in). Set true to activate; env CK_SIMPLIFY_DISABLED=1 always bypasses."
+						},
+						"hardVerbs": {
+							"type": "array",
+							"items": { "type": "string" },
+							"default": ["ship", "merge", "pr", "deploy", "publish"],
+							"description": "Verbs that hard-block (continue:false) when thresholds breached."
+						},
+						"softVerbs": {
+							"type": "array",
+							"items": { "type": "string" },
+							"default": ["commit", "finalize", "release"],
+							"description": "Verbs that soft-warn (additionalContext) when thresholds breached."
+						}
+					}
 				}
 			},
 			"additionalProperties": false

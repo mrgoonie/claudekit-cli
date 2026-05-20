@@ -70,6 +70,35 @@ export const skillsCommandHelp: CommandHelp = {
 			],
 		},
 		{
+			title: "Catalog Options",
+			options: [
+				{
+					flags: "--catalog",
+					description: "Show skill catalog stats and metadata",
+				},
+				{
+					flags: "--regenerate",
+					description: "Force regenerate catalog (use with --catalog)",
+				},
+				{
+					flags: "--search <query>",
+					description: "BM25 full-text search over skill catalog",
+				},
+				{
+					flags: "--json",
+					description: "Output search results as JSON (use with --search)",
+				},
+				{
+					flags: "--limit <n>",
+					description: "Max search results, default 10 (use with --search)",
+				},
+				{
+					flags: "--validate",
+					description: "Validate SKILL.md frontmatter fields",
+				},
+			],
+		},
+		{
 			title: "Uninstall Options",
 			options: [
 				{
@@ -100,8 +129,9 @@ export const skillsCommandHelp: CommandHelp = {
 		{
 			title: "Notes",
 			content: `  • Skills are installed from ~/.claude/skills (ClaudeKit Engineer source)
+  • OpenCode reuses Claude-compatible skill roots (.claude/skills, ~/.claude/skills), so installs may be a no-op
   • Registry stored at ~/.claudekit/skill-registry.json
-  • Project installs go to ./<agent>/skills, global to ~/<agent>/skills`,
+  • Target paths vary by agent; some agents intentionally share a common skills directory`,
 		},
 	],
 };

@@ -17,7 +17,7 @@ ClaudeKit CLI (`ck`) is the primary user interface for bootstrapping and managin
 | `content` | Multi-channel content automation | See `docs/ck-content.md` |
 | `watch` | GitHub issue auto-responder | See `docs/ck-watch.md` |
 | `uninstall` | Remove installations | `--yes`, `--global` |
-| `watch` | Watch GitHub issues and auto-respond | `--interval`, `--dry-run` |
+| `migrate` | Reconcile and preview destination-aware migrations across providers | `-a, --agent`, `--all`, `-g, --global`, `--dry-run` |
 
 ### Global Flags
 
@@ -108,7 +108,7 @@ flowchart TD
 - Optional: Install skills
 - Optional: Install Gemini MCP
 - Optional: Open in code editor
-- Setup wizard: Prompts for required env keys (e.g., `GEMINI_API_KEY`) if missing
+- Setup wizard: Prompts for required env keys for `ai-multimodal` image generation if missing (for example, `GEMINI_API_KEY`, `OPENROUTER_API_KEY`, or `MINIMAX_API_KEY`) and can persist `IMAGE_GEN_PROVIDER` when multiple providers are configured
 
 ---
 
@@ -218,7 +218,7 @@ flowchart TD
 - Skill components and dependencies
 - Slash command hooks present
 - Active CLAUDE.md file
-- Required environment keys (e.g., `GEMINI_API_KEY`) in `.env`
+- Required environment keys for image generation (for example, one of `GEMINI_API_KEY`, `OPENROUTER_API_KEY`, or `MINIMAX_API_KEY`) in `.env`, plus optional `IMAGE_GEN_PROVIDER` when users want an explicit default path
 
 ---
 

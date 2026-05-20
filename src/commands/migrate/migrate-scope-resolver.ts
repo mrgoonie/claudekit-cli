@@ -2,25 +2,27 @@
  * Resolve which content types to migrate based on CLI flags and options.
  * Extracted from migrate-command.ts for testability (#404).
  *
- * Truth table:
- *   --config           → only config (no agents/commands/skills/rules/hooks)
- *   --rules            → only rules
- *   --hooks            → only hooks
- *   --config --rules   → only config AND rules
- *   --config --hooks   → only config AND hooks
- *   --rules --hooks    → only rules AND hooks
- *   --config --rules --hooks → only config AND rules AND hooks
- *   --skip-config      → everything except config
- *   --skip-rules       → everything except rules
- *   --skip-hooks       → everything except hooks
- *   (none)             → everything
+ * Truth table (any subset of types can be selected via --X "only" flags
+ * or excluded via --skip-X / --no-X flags):
+ *   --config / --rules / --hooks                        → only those types
+ *   --only-agents / --only-commands / --only-skills      → only those types
+ *   --skip-X (any type) → everything except X
+ *   (none)              → everything
+ *
+ * Skip and only flags can combine across different types.
  */
 
 /** Options that affect migration scope */
 export interface MigrateScopeOptions {
+	agents?: boolean;
+	commands?: boolean;
+	skills?: boolean;
 	config?: boolean;
 	rules?: boolean;
 	hooks?: boolean;
+	skipAgents?: boolean;
+	skipCommands?: boolean;
+	skipSkills?: boolean;
 	skipConfig?: boolean;
 	skipRules?: boolean;
 	skipHooks?: boolean;
@@ -47,21 +49,40 @@ export function resolveMigrationScope(
 ): MigrationScope {
 	const argSet = new Set(argv);
 
-	// Detect explicit CLI flags
+	// Detect explicit CLI flags (only-mode for content type X).
+	// Agents/commands/skills use the `--only-*` form to avoid collision with
+	// `-a, --agent <agents...>` (the variadic provider list). Config/rules/hooks
+	// keep the legacy `--<type>` form for backward compatibility.
+	const hasAgentsArg = argSet.has("--only-agents");
+	const hasCommandsArg = argSet.has("--only-commands");
+	const hasSkillsArg = argSet.has("--only-skills");
 	const hasConfigArg = argSet.has("--config");
 	const hasRulesArg = argSet.has("--rules");
 	const hasHooksArg = argSet.has("--hooks");
+	// Skip-mode flags
+	const hasNoAgentsArg = argSet.has("--no-agents") || argSet.has("--skip-agents");
+	const hasNoCommandsArg = argSet.has("--no-commands") || argSet.has("--skip-commands");
+	const hasNoSkillsArg = argSet.has("--no-skills") || argSet.has("--skip-skills");
 	const hasNoConfigArg = argSet.has("--no-config") || argSet.has("--skip-config");
 	const hasNoRulesArg = argSet.has("--no-rules") || argSet.has("--skip-rules");
 	const hasNoHooksArg = argSet.has("--no-hooks") || argSet.has("--skip-hooks");
 
-	// Programmatic fallback:
-	// - Preserve legacy behavior for config+rules (no argv): migrate all.
-	// - Support hooks-aware combinations explicitly (e.g. config+hooks, rules+hooks).
+	// Programmatic fallback (no argv toggles at all):
+	// - Legacy: config+rules together still means migrate-everything.
+	// - Single-only positives (config / rules / hooks) trigger only-mode.
+	// - hooks combined with config/rules also triggers only-mode (existing behavior).
+	// New types (agents/commands/skills) are argv-only triggers; programmatic
+	// `options.skills = true` does NOT flip into only-mode (kept simple, YAGNI).
 	const hasNoToggleArgs =
+		!hasAgentsArg &&
+		!hasCommandsArg &&
+		!hasSkillsArg &&
 		!hasConfigArg &&
 		!hasRulesArg &&
 		!hasHooksArg &&
+		!hasNoAgentsArg &&
+		!hasNoCommandsArg &&
+		!hasNoSkillsArg &&
 		!hasNoConfigArg &&
 		!hasNoRulesArg &&
 		!hasNoHooksArg;
@@ -76,8 +97,11 @@ export function resolveMigrationScope(
 		options.hooks === true &&
 		(options.config === true || options.rules === true);
 
-	// "Only" mode: --config/--rules/--hooks were specified (or explicit programmatic positives)
+	// "Only" mode: any X-only flag was specified (argv) or programmatic equivalent.
 	const hasOnlyFlag =
+		hasAgentsArg ||
+		hasCommandsArg ||
+		hasSkillsArg ||
 		hasConfigArg ||
 		hasRulesArg ||
 		hasHooksArg ||
@@ -86,11 +110,19 @@ export function resolveMigrationScope(
 		fallbackHooksOnly ||
 		fallbackOnlyModeWithHooks;
 
-	// "Skip" mode: --skip-config / --skip-rules / --no-config / --no-rules
+	// Skip-mode (per type): explicit --skip-X / --no-X / programmatic equivalent.
+	const skipAgents = hasNoAgentsArg || options.skipAgents === true || options.agents === false;
+	const skipCommands =
+		hasNoCommandsArg || options.skipCommands === true || options.commands === false;
+	const skipSkills = hasNoSkillsArg || options.skipSkills === true || options.skills === false;
 	const skipConfig = hasNoConfigArg || options.skipConfig === true || options.config === false;
 	const skipRules = hasNoRulesArg || options.skipRules === true || options.rules === false;
 	const skipHooks = hasNoHooksArg || options.skipHooks === true || options.hooks === false;
 
+	// Per-type only-mode triggers (legacy behavior preserved for config/rules/hooks).
+	const migrateAgentsOnly = hasAgentsArg;
+	const migrateCommandsOnly = hasCommandsArg;
+	const migrateSkillsOnly = hasSkillsArg;
 	const migrateConfigOnly =
 		hasConfigArg || fallbackConfigOnly || (fallbackOnlyModeWithHooks && options.config === true);
 	const migrateRulesOnly =
@@ -98,9 +130,9 @@ export function resolveMigrationScope(
 	const migrateHooksOnly = hasHooksArg || fallbackHooksOnly || fallbackOnlyModeWithHooks;
 
 	return {
-		agents: !hasOnlyFlag,
-		commands: !hasOnlyFlag,
-		skills: !hasOnlyFlag,
+		agents: hasOnlyFlag ? migrateAgentsOnly && !skipAgents : !skipAgents,
+		commands: hasOnlyFlag ? migrateCommandsOnly && !skipCommands : !skipCommands,
+		skills: hasOnlyFlag ? migrateSkillsOnly && !skipSkills : !skipSkills,
 		config: hasOnlyFlag ? migrateConfigOnly && !skipConfig : !skipConfig,
 		rules: hasOnlyFlag ? migrateRulesOnly && !skipRules : !skipRules,
 		hooks: hasOnlyFlag ? migrateHooksOnly && !skipHooks : !skipHooks,

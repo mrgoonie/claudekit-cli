@@ -5,8 +5,10 @@ import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { acquireInstallationStateLock } from "@/services/file-operations/installation-state-lock.js";
 import { ManifestWriter } from "@/services/file-operations/manifest-writer.js";
 import type { Metadata, TrackedFile } from "@/types";
+import { pathExists } from "fs-extra";
 
 describe("ManifestWriter multi-kit", () => {
 	let testDir: string;
@@ -136,6 +138,25 @@ describe("ManifestWriter multi-kit", () => {
 			const metadata = JSON.parse(content) as Metadata;
 
 			expect(metadata.kits?.engineer?.version).toBe("v1.0.0");
+		});
+
+		it("waits for the shared installation lock before writing metadata", async () => {
+			const writer = new ManifestWriter();
+			const release = await acquireInstallationStateLock(testDir);
+
+			let settled = false;
+			const run = writer
+				.writeManifest(testDir, "ClaudeKit Engineer", "v1.2.3", "local", "engineer")
+				.finally(() => {
+					settled = true;
+				});
+
+			await Bun.sleep(50);
+			expect(settled).toBe(false);
+
+			await release();
+			await run;
+			expect(settled).toBe(true);
 		});
 	});
 
@@ -425,7 +446,7 @@ describe("ManifestWriter multi-kit", () => {
 			expect(updated.kits?.marketing?.version).toBe("v0.1.0");
 		});
 
-		it("returns true even when removing last kit (metadata.json cleanup handled separately)", async () => {
+		it("removes metadata.json when the last kit is removed", async () => {
 			const metadata: Metadata = {
 				kits: {
 					engineer: {
@@ -439,6 +460,7 @@ describe("ManifestWriter multi-kit", () => {
 			const result = await ManifestWriter.removeKitFromManifest(testDir, "engineer");
 
 			expect(result).toBe(true);
+			expect(await pathExists(join(testDir, "metadata.json"))).toBe(false);
 		});
 
 		it("returns false for non-existent kit", async () => {

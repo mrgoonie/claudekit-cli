@@ -1,10 +1,13 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdir, rm, symlink, writeFile } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
+	checkHookCommandPaths,
 	checkHookConfig,
 	checkHookDeps,
+	checkHookFileReferences,
 	checkHookLogs,
 	checkHookRuntime,
 	checkHookSyntax,
@@ -405,6 +408,189 @@ describe("checkHookConfig", () => {
 	});
 });
 
+describe("checkHookCommandPaths", () => {
+	let tempDir: string;
+	let projectDir: string;
+	let originalCkTestHome: string | undefined;
+
+	beforeEach(async () => {
+		tempDir = join(
+			tmpdir(),
+			`hook-health-test-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+		);
+		projectDir = join(tempDir, "project");
+		await mkdir(projectDir, { recursive: true });
+
+		originalCkTestHome = process.env.CK_TEST_HOME;
+		process.env.CK_TEST_HOME = tempDir;
+	});
+
+	afterEach(async () => {
+		await rm(tempDir, { recursive: true, force: true });
+
+		if (originalCkTestHome === undefined) {
+			process.env.CK_TEST_HOME = undefined;
+		} else {
+			process.env.CK_TEST_HOME = originalCkTestHome;
+		}
+	});
+
+	test("returns fail for raw relative hook commands in settings.local.json", async () => {
+		await mkdir(join(projectDir, ".claude"), { recursive: true });
+		await writeFile(
+			join(projectDir, ".claude", "settings.local.json"),
+			JSON.stringify({
+				hooks: {
+					PreToolUse: [
+						{
+							matcher: "Read",
+							hooks: [{ type: "command", command: "node .claude/hooks/scout-block.cjs" }],
+						},
+					],
+				},
+			}),
+		);
+
+		const result = await checkHookCommandPaths(projectDir);
+
+		expect(result.status).toBe("fail");
+		expect(result.message).toBe("1 stale hook command path(s)");
+		expect(result.details).toContain("project settings.local.json");
+		expect(result.details).toContain("raw-relative");
+		expect(result.autoFixable).toBe(true);
+	});
+
+	test("returns pass when hook commands are already canonical", async () => {
+		await mkdir(join(projectDir, ".claude"), { recursive: true });
+		await writeFile(
+			join(projectDir, ".claude", "settings.json"),
+			JSON.stringify({
+				hooks: {
+					PreToolUse: [
+						{
+							matcher: "Read",
+							hooks: [
+								{
+									type: "command",
+									command: 'node "$CLAUDE_PROJECT_DIR"/.claude/hooks/scout-block.cjs',
+								},
+							],
+						},
+					],
+				},
+			}),
+		);
+
+		const result = await checkHookCommandPaths(projectDir);
+
+		expect(result.status).toBe("pass");
+		expect(result.message).toBe("1 settings file(s) canonical");
+	});
+
+	test("returns fail for invalid embedded-quoted hook commands", async () => {
+		await mkdir(join(projectDir, ".claude"), { recursive: true });
+		await writeFile(
+			join(projectDir, ".claude", "settings.json"),
+			JSON.stringify({
+				hooks: {
+					PreToolUse: [
+						{
+							matcher: "Read",
+							hooks: [
+								{
+									type: "command",
+									command: 'node "$CLAUDE_PROJECT_DIR/.claude/hooks/scout-block.cjs"',
+								},
+							],
+						},
+					],
+				},
+			}),
+		);
+
+		const result = await checkHookCommandPaths(projectDir);
+
+		expect(result.status).toBe("fail");
+		expect(result.details).toContain("invalid-format");
+		expect(result.autoFixable).toBe(true);
+	});
+
+	test("auto-fix rewrites stale hook commands but leaves non-node commands untouched", async () => {
+		await mkdir(join(projectDir, ".claude"), { recursive: true });
+		const settingsPath = join(projectDir, ".claude", "settings.local.json");
+		await writeFile(
+			settingsPath,
+			JSON.stringify({
+				hooks: {
+					PreToolUse: [
+						{
+							matcher: "Read",
+							hooks: [
+								{ type: "command", command: "node .claude/hooks/scout-block.cjs" },
+								{ type: "command", command: "bash .claude/hooks/scout-block.cjs" },
+							],
+						},
+					],
+				},
+			}),
+		);
+
+		const result = await checkHookCommandPaths(projectDir);
+		expect(result.fix).toBeDefined();
+
+		const fixResult = await result.fix?.execute();
+		expect(fixResult?.success).toBe(true);
+
+		const repaired = JSON.parse(await Bun.file(settingsPath).text()) as {
+			hooks: { PreToolUse: Array<{ hooks: Array<{ command: string }> }> };
+		};
+		expect(repaired.hooks.PreToolUse[0].hooks[0].command).toBe(
+			'node "$CLAUDE_PROJECT_DIR"/.claude/hooks/scout-block.cjs',
+		);
+		expect(repaired.hooks.PreToolUse[0].hooks[1].command).toBe(
+			"bash .claude/hooks/scout-block.cjs",
+		);
+	});
+
+	test("detects and auto-fixes absolute Windows-style hook path in settings.json", async () => {
+		await mkdir(join(projectDir, ".claude"), { recursive: true });
+		const settingsPath = join(projectDir, ".claude", "settings.json");
+		await writeFile(
+			settingsPath,
+			JSON.stringify({
+				hooks: {
+					UserPromptSubmit: [
+						{
+							hooks: [
+								{
+									type: "command",
+									command:
+										'node "D:\\Admin\\Documents\\PROJECTS\\myapp\\.claude\\hooks\\session-state.cjs"',
+								},
+							],
+						},
+					],
+				},
+			}),
+		);
+
+		const result = await checkHookCommandPaths(projectDir);
+		expect(result.status).toBe("fail");
+		expect(result.details).toContain("invalid-format");
+		expect(result.autoFixable).toBe(true);
+
+		const fixResult = await result.fix?.execute();
+		expect(fixResult?.success).toBe(true);
+
+		const repaired = JSON.parse(await Bun.file(settingsPath).text()) as {
+			hooks: { UserPromptSubmit: Array<{ hooks: Array<{ command: string }> }> };
+		};
+		expect(repaired.hooks.UserPromptSubmit[0].hooks[0].command).toBe(
+			'node "$CLAUDE_PROJECT_DIR"/.claude/hooks/session-state.cjs',
+		);
+	});
+});
+
 describe("checkHookLogs", () => {
 	let tempDir: string;
 	let projectDir: string;
@@ -604,5 +790,402 @@ describe("checkPythonVenv", () => {
 			// Skip test if symlink fails (permissions, etc.)
 			console.log(`Skipping test: ${error}`);
 		}
+	});
+});
+
+describe("checkHookFileReferences", () => {
+	let tempDir: string;
+	let projectDir: string;
+	let originalCkTestHome: string | undefined;
+
+	beforeEach(async () => {
+		tempDir = join(
+			tmpdir(),
+			`hook-file-refs-test-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+		);
+		projectDir = join(tempDir, "project");
+		await mkdir(projectDir, { recursive: true });
+		originalCkTestHome = process.env.CK_TEST_HOME;
+		process.env.CK_TEST_HOME = tempDir;
+	});
+
+	afterEach(async () => {
+		await rm(tempDir, { recursive: true, force: true });
+		if (originalCkTestHome === undefined) {
+			process.env.CK_TEST_HOME = undefined;
+		} else {
+			process.env.CK_TEST_HOME = originalCkTestHome;
+		}
+	});
+
+	test("returns info when no settings files exist", async () => {
+		const result = await checkHookFileReferences(projectDir);
+		expect(result.id).toBe("hook-file-references");
+		expect(result.status).toBe("info");
+	});
+
+	test("returns pass when all referenced hook files exist", async () => {
+		await mkdir(join(projectDir, ".claude", "hooks"), { recursive: true });
+		await writeFile(join(projectDir, ".claude", "hooks", "scout-block.cjs"), "process.exit(0);");
+		await writeFile(
+			join(projectDir, ".claude", "settings.json"),
+			JSON.stringify({
+				hooks: {
+					PreToolUse: [
+						{
+							matcher: "Read",
+							hooks: [
+								{
+									type: "command",
+									command: 'node "$CLAUDE_PROJECT_DIR"/.claude/hooks/scout-block.cjs',
+								},
+							],
+						},
+					],
+				},
+			}),
+		);
+
+		const result = await checkHookFileReferences(projectDir);
+		expect(result.status).toBe("pass");
+	});
+
+	test("returns pass when bash runner and target hook both exist", async () => {
+		await mkdir(join(projectDir, ".claude", "hooks"), { recursive: true });
+		await writeFile(join(projectDir, ".claude", "hooks", "node-hook-runner.sh"), "#!/bin/sh\n");
+		await writeFile(join(projectDir, ".claude", "hooks", "privacy-block.cjs"), "process.exit(0);");
+		await writeFile(
+			join(projectDir, ".claude", "settings.json"),
+			JSON.stringify({
+				hooks: {
+					PreToolUse: [
+						{
+							matcher: "Bash",
+							hooks: [
+								{
+									type: "command",
+									command: "bash .claude/hooks/node-hook-runner.sh .claude/hooks/privacy-block.cjs",
+								},
+							],
+						},
+					],
+				},
+			}),
+		);
+
+		const result = await checkHookFileReferences(projectDir);
+		expect(result.status).toBe("pass");
+	});
+
+	test("detects and prunes bash runner command when runner file is missing", async () => {
+		await mkdir(join(projectDir, ".claude", "hooks"), { recursive: true });
+		await writeFile(join(projectDir, ".claude", "hooks", "privacy-block.cjs"), "process.exit(0);");
+		const settingsPath = join(projectDir, ".claude", "settings.json");
+		await writeFile(
+			settingsPath,
+			JSON.stringify({
+				hooks: {
+					PreToolUse: [
+						{
+							matcher: "Bash",
+							hooks: [
+								{
+									type: "command",
+									command: "bash .claude/hooks/node-hook-runner.sh .claude/hooks/privacy-block.cjs",
+								},
+							],
+						},
+					],
+				},
+			}),
+		);
+
+		const result = await checkHookFileReferences(projectDir);
+		expect(result.status).toBe("fail");
+		expect(result.details).toContain("node-hook-runner.sh");
+
+		const fixResult = await result.fix?.execute();
+		expect(fixResult?.success).toBe(true);
+
+		const updated = JSON.parse(await readFile(settingsPath, "utf-8"));
+		expect(updated.hooks).toBeUndefined();
+	});
+
+	test("detects bash runner command when target hook file is missing", async () => {
+		await mkdir(join(projectDir, ".claude", "hooks"), { recursive: true });
+		await writeFile(join(projectDir, ".claude", "hooks", "node-hook-runner.sh"), "#!/bin/sh\n");
+		await writeFile(
+			join(projectDir, ".claude", "settings.json"),
+			JSON.stringify({
+				hooks: {
+					PreToolUse: [
+						{
+							hooks: [
+								{
+									type: "command",
+									command: "bash .claude/hooks/node-hook-runner.sh .claude/hooks/privacy-block.cjs",
+								},
+							],
+						},
+					],
+				},
+			}),
+		);
+
+		const result = await checkHookFileReferences(projectDir);
+		expect(result.status).toBe("fail");
+		expect(result.details).toContain("privacy-block.cjs");
+	});
+
+	test("detects and prunes stale statusLine runner command", async () => {
+		await mkdir(join(projectDir, ".claude"), { recursive: true });
+		const settingsPath = join(projectDir, ".claude", "settings.json");
+		await writeFile(
+			settingsPath,
+			JSON.stringify({
+				statusLine: {
+					command: "bash .claude/hooks/node-hook-runner.sh .claude/statusline.cjs",
+				},
+				otherField: "preserved",
+			}),
+		);
+
+		const result = await checkHookFileReferences(projectDir);
+		expect(result.status).toBe("fail");
+		expect(result.details).toContain("node-hook-runner.sh");
+
+		const fixResult = await result.fix?.execute();
+		expect(fixResult?.success).toBe(true);
+
+		const updated = JSON.parse(await readFile(settingsPath, "utf-8"));
+		expect(updated.statusLine).toBeUndefined();
+		expect(updated.otherField).toBe("preserved");
+	});
+
+	test("returns fail when settings reference a missing hook file", async () => {
+		await mkdir(join(projectDir, ".claude"), { recursive: true });
+		await writeFile(
+			join(projectDir, ".claude", "settings.json"),
+			JSON.stringify({
+				hooks: {
+					Stop: [
+						{
+							hooks: [
+								{
+									type: "command",
+									command: 'node "$CLAUDE_PROJECT_DIR"/.claude/hooks/session-state.cjs',
+								},
+							],
+						},
+					],
+				},
+			}),
+		);
+
+		const result = await checkHookFileReferences(projectDir);
+		expect(result.status).toBe("fail");
+		expect(result.autoFixable).toBe(true);
+		expect(result.details).toContain("session-state.cjs");
+	});
+
+	test("ignores non-node commands (e.g. arbitrary shell)", async () => {
+		await mkdir(join(projectDir, ".claude"), { recursive: true });
+		await writeFile(
+			join(projectDir, ".claude", "settings.json"),
+			JSON.stringify({
+				hooks: {
+					Stop: [
+						{
+							hooks: [{ type: "command", command: "echo hello" }],
+						},
+					],
+				},
+			}),
+		);
+
+		const result = await checkHookFileReferences(projectDir);
+		expect(result.status).toBe("pass");
+	});
+
+	test("auto-fix prunes stale hook entries from settings.json", async () => {
+		await mkdir(join(projectDir, ".claude", "hooks"), { recursive: true });
+		await writeFile(join(projectDir, ".claude", "hooks", "exists.cjs"), "process.exit(0);");
+		const settingsPath = join(projectDir, ".claude", "settings.json");
+		await writeFile(
+			settingsPath,
+			JSON.stringify({
+				hooks: {
+					PreToolUse: [
+						{
+							matcher: "Edit",
+							hooks: [
+								{
+									type: "command",
+									command: 'node "$CLAUDE_PROJECT_DIR"/.claude/hooks/missing.cjs',
+								},
+								{
+									type: "command",
+									command: 'node "$CLAUDE_PROJECT_DIR"/.claude/hooks/exists.cjs',
+								},
+							],
+						},
+					],
+					Stop: [
+						{
+							hooks: [
+								{
+									type: "command",
+									command: 'node "$CLAUDE_PROJECT_DIR"/.claude/hooks/session-state.cjs',
+								},
+							],
+						},
+					],
+				},
+			}),
+		);
+
+		const result = await checkHookFileReferences(projectDir);
+		expect(result.status).toBe("fail");
+		expect(result.fix).toBeDefined();
+
+		const fixResult = await result.fix?.execute();
+		expect(fixResult?.success).toBe(true);
+
+		const updated = JSON.parse(await readFile(settingsPath, "utf-8"));
+		expect(updated.hooks.Stop).toBeUndefined();
+		expect(updated.hooks.PreToolUse[0].hooks).toHaveLength(1);
+		expect(updated.hooks.PreToolUse[0].hooks[0].command).toContain("exists.cjs");
+	});
+
+	test("detects missing file for bare relative .claude/ path", async () => {
+		await mkdir(join(projectDir, ".claude"), { recursive: true });
+		await writeFile(
+			join(projectDir, ".claude", "settings.json"),
+			JSON.stringify({
+				hooks: {
+					Stop: [
+						{
+							hooks: [{ type: "command", command: "node .claude/hooks/missing.cjs" }],
+						},
+					],
+				},
+			}),
+		);
+
+		const result = await checkHookFileReferences(projectDir);
+		expect(result.status).toBe("fail");
+		expect(result.details).toContain("missing.cjs");
+	});
+
+	test("detects missing file for tilde-prefixed path", async () => {
+		await mkdir(join(projectDir, ".claude"), { recursive: true });
+		await writeFile(
+			join(projectDir, ".claude", "settings.json"),
+			JSON.stringify({
+				hooks: {
+					Stop: [
+						{
+							hooks: [{ type: "command", command: "node ~/.claude/hooks/nope-xyz-missing.cjs" }],
+						},
+					],
+				},
+			}),
+		);
+
+		const result = await checkHookFileReferences(projectDir);
+		expect(result.status).toBe("fail");
+		expect(result.details).toContain("nope-xyz-missing.cjs");
+	});
+
+	test("detects missing file for $HOME-prefixed path", async () => {
+		await mkdir(join(projectDir, ".claude"), { recursive: true });
+		await writeFile(
+			join(projectDir, ".claude", "settings.json"),
+			JSON.stringify({
+				hooks: {
+					Stop: [
+						{
+							hooks: [
+								{
+									type: "command",
+									command: 'node "$HOME/.claude/hooks/nope-home-missing.cjs"',
+								},
+							],
+						},
+					],
+				},
+			}),
+		);
+
+		const result = await checkHookFileReferences(projectDir);
+		expect(result.status).toBe("fail");
+		expect(result.details).toContain("nope-home-missing.cjs");
+	});
+
+	test("detects missing file for %USERPROFILE% Windows path form", async () => {
+		await mkdir(join(projectDir, ".claude"), { recursive: true });
+		await writeFile(
+			join(projectDir, ".claude", "settings.json"),
+			JSON.stringify({
+				hooks: {
+					Stop: [
+						{
+							hooks: [
+								{
+									type: "command",
+									command: 'node "%USERPROFILE%\\\\.claude\\\\hooks\\\\nope-winprofile.cjs"',
+								},
+							],
+						},
+					],
+				},
+			}),
+		);
+
+		const result = await checkHookFileReferences(projectDir);
+		expect(result.status).toBe("fail");
+		expect(result.details).toContain("nope-winprofile.cjs");
+	});
+
+	test("auto-fix removes empty hooks key when all entries are pruned", async () => {
+		await mkdir(join(projectDir, ".claude"), { recursive: true });
+		const settingsPath = join(projectDir, ".claude", "settings.json");
+		await writeFile(
+			settingsPath,
+			JSON.stringify({
+				hooks: {
+					PreToolUse: [
+						{
+							matcher: "Edit",
+							hooks: [
+								{
+									type: "command",
+									command: 'node "$CLAUDE_PROJECT_DIR"/.claude/hooks/missing.cjs',
+								},
+							],
+						},
+					],
+					Stop: [
+						{
+							hooks: [
+								{
+									type: "command",
+									command: 'node "$CLAUDE_PROJECT_DIR"/.claude/hooks/session-state.cjs',
+								},
+							],
+						},
+					],
+				},
+				otherField: "preserved",
+			}),
+		);
+
+		const result = await checkHookFileReferences(projectDir);
+		const fixResult = await result.fix?.execute();
+		expect(fixResult?.success).toBe(true);
+
+		const updated = JSON.parse(await readFile(settingsPath, "utf-8"));
+		expect(updated.hooks).toBeUndefined();
+		expect(updated.otherField).toBe("preserved");
 	});
 });

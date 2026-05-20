@@ -1,6 +1,6 @@
 {
 	"name": "claudekit-cli",
-	"version": "3.40.3-dev.2",
+	"version": "4.3.1-dev.2",
 	"description": "CLI tool for bootstrapping and updating ClaudeKit projects",
 	"type": "module",
 	"repository": {
@@ -17,12 +17,15 @@
 	"files": [
 		"bin/ck.js",
 		"dist/index.js",
-		"dist/ui/"
+		"dist/ui/",
+		"cli-manifest.json"
 	],
 	"scripts": {
 		"dev": "bun run src/index.ts",
 		"dashboard:dev": "cd src/ui && bun install --silent && cd ../.. && bun run src/index.ts config ui --dev",
 		"ui:build": "cd src/ui && bun install --silent && bun run build",
+		"ui:test": "cd src/ui && bun install --silent && bun run test",
+		"ui:test:plans": "cd src/ui && bun install --silent && bunx vitest run src/hooks/__tests__/use-plans-dashboard.vitest.ts src/pages/__tests__/PlansPage.vitest.tsx src/pages/__tests__/PlanDetailPage.vitest.tsx",
 		"ui:dev": "cd src/ui && bun run dev",
 		"build": "bun build src/index.ts --outdir dist --target node --external @octokit/rest --external better-sqlite3 && node -e \"const fs=require('fs'),f='dist/index.js',c=fs.readFileSync(f,'utf-8');fs.writeFileSync(f,c.replace(/^#!.*\\n\\/\\/ @bun\\n/,''))\"",
 		"verify:package": "node scripts/prepublish-check.js",
@@ -30,6 +33,8 @@
 		"test:integration": "CK_RUN_CLI_INTEGRATION=1 bun test tests/integration/cli.test.ts",
 		"test:watch": "bun test --watch",
 		"test:quick": "./scripts/dev-quick-start.sh test",
+		"test:e2e": "playwright test --config=playwright.config.ts",
+		"test:e2e:ui": "playwright test --ui --config=playwright.config.ts",
 		"lint": "biome check .",
 		"lint:fix": "biome check --fix .",
 		"lint:fix-unsafe": "biome check --fix --unsafe .",
@@ -38,9 +43,14 @@
 		"dev:quick": "./scripts/dev-quick-start.sh",
 		"dev:all": "./scripts/dev-quick-start.sh all",
 		"metrics": "bun run scripts/workflow-metrics.ts",
-		"validate": "bun run typecheck && bun run lint && bun test && bun run build",
+		"validate": "bun run typecheck && bun run lint && bun test && bun run ui:test && bun run build",
+		"ci:local": "bash scripts/ci-local.sh",
 		"install:hooks": "./.githooks/install.sh",
-		"prepare": "node -e \"try{require('child_process').execSync('git rev-parse --git-dir',{stdio:'ignore'});require('child_process').execSync('bash .githooks/install.sh',{stdio:'inherit'})}catch(e){console.warn('[i] Hook install skipped:',e.message)}\""
+		"prepare": "node -e \"try{require('child_process').execSync('git rev-parse --git-dir',{stdio:'ignore'});require('child_process').execSync('bash .githooks/install.sh',{stdio:'inherit'})}catch(e){console.warn('[i] Hook install skipped:',e.message)}\"",
+		"help:check-parity": "bun run scripts/check-help-parity.ts",
+		"manifest:generate": "bun run scripts/generate-cli-manifest.ts",
+		"docs:generate": "bun run scripts/generate-cli-reference.ts",
+		"prepublishOnly": "bun run help:check-parity && bun run manifest:generate && bun run docs:generate"
 	},
 	"keywords": [
 		"cli",
@@ -84,6 +94,7 @@
 	},
 	"devDependencies": {
 		"@biomejs/biome": "^1.9.4",
+		"@playwright/test": "^1.59.1",
 		"@semantic-release/changelog": "^6.0.3",
 		"@semantic-release/git": "^10.0.1",
 		"@types/better-sqlite3": "^7.6.13",

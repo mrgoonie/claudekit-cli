@@ -132,6 +132,7 @@ export async function getUninstallManifest(
 	claudeDir: string,
 	kit?: KitType,
 ): Promise<UninstallManifestResult> {
+	const normalizeTrackedPath = (relativePath: string): string => relativePath.replace(/\\/g, "/");
 	const detection = await detectMetadataFormat(claudeDir);
 
 	// Multi-kit format
@@ -152,7 +153,7 @@ export async function getUninstallManifest(
 			}
 
 			// Get files for this kit only
-			const kitFiles = kitMeta.files.map((f) => f.path);
+			const kitFiles = kitMeta.files.map((f) => normalizeTrackedPath(f.path));
 
 			// Check for shared files with other kits (preserve them)
 			const sharedFiles = new Set<string>();
@@ -161,7 +162,7 @@ export async function getUninstallManifest(
 					const otherMeta = detection.metadata.kits[otherKit];
 					if (otherMeta?.files) {
 						for (const f of otherMeta.files) {
-							sharedFiles.add(f.path);
+							sharedFiles.add(normalizeTrackedPath(f.path));
 						}
 					}
 				}
@@ -185,7 +186,7 @@ export async function getUninstallManifest(
 		// Full uninstall - all kits
 		const allFiles = getAllTrackedFiles(detection.metadata);
 		return {
-			filesToRemove: allFiles.map((f) => f.path),
+			filesToRemove: allFiles.map((f) => normalizeTrackedPath(f.path)),
 			filesToPreserve: USER_CONFIG_PATTERNS,
 			hasManifest: true,
 			isMultiKit: true,
@@ -195,8 +196,10 @@ export async function getUninstallManifest(
 
 	// Legacy format
 	if (detection.format === "legacy" && detection.metadata) {
-		const legacyFiles = detection.metadata.files?.map((f) => f.path) || [];
-		const installedFiles = detection.metadata.installedFiles || [];
+		const legacyFiles = detection.metadata.files?.map((f) => normalizeTrackedPath(f.path)) || [];
+		const installedFiles = (detection.metadata.installedFiles || []).map((path) =>
+			normalizeTrackedPath(path),
+		);
 		const hasFiles = legacyFiles.length > 0 || installedFiles.length > 0;
 
 		// If no files tracked, fall through to legacy hardcoded directories

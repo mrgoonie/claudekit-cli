@@ -23,10 +23,12 @@ function shellEscape(str: string): string {
 }
 
 function runXurl(args: string, timeoutMs = 30000): string {
+	// Cross-platform: use cmd.exe on Windows, /bin/sh on Unix
+	const shell = process.platform === "win32" ? "cmd.exe" : "/bin/sh";
 	return execSync(`xurl ${args}`, {
 		stdio: "pipe",
 		timeout: timeoutMs,
-		shell: "/bin/sh",
+		shell,
 	}).toString();
 }
 

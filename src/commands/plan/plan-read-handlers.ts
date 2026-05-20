@@ -5,6 +5,7 @@
  */
 import { existsSync, statSync } from "node:fs";
 import { basename, dirname, join, relative, resolve } from "node:path";
+import { CkConfigManager } from "@/domains/config/index.js";
 import {
 	buildPlanSummary,
 	parsePlanFile,
@@ -12,18 +13,30 @@ import {
 	validatePlanFile,
 } from "@/domains/plan-parser/index.js";
 import type { PlanPhase, PlanSummary, ValidationResult } from "@/domains/plan-parser/plan-types.js";
+import { findProjectRoot } from "@/domains/plan-parser/plans-registry.js";
 import { logger } from "@/shared/logger.js";
 import { output } from "@/shared/output-manager.js";
 import pc from "picocolors";
 import type { PlanCommandOptions } from "./plan-command.js";
 import { isJsonOutput, progressBar, renderPhasesTable, resolvePlanFile } from "./plan-command.js";
+import { resolvePlanDependencies } from "./plan-dependencies.js";
+import { getGlobalPlansDirFromCwd, resolveTargetFromBase } from "./plan-scope-context.js";
 
 /** parse — output phases as ASCII table or JSON */
 export async function handleParse(
 	target: string | undefined,
 	options: PlanCommandOptions,
 ): Promise<void> {
-	const planFile = resolvePlanFile(target);
+	const globalBaseDir = options.global ? await getGlobalPlansDirFromCwd() : undefined;
+	const resolvedTarget =
+		target && globalBaseDir ? resolveTargetFromBase(target, globalBaseDir) : target;
+	if (target && globalBaseDir && !resolvedTarget) {
+		output.error("[X] Target must stay within the configured global plans root");
+		process.exitCode = 1;
+		return;
+	}
+	const safeTarget = resolvedTarget ?? undefined;
+	const planFile = resolvePlanFile(safeTarget, globalBaseDir);
 	if (!planFile) {
 		output.error(`[X] No plan.md found${target ? ` at '${target}'` : " in current directory"}`);
 		process.exitCode = 1;
@@ -67,7 +80,16 @@ export async function handleValidate(
 	target: string | undefined,
 	options: PlanCommandOptions,
 ): Promise<void> {
-	const planFile = resolvePlanFile(target);
+	const globalBaseDir = options.global ? await getGlobalPlansDirFromCwd() : undefined;
+	const resolvedTarget =
+		target && globalBaseDir ? resolveTargetFromBase(target, globalBaseDir) : target;
+	if (target && globalBaseDir && !resolvedTarget) {
+		output.error("[X] Target must stay within the configured global plans root");
+		process.exitCode = 1;
+		return;
+	}
+	const safeTarget = resolvedTarget ?? undefined;
+	const planFile = resolvePlanFile(safeTarget, globalBaseDir);
 	if (!planFile) {
 		output.error(`[X] No plan.md found${target ? ` at '${target}'` : " in current directory"}`);
 		process.exitCode = 1;
@@ -119,8 +141,18 @@ export async function handleStatus(
 	target: string | undefined,
 	options: PlanCommandOptions,
 ): Promise<void> {
+	const globalBaseDir = options.global ? await getGlobalPlansDirFromCwd() : undefined;
+	const resolvedTarget =
+		target && globalBaseDir ? resolveTargetFromBase(target, globalBaseDir) : target;
+	if (target && globalBaseDir && !resolvedTarget) {
+		output.error("[X] Target must stay within the configured global plans root");
+		process.exitCode = 1;
+		return;
+	}
+	const effectiveTarget = !resolvedTarget && globalBaseDir ? globalBaseDir : resolvedTarget;
+
 	// Check if target is a plans/ directory (contains plan subdirs, not a plan.md itself)
-	const t = target ? resolve(target) : null;
+	const t = effectiveTarget ? resolve(effectiveTarget) : null;
 	const plansDir =
 		t && existsSync(t) && statSync(t).isDirectory() && !existsSync(join(t, "plan.md")) ? t : null;
 
@@ -132,6 +164,10 @@ export async function handleStatus(
 			return;
 		}
 
+		// Preload config once to avoid N+1 reads during dependency resolution
+		const projectRoot = findProjectRoot(plansDir);
+		const { config: preloadedConfig } = await CkConfigManager.loadFull(projectRoot);
+
 		if (isJsonOutput(options)) {
 			const summaries = planFiles.flatMap((pf) => {
 				try {
@@ -140,7 +176,20 @@ export async function handleStatus(
 					return [];
 				}
 			});
-			console.log(JSON.stringify(summaries, null, 2));
+			const withDependencies = await Promise.all(
+				summaries.map(async (summary) => ({
+					...summary,
+					dependencyStatus: {
+						blockedBy: await resolvePlanDependencies(summary.blockedBy, summary.planFile, {
+							preloadedConfig,
+						}),
+						blocks: await resolvePlanDependencies(summary.blocks, summary.planFile, {
+							preloadedConfig,
+						}),
+					},
+				})),
+			);
+			console.log(JSON.stringify(withDependencies, null, 2));
 			return;
 		}
 
@@ -150,11 +199,31 @@ export async function handleStatus(
 		for (const pf of planFiles) {
 			try {
 				const s = buildPlanSummary(pf);
+				const blockedBy = await resolvePlanDependencies(s.blockedBy, pf, { preloadedConfig });
+				const blocks = await resolvePlanDependencies(s.blocks, pf, { preloadedConfig });
 				const bar = progressBar(s.completed, s.totalPhases);
 				const title = s.title ?? basename(dirname(pf));
 				console.log(`  ${pc.bold(title)}`);
 				console.log(`  ${bar}`);
 				if (s.inProgress > 0) console.log(`  [~] ${s.inProgress} in progress`);
+				const selfRefs = [...blockedBy, ...blocks].filter((d) => d.isSelfReference);
+				if (selfRefs.length > 0) {
+					console.log(
+						`  [X] Circular: ${selfRefs.map((d) => d.reference).join(", ")} (self-reference)`,
+					);
+				}
+				const validBlockedBy = blockedBy.filter((d) => !d.isSelfReference);
+				const validBlocks = blocks.filter((d) => !d.isSelfReference);
+				if (validBlockedBy.length > 0) {
+					console.log(
+						`  [!] Blocked by: ${validBlockedBy.map((dependency) => `${dependency.reference} (${dependency.exists ? (dependency.status ?? "pending") : "not found"})`).join(", ")}`,
+					);
+				}
+				if (validBlocks.length > 0) {
+					console.log(
+						`  [i] Blocks: ${validBlocks.map((dependency) => `${dependency.reference} (${dependency.exists ? (dependency.status ?? "pending") : "not found"})`).join(", ")}`,
+					);
+				}
 				console.log();
 			} catch {
 				console.log(`  [X] Failed to read: ${basename(dirname(pf))}`);
@@ -165,7 +234,8 @@ export async function handleStatus(
 	}
 
 	// Single plan mode
-	const planFile = resolvePlanFile(target);
+	const safeTarget = resolvedTarget ?? undefined;
+	const planFile = resolvePlanFile(safeTarget, globalBaseDir);
 	if (!planFile) {
 		output.error(`[X] No plan.md found${target ? ` at '${target}'` : " in current directory"}`);
 		process.exitCode = 1;
@@ -181,8 +251,11 @@ export async function handleStatus(
 		return;
 	}
 
+	const blockedBy = await resolvePlanDependencies(summary.blockedBy, planFile);
+	const blocks = await resolvePlanDependencies(summary.blocks, planFile);
+
 	if (isJsonOutput(options)) {
-		console.log(JSON.stringify(summary, null, 2));
+		console.log(JSON.stringify({ ...summary, dependencyStatus: { blockedBy, blocks } }, null, 2));
 		return;
 	}
 
@@ -195,22 +268,53 @@ export async function handleStatus(
 	console.log(`  [OK] Completed:   ${summary.completed}`);
 	console.log(`  [~]  In Progress: ${summary.inProgress}`);
 	console.log(`  [ ]  Pending:     ${summary.pending}`);
+	if (summary.branch) console.log(`  Branch: ${summary.branch}`);
+	if (summary.tags.length > 0) console.log(`  Tags: ${summary.tags.join(", ")}`);
+	if (blockedBy.length > 0) {
+		console.log();
+		console.log("  Blocked By:");
+		for (const dependency of blockedBy) {
+			const icon = dependency.exists ? "[OK]" : "[!]";
+			const status = dependency.exists ? (dependency.status ?? "pending") : "not found";
+			const titleText = dependency.title ? ` ${dependency.title}` : "";
+			console.log(`  ${icon} ${dependency.reference}${titleText} (${status})`);
+		}
+	}
+	if (blocks.length > 0) {
+		console.log();
+		console.log("  Blocks:");
+		for (const dependency of blocks) {
+			const icon = dependency.exists ? "[OK]" : "[!]";
+			const status = dependency.exists ? (dependency.status ?? "pending") : "not found";
+			const titleText = dependency.title ? ` ${dependency.title}` : "";
+			console.log(`  ${icon} ${dependency.reference}${titleText} (${status})`);
+		}
+	}
 	console.log();
 }
 
-/** kanban — open dashboard at /kanban?file=<path> */
+/** kanban — open dashboard at /plans?dir=<plans-root>&view=kanban */
 export async function handleKanban(
 	target: string | undefined,
 	options: PlanCommandOptions,
 ): Promise<void> {
-	const planFile = resolvePlanFile(target);
+	const globalBaseDir = options.global ? await getGlobalPlansDirFromCwd() : undefined;
+	const resolvedTarget =
+		target && globalBaseDir ? resolveTargetFromBase(target, globalBaseDir) : target;
+	if (target && globalBaseDir && !resolvedTarget) {
+		output.error("[X] Target must stay within the configured global plans root");
+		process.exitCode = 1;
+		return;
+	}
+	const safeTarget = resolvedTarget ?? undefined;
+	const planFile = resolvePlanFile(safeTarget, globalBaseDir);
 	if (!planFile) {
 		output.error(`[X] No plan.md found${target ? ` at '${target}'` : " in current directory"}`);
 		process.exitCode = 1;
 		return;
 	}
 
-	logger.info("Starting ClaudeKit Dashboard (Kanban view)...");
+	logger.info("Starting ClaudeKit Dashboard (Plans kanban view)...");
 
 	const { port, dev = false } = options;
 	const noOpen = options.open === false;
@@ -225,11 +329,11 @@ export async function handleKanban(
 		return;
 	}
 
-	const encodedPath = encodeURIComponent(planFile);
-	const url = `http://localhost:${server.port}/kanban?file=${encodedPath}`;
+	const route = `/plans?dir=${encodeURIComponent(dirname(dirname(planFile)))}&view=kanban`;
+	const url = `http://localhost:${server.port}${route}`;
 
 	console.log();
-	console.log(pc.bold("  ClaudeKit Dashboard — Kanban"));
+	console.log(pc.bold("  ClaudeKit Dashboard — Plans"));
 	console.log(pc.dim("  ──────────────────────────────"));
 	console.log(`  Local:  ${pc.cyan(url)}`);
 	console.log(`  File:   ${planFile}`);

@@ -1,6 +1,5 @@
 import { createHash } from "node:crypto";
-import { createReadStream } from "node:fs";
-import { stat } from "node:fs/promises";
+import { readFile, stat } from "node:fs/promises";
 import { relative } from "node:path";
 import { getAllTrackedFiles } from "@/domains/migration/metadata-migration.js";
 import { mapWithLimit } from "@/shared/concurrent-file-ops.js";
@@ -28,27 +27,23 @@ export interface OwnershipCheckResult {
  */
 export class OwnershipChecker {
 	/**
-	 * Calculate SHA-256 checksum of file using streaming
-	 * Memory efficient for large files
+	 * Calculate SHA-256 checksum of a tracked file
+	 * Uses direct reads because tracked ClaudeKit assets are small and Bun's
+	 * Node stream shim can stall under large concurrent test runs.
 	 *
 	 * @param filePath Absolute path to file
 	 * @returns Hex string (64 chars)
 	 * @throws Error if file doesn't exist or can't be read
 	 */
 	static async calculateChecksum(filePath: string): Promise<string> {
-		return new Promise((resolve, reject) => {
-			const hash = createHash("sha256");
-			const stream = createReadStream(filePath);
-
-			stream.on("data", (chunk) => hash.update(chunk));
-			stream.on("end", () => {
-				resolve(hash.digest("hex"));
-			});
-			stream.on("error", (err) => {
-				stream.destroy(); // Only needed in error handler for cleanup
-				reject(new Error(operationError("Checksum calculation", filePath, err.message)));
-			});
-		});
+		try {
+			return createHash("sha256")
+				.update(await readFile(filePath))
+				.digest("hex");
+		} catch (err) {
+			const message = err instanceof Error ? err.message : String(err);
+			throw new Error(operationError("Checksum calculation", filePath, message));
+		}
 	}
 
 	/**
@@ -90,7 +85,7 @@ export class OwnershipChecker {
 		const relativePath = relative(claudeDir, filePath).replace(/\\/g, "/");
 
 		// Find file in tracked files (works with both kits[kit].files and legacy metadata.files)
-		const tracked = allTrackedFiles.find((f) => f.path === relativePath);
+		const tracked = allTrackedFiles.find((f) => f.path.replace(/\\/g, "/") === relativePath);
 		if (!tracked) {
 			// File not in metadata → user-created
 			return { path: filePath, ownership: "user", exists: true };

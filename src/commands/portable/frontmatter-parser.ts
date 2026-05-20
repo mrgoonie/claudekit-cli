@@ -36,6 +36,10 @@ const KNOWN_KEYS: Record<string, keyof ParsedFrontmatter> = {
 	"argument-hint": "argumentHint",
 };
 
+function normalizeFrontmatterInput(content: string): string {
+	return content.replace(/^\uFEFF/, "");
+}
+
 /**
  * Regex-based fallback parser for when gray-matter/js-yaml fails on
  * unquoted YAML values containing colons, brackets, or other special chars.
@@ -77,8 +81,12 @@ function parseFrontmatterFallback(content: string): FrontmatterParseResult | nul
  * Parse frontmatter and body from markdown content string
  */
 export function parseFrontmatter(content: string): FrontmatterParseResult {
+	const normalizedContent = normalizeFrontmatterInput(content);
+
 	try {
-		const { data, content: body } = matter(content);
+		const { data, content: body } = matter(normalizedContent, {
+			engines: { javascript: { parse: () => ({}) } },
+		});
 		const frontmatter: ParsedFrontmatter = {};
 		const warnings: string[] = [];
 
@@ -106,7 +114,7 @@ export function parseFrontmatter(content: string): FrontmatterParseResult {
 	} catch (error) {
 		// gray-matter failed (e.g. unquoted YAML values with colons/brackets).
 		// Try regex-based fallback before giving up.
-		const fallback = parseFrontmatterFallback(content);
+		const fallback = parseFrontmatterFallback(normalizedContent);
 		if (fallback && Object.keys(fallback.frontmatter).length > 0) {
 			logger.verbose(
 				`Failed to parse frontmatter: ${error instanceof Error ? error.message : "Unknown error"} (recovered via fallback)`,
@@ -117,7 +125,7 @@ export function parseFrontmatter(content: string): FrontmatterParseResult {
 		logger.warning(
 			`Failed to parse frontmatter: ${error instanceof Error ? error.message : "Unknown error"}`,
 		);
-		return { frontmatter: {}, body: content.trim(), warnings: [] };
+		return { frontmatter: {}, body: normalizedContent.trim(), warnings: [] };
 	}
 }
 

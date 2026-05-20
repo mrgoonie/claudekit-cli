@@ -2,18 +2,43 @@
  * Project dashboard page - displays project overview and actions
  */
 import type React from "react";
+import { useEffect, useState } from "react";
 import { useOutletContext } from "react-router-dom";
 import ProjectDashboard from "../components/ProjectDashboard";
 import { useI18n } from "../i18n";
+import type { AppLayoutContext } from "../layouts/app-layout-context";
+import { fetchProject } from "../services/api";
 import type { Project } from "../types";
-
-interface OutletContext {
-	project: Project | null;
-}
 
 const ProjectDashboardPage: React.FC = () => {
 	const { t } = useI18n();
-	const { project } = useOutletContext<OutletContext>();
+	const { project } = useOutletContext<AppLayoutContext>();
+	const [detailedProject, setDetailedProject] = useState<Project | null>(null);
+
+	useEffect(() => {
+		if (!project?.id) {
+			setDetailedProject(null);
+			return;
+		}
+
+		setDetailedProject(null);
+		let cancelled = false;
+		void fetchProject(project.id)
+			.then((nextProject) => {
+				if (!cancelled) {
+					setDetailedProject(nextProject);
+				}
+			})
+			.catch(() => {
+				if (!cancelled) {
+					setDetailedProject(null);
+				}
+			});
+
+		return () => {
+			cancelled = true;
+		};
+	}, [project?.id]);
 
 	if (!project) {
 		return (
@@ -26,7 +51,9 @@ const ProjectDashboardPage: React.FC = () => {
 		);
 	}
 
-	return <ProjectDashboard project={project} />;
+	const projectForView = detailedProject?.id === project.id ? detailedProject : project;
+
+	return <ProjectDashboard project={projectForView} />;
 };
 
 export default ProjectDashboardPage;

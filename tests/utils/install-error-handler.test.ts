@@ -137,6 +137,73 @@ describe("install-error-handler", () => {
 			expect(loggerInfoSpy).toHaveBeenCalledWith("  sudo apt-get install -y ffmpeg");
 		});
 
+		it("should show Windows system tool remediation without nonexistent librsvg winget command", () => {
+			const pipRetry =
+				'.\\.claude\\skills\\.venv\\Scripts\\Activate.ps1; python -m pip install "<package>"';
+			const summary: InstallErrorSummary = {
+				exit_code: 2,
+				timestamp: new Date().toISOString(),
+				critical_failures: [],
+				optional_failures: [
+					"FFmpeg: installation failed",
+					"librsvg (rsvg-convert): installation failed",
+				],
+				skipped: [],
+				remediation: {
+					sudo_packages: "",
+					winget_packages: "winget install Gyan.FFmpeg ImageMagick.ImageMagick",
+					build_tools: "",
+					pip_retry: pipRetry,
+				},
+			};
+
+			writeFileSync(join(testDir, ".install-error-summary.json"), JSON.stringify(summary));
+			displayInstallErrors(testDir);
+
+			expect(loggerInfoSpy).toHaveBeenCalledWith("Install system packages:");
+			expect(loggerInfoSpy).toHaveBeenCalledWith("  winget install Gyan.FFmpeg");
+			expect(loggerInfoSpy).toHaveBeenCalledWith(
+				"  choco install rsvg-convert -y  # run from elevated PowerShell",
+			);
+			expect(loggerInfoSpy).toHaveBeenCalledWith(
+				"  pacman -S mingw-w64-x86_64-librsvg  # MSYS2 alternative",
+			);
+			const loggedInfo: string[] = loggerInfoSpy.mock.calls.map((call: unknown[]) =>
+				String(call[0]),
+			);
+			expect(loggedInfo.some((line) => line.includes("GNOME.librsvg"))).toBe(false);
+			expect(loggerInfoSpy).not.toHaveBeenCalledWith("Then retry failed packages manually:");
+			expect(loggerInfoSpy).not.toHaveBeenCalledWith(`  ${pipRetry}`);
+		});
+
+		it("should show both system and pip remediation for mixed optional failures", () => {
+			const pipRetry =
+				'.\\.claude\\skills\\.venv\\Scripts\\Activate.ps1; python -m pip install "<package>"';
+			const summary: InstallErrorSummary = {
+				exit_code: 2,
+				timestamp: new Date().toISOString(),
+				critical_failures: [],
+				optional_failures: [
+					"FFmpeg: installation failed",
+					"ai-multimodal (pytest-mock>=3.12.0): Package install failed",
+				],
+				skipped: [],
+				remediation: {
+					sudo_packages: "",
+					winget_packages: "winget install Gyan.FFmpeg ImageMagick.ImageMagick",
+					build_tools: "",
+					pip_retry: pipRetry,
+				},
+			};
+
+			writeFileSync(join(testDir, ".install-error-summary.json"), JSON.stringify(summary));
+			displayInstallErrors(testDir);
+
+			expect(loggerInfoSpy).toHaveBeenCalledWith("  winget install Gyan.FFmpeg");
+			expect(loggerInfoSpy).toHaveBeenCalledWith("Then retry failed packages manually:");
+			expect(loggerInfoSpy).toHaveBeenCalledWith(`  ${pipRetry}`);
+		});
+
 		it("should handle malformed JSON gracefully", () => {
 			writeFileSync(join(testDir, ".install-error-summary.json"), "{ invalid json }");
 			displayInstallErrors(testDir);

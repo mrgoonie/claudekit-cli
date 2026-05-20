@@ -92,6 +92,11 @@ const ProjectConfigPage: React.FC = () => {
 				fields: [
 					{ path: "paths.docs", label: t("fieldDocsPath"), description: t("fieldDocsPathDesc") },
 					{ path: "paths.plans", label: t("fieldPlansPath"), description: t("fieldPlansPathDesc") },
+					{
+						path: "paths.globalPlans",
+						label: t("fieldGlobalPlansPath"),
+						description: t("fieldGlobalPlansPathDesc"),
+					},
 				],
 			},
 			{

@@ -21,8 +21,11 @@ export interface SkillsDependenciesConfig {
  */
 export const SKILLS_DEPENDENCIES: SkillsDependenciesConfig = {
 	python: [
-		{ name: "google-genai", description: "Required for ai-multimodal skill (Gemini API)" },
-		{ name: "pillow, pypdf", description: "Image/PDF processing" },
+		{ name: "google-genai", description: "Required for ai-multimodal Gemini provider support" },
+		{
+			name: "pillow, pypdf, requests",
+			description: "Image/PDF processing and provider HTTP clients",
+		},
 		{ name: "python-dotenv", description: "Environment variable management" },
 	],
 	system: [

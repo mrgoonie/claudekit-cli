@@ -16,8 +16,8 @@ export const updateCommandHelp: CommandHelp = {
 			description: "Check for CLI updates without installing",
 		},
 		{
-			command: "ck update --beta --yes",
-			description: "Update to latest beta version without confirmation",
+			command: "ck update --dev --yes",
+			description: "Update to latest dev version without confirmation",
 		},
 	],
 	optionGroups: [
@@ -37,8 +37,8 @@ export const updateCommandHelp: CommandHelp = {
 					description: "Skip all confirmation prompts (CLI and kit content update)",
 				},
 				{
-					flags: "--beta",
-					description: "Update to the latest beta version",
+					flags: "-d, --dev",
+					description: "Update to the latest dev version",
 				},
 				{
 					flags: "--registry <url>",
@@ -49,6 +49,14 @@ export const updateCommandHelp: CommandHelp = {
 		{
 			title: "Deprecated Options",
 			options: [
+				{
+					flags: "--beta",
+					description: "(deprecated) Alias for --dev; use -d, --dev instead",
+					deprecated: {
+						message: "Use '-d, --dev' to update to the latest dev version",
+						alternative: "-d, --dev",
+					},
+				},
 				{
 					flags: "--kit <kit>",
 					description: "This option is no longer supported with 'ck update'",

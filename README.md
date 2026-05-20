@@ -148,6 +148,10 @@ ck new --prefix
 # Offline installation (from local archive or directory)
 ck new --archive ~/downloads/engineer-v1.16.0.zip
 ck new --kit-path ~/extracted-kit/
+
+# Direct repo downloads are also supported
+ck new --archive ~/downloads/claudekit-engineer-main.zip
+ck new --kit-path ~/downloads/claudekit-engineer-main/
 ```
 
 **Flags:**
@@ -157,6 +161,8 @@ ck new --kit-path ~/extracted-kit/
 - `--opencode/--gemini`: Install optional packages
 - `--archive <path>`: Use local archive (zip/tar.gz) instead of downloading
 - `--kit-path <path>`: Use local kit directory instead of downloading
+
+`--archive` and `--kit-path` both accept direct repo downloads with a single wrapper directory, including GitHub "Download ZIP" archives and extracted repo folders that still contain `claudekit-engineer-main/` or similar at the top level.
 
 ### Initialize or Update Project
 
@@ -188,6 +194,10 @@ ck init --exclude "*.local" --prefix
 # Offline installation (from local archive or directory)
 ck init --archive ~/downloads/engineer-v1.16.0.zip
 ck init --kit-path ~/extracted-kit/
+
+# Direct repo downloads are also supported
+ck init --archive ~/downloads/claudekit-engineer-main.zip
+ck init --kit-path ~/downloads/claudekit-engineer-main/
 ```
 
 **Flags:**
@@ -198,6 +208,8 @@ ck init --kit-path ~/extracted-kit/
 - `--prefix`: Apply /ck: namespace to commands
 - `--archive <path>`: Use local archive (zip/tar.gz) instead of downloading
 - `--kit-path <path>`: Use local kit directory instead of downloading
+
+`--archive` and `--kit-path` both accept direct repo downloads with a single wrapper directory, including GitHub "Download ZIP" archives and extracted repo folders that still contain `claudekit-engineer-main/` or similar at the top level.
 
 **Default Behavior with `-y` Flag:**
 
@@ -281,7 +293,7 @@ ck doctor --verbose --fix
 
 **Health Checks:**
 - **System**: Node.js, npm, Python, pip, Claude CLI, git, gh CLI
-- **ClaudeKit**: Global/project installation, versions, skills
+- **ClaudeKit**: Global/project installation, versions, skills, skill listing budget, duplicate skill inventory
 - **Auth**: GitHub CLI authentication, repository access
 - **Project**: package.json, node_modules, lock files
 - **Modules**: Dynamic skill dependency resolution
@@ -294,6 +306,9 @@ ck doctor --verbose --fix
 | Corrupted node_modules | Reinstall dependencies |
 | Missing global install | Run `ck init --global` |
 | Missing skill deps | Install in skill directory |
+| Missing/low Engineer skill listing budget | Ensure computed `skillListingBudgetFraction` and a valid ClaudeKit-recommended `skillListingMaxDescChars` ceiling in project settings |
+
+`ck doctor` never writes `skillOverrides`, hides skills, or deletes duplicate skills automatically. It reports existing `skillOverrides` and inventory issues so all active project/global skills can stay user-invocable while listing pressure is managed through 200k-context-floor project settings and bounded descriptions.
 
 **Exit Codes:**
 - `0`: All checks pass or issues fixed
@@ -309,6 +324,7 @@ Remove ClaudeKit installations from your system:
 ck uninstall              # Interactive mode - prompts for scope and confirmation
 ck uninstall --local      # Uninstall only local installation (current project)
 ck uninstall --global     # Uninstall only global installation (~/.claude/)
+ck uninstall -g --kit marketing  # Remove only global Marketing kit
 ck uninstall -l -y        # Local only, skip confirmation
 ck uninstall -g -y        # Global only, skip confirmation
 ck uninstall --yes        # Non-interactive - skip confirmation (for scripts)
@@ -319,7 +335,11 @@ ck uninstall --yes        # Non-interactive - skip confirmation (for scripts)
   - **Local only**: Remove from current project (`.claude/`)
   - **Global only**: Remove from user directory (`~/.claude/`)
   - **Both**: Remove all ClaudeKit installations
+- When multiple kits are installed in the selected scope, interactive uninstall prompts for:
+  - **Marketing kit only** or **Engineer kit only**: Remove one kit and preserve the other
+  - **All ClaudeKit kits**: Remove the full selected installation scope
 - Use `--local` or `--global` flags to skip the prompt
+- Use `--kit engineer` or `--kit marketing` to skip the kit prompt
 
 **What it does:**
 - Detects local `.claude` directory in current project
@@ -634,6 +654,25 @@ bun test
 # Optional: run expensive CLI integration tests explicitly
 bun run test:integration
 ```
+
+## E2E Tests
+
+Playwright E2E tests cover the `ck migrate` dashboard (3 scenarios). Tests run against the local dev server and use API mocking — no real filesystem state is modified.
+
+**Prerequisites:** Node 18+ or Bun 1.0+, Chromium (installed automatically).
+
+```bash
+# One-time browser setup (if not already installed)
+./node_modules/.bin/playwright install chromium
+
+# Run all E2E specs
+bun run test:e2e
+
+# Interactive UI mode (watch + trace viewer)
+bun run test:e2e:ui
+```
+
+Note: The dev server starts automatically via `bun run dashboard:dev`. CI wiring is a separate follow-up (local-only for now).
 
 ## FAQ
 

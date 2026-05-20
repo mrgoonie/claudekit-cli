@@ -4,6 +4,10 @@ import { isUnknownChecksum } from "./reconcile-types.js";
 import type { ReconcileAction } from "./reconcile-types.js";
 import type { ProviderType } from "./types.js";
 
+interface BackfillRegistryChecksumsDeps {
+	addPortableInstallation?: typeof addPortableInstallation;
+}
+
 function shouldBackfillRegistry(action: ReconcileAction): boolean {
 	return (
 		action.action === "skip" &&
@@ -20,7 +24,10 @@ function shouldBackfillRegistry(action: ReconcileAction): boolean {
 export async function backfillRegistryChecksums(
 	actions: ReconcileAction[],
 	registry: PortableRegistryV3,
+	deps?: BackfillRegistryChecksumsDeps,
 ): Promise<void> {
+	const addInstallation = deps?.addPortableInstallation ?? addPortableInstallation;
+
 	for (const action of actions) {
 		if (!shouldBackfillRegistry(action)) continue;
 
@@ -33,7 +40,7 @@ export async function backfillRegistryChecksums(
 		);
 		if (!registryEntry) continue;
 
-		await addPortableInstallation(
+		await addInstallation(
 			action.item,
 			action.type,
 			action.provider as ProviderType,

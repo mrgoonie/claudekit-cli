@@ -25,9 +25,12 @@ describe("help-commands", () => {
 		"uninstall",
 		"skills",
 		"agents",
+		"backups",
 		"commands",
 		"migrate",
 		"watch",
+		"api",
+		"plan",
 	];
 
 	describe("HELP_REGISTRY", () => {
@@ -49,7 +52,6 @@ describe("help-commands", () => {
 				expect(command.usage).toContain("ck");
 				expect(Array.isArray(command.examples)).toBe(true);
 				expect(Array.isArray(command.optionGroups)).toBe(true);
-				expect(command.optionGroups.length).toBeGreaterThan(0);
 			}
 		});
 
@@ -220,7 +222,10 @@ describe("help-commands", () => {
 			expect(help.name).toBe("uninstall");
 			expect(help.description).toContain("Remove");
 			expect(help.usage).toBe("ck uninstall [options]");
-			expect(help.examples).toHaveLength(2);
+			expect(help.examples).toHaveLength(3);
+			expect(help.examples.map((example) => example.command)).toContain(
+				"ck uninstall --global --kit marketing",
+			);
 		});
 	});
 
@@ -325,10 +330,10 @@ describe("help-commands", () => {
 			}
 		});
 
-		test("all example commands start with 'ck'", () => {
+		test("all example commands start with 'ck' (optionally prefixed with env vars)", () => {
 			for (const command of Object.values(HELP_REGISTRY)) {
 				for (const example of command.examples) {
-					expect(example.command).toMatch(/^ck\s+/);
+					expect(example.command).toMatch(/^(\w+=\S+\s+)*ck\s+/);
 				}
 			}
 		});

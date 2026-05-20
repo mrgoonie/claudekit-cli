@@ -47,6 +47,23 @@ export const SKIP_DIRS_ALL: readonly string[] = [
 	...CLAUDE_CODE_INTERNAL_DIRS,
 ];
 
+const SKIP_DIRS_ALL_SET = new Set(SKIP_DIRS_ALL);
+
+/**
+ * Check whether a relative path contains any skipped directory segment.
+ * This is a defensive fallback for callers that operate on file paths
+ * after scanning, so runtime artifact trees never re-enter later stages.
+ */
+export function hasSkippedDirectorySegment(
+	relativePath: string,
+	skipDirs: readonly string[] = SKIP_DIRS_ALL,
+): boolean {
+	const segments = relativePath.replace(/\\/g, "/").split("/").filter(Boolean);
+	const skipSet = skipDirs === SKIP_DIRS_ALL ? SKIP_DIRS_ALL_SET : new Set(skipDirs);
+
+	return segments.some((segment) => skipSet.has(segment));
+}
+
 /**
  * Only Claude Code internal directories to skip
  * Use this for ClaudeKit-specific scanning (e.g., counting components)

@@ -4,6 +4,7 @@
  * Prompts for update modes and directory selection during installation
  */
 
+import { join } from "node:path";
 import type { FreshAnalysisResult } from "@/domains/installation/fresh-installer.js";
 import { logger } from "@/shared/logger.js";
 import { PathResolver } from "@/shared/path-resolver.js";
@@ -75,8 +76,11 @@ export async function promptFreshConfirmation(
 	targetPath: string,
 	analysis?: FreshAnalysisResult,
 ): Promise<boolean> {
+	const backupRoot = join(PathResolver.getConfigDir(false), "backups");
+
 	logger.warning("[!] Fresh installation will remove ClaudeKit files:");
 	logger.info(`Path: ${targetPath}`);
+	logger.info(`Recovery backup: ${backupRoot}`);
 
 	if (analysis?.hasMetadata) {
 		// Smart mode: show ownership-based breakdown

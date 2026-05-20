@@ -1,0 +1,30 @@
+{
+	"version": "3.0",
+	"appliedManifestVersion": "3.43.0",
+	"installations": [
+		{
+			"item": "foo",
+			"type": "skill",
+			"provider": "cursor",
+			"global": false,
+			"path": ".cursor/skills/foo",
+			"installedAt": "2024-01-01T00:00:00.000Z",
+			"sourcePath": "skills/foo",
+			"sourceChecksum": "source-abc",
+			"targetChecksum": "target-abc",
+			"installSource": "kit"
+		},
+		{
+			"item": "bar",
+			"type": "skill",
+			"provider": "windsurf",
+			"global": false,
+			"path": ".windsurf/skills/bar",
+			"installedAt": "2024-01-01T00:00:00.000Z",
+			"sourcePath": "skills/bar",
+			"sourceChecksum": "source-def",
+			"targetChecksum": "target-def",
+			"installSource": "kit"
+		}
+	]
+}

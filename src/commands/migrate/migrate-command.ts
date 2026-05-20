@@ -1,6 +1,7 @@
 /**
- * Migrate command — one-shot migration of all agents, commands, skills, config,
- * rules, and hooks to target providers. Thin orchestration layer over portable infrastructure.
+ * Migrate command — one-shot migration of all agents, commands, skills,
+ * config, rules, and hooks to target providers. Thin orchestration layer over
+ * portable infrastructure.
  */
 import { existsSync } from "node:fs";
 import { readFile, rm, unlink } from "node:fs/promises";
@@ -10,23 +11,39 @@ import * as p from "@clack/prompts";
 import pc from "picocolors";
 import { handleDeletions } from "../../domains/installation/deletion-handler.js";
 import { logger } from "../../shared/logger.js";
+import type { KitType } from "../../types/kit.js";
 import type { ClaudeKitMetadata } from "../../types/metadata.js";
+import {
+	formatDisplayPath,
+	renderPanel,
+	renderPreflightRow,
+	renderSourceTargetHeader,
+} from "../../ui/ck-cli-design/index.js";
 import { discoverAgents, getAgentSourcePath } from "../agents/agents-discovery.js";
 import { discoverCommands, getCommandSourcePath } from "../commands/commands-discovery.js";
 import { cleanupStaleCodexConfigEntries } from "../portable/codex-toml-installer.js";
 import {
+	copyHooksCompanionDirs,
 	discoverConfig,
 	discoverHooks,
 	discoverRules,
+	getConfigSourcePath,
 	getHooksSourcePath,
 	getRulesSourcePath,
-	resolveSourceOrigin,
 } from "../portable/config-discovery.js";
 import { resolveConflict } from "../portable/conflict-resolver.js";
 import { convertItem } from "../portable/converters/index.js";
 import { generateDiff } from "../portable/diff-display.js";
 import { migrateHooksSettings } from "../portable/hooks-settings-merger.js";
+import {
+	cleanupMigratedHooksForProviders,
+	isGeneratedContextHookName,
+} from "../portable/migrated-hooks-cleanup.js";
 import { setTaxonomyOverrides } from "../portable/model-taxonomy.js";
+import {
+	OpenCodeAuthRequiredError,
+	ensureOpenCodeModel,
+} from "../portable/opencode-config-installer.js";
 import { displayMigrationSummary, displayReconcilePlan } from "../portable/plan-display.js";
 import { installPortableItems } from "../portable/portable-installer.js";
 import { loadPortableManifest } from "../portable/portable-manifest.js";
@@ -38,6 +55,7 @@ import {
 } from "../portable/portable-registry.js";
 import {
 	detectInstalledProviders,
+	getPortableBasePath,
 	getProvidersSupporting,
 	providers,
 } from "../portable/provider-registry.js";
@@ -46,22 +64,36 @@ import {
 	type ConversionFallbackWarning,
 	buildSourceItemState,
 	buildTargetStates,
+	buildTypeDirectoryStates,
 } from "../portable/reconcile-state-builders.js";
 import type {
 	ReconcileAction,
+	ReconcileBanner,
 	ReconcileProviderInput,
 	SourceItemState,
 	TargetFileState,
 } from "../portable/reconcile-types.js";
 import { reconcile } from "../portable/reconciler.js";
-import type {
-	MigrationWarning,
-	PortableInstallResult,
-	PortableItem,
-	ProviderType,
-} from "../portable/types.js";
+import type { PortableInstallResult, PortableItem, ProviderType } from "../portable/types.js";
 import { discoverSkills, getSkillSourcePath } from "../skills/skills-discovery.js";
+import type { SkillInfo } from "../skills/types.js";
+import { createMigrateProgressSink } from "./migrate-progress.js";
+import {
+	buildScopedProviderConfigs,
+	getEnabledPortableTypes,
+	providerConfigAppliesToType,
+	resolvePortableTypeGlobal,
+} from "./migrate-provider-scopes.js";
 import { resolveMigrationScope } from "./migrate-scope-resolver.js";
+import {
+	type PortableSourceCounts,
+	buildDiscoverySummaryLines,
+	buildPreflightRows,
+	buildProviderScopeSubtitle,
+	buildSourceSummaryLines,
+	buildTargetSummaryLines,
+	renderBannerLines,
+} from "./migrate-ui-summary.js";
 import { installSkillDirectories } from "./skill-directory-installer.js";
 
 /** Options for ck migrate */
@@ -70,22 +102,264 @@ export interface MigrateOptions {
 	global?: boolean;
 	yes?: boolean;
 	all?: boolean;
+	agents?: boolean;
+	commands?: boolean;
+	skills?: boolean;
 	config?: boolean;
 	rules?: boolean;
 	hooks?: boolean;
+	skipAgents?: boolean;
+	skipCommands?: boolean;
+	skipSkills?: boolean;
 	skipConfig?: boolean;
 	skipRules?: boolean;
 	skipHooks?: boolean;
 	source?: string;
 	dryRun?: boolean;
 	force?: boolean;
+	// NEW — mode flags (P5)
+	install?: boolean; // --install: opt-in install picker mode
+	reconcile?: boolean; // --reconcile: explicit reconcile mode
+	reinstallEmptyDirs?: boolean; // --reinstall-empty-dirs (default true)
+	respectDeletions?: boolean; // --respect-deletions (default false)
+}
+
+/** Resolved migration mode */
+export type MigrationMode = "reconcile" | "install";
+
+/**
+ * Validate mutually exclusive flag pairs.
+ * Returns error message string if conflict detected, null if ok.
+ */
+export function validateMutualExclusion(options: MigrateOptions): string | null {
+	if (options.install && options.reconcile) {
+		return "Pass either --install or --reconcile, not both.";
+	}
+	if (options.reinstallEmptyDirs && options.respectDeletions) {
+		return "Pass either --reinstall-empty-dirs or --respect-deletions, not both.";
+	}
+	return null;
+}
+
+/**
+ * Resolve which migration mode to use based on flags and registry state.
+ * Decision:
+ *   --install                → install
+ *   --reconcile              → reconcile
+ *   neither + unknown checksums in registry → install (smart default per decisions Q6)
+ *   neither + valid registry → reconcile
+ */
+export function resolveMigrationMode(
+	options: MigrateOptions,
+	hasUnknownChecksums: boolean,
+): MigrationMode {
+	if (options.install) return "install";
+	if (options.reconcile) return "reconcile";
+	// Smart default: any unknown checksum → install mode
+	if (hasUnknownChecksums) return "install";
+	return "reconcile";
+}
+
+/**
+ * Render reconcile plan banners to stdout.
+ * Each banner is an ASCII info box (design-principles.md: ASCII-only, [i]/[!]).
+ * Delegates to renderBannerLines() from migrate-ui-summary for the actual formatting.
+ */
+export function renderBanners(banners: ReconcileBanner[]): void {
+	if (banners.length === 0) return;
+	for (const banner of banners) {
+		const lines = renderBannerLines(banner);
+		if (lines.length > 0) {
+			console.log();
+			for (const line of lines) {
+				console.log(line);
+			}
+		}
+	}
+}
+
+function logHookCleanupResults(
+	results: Awaited<ReturnType<typeof cleanupMigratedHooksForProviders>>,
+): void {
+	const cleaned = results.filter(
+		(result) =>
+			result.hooksPruned > 0 || result.filesRemoved > 0 || result.registryEntriesRemoved > 0,
+	);
+	if (cleaned.length > 0) {
+		const count = cleaned.reduce(
+			(total, result) =>
+				total + result.hooksPruned + result.filesRemoved + result.registryEntriesRemoved,
+			0,
+		);
+		p.log.info(pc.dim(`[migrate] Disabled generated-context hooks (${count} cleanup action(s))`));
+	}
+	for (const result of results) {
+		for (const warning of result.warnings) {
+			p.log.warn(warning);
+		}
+	}
+}
+
+/**
+ * Run install picker mode: show interactive per-type multiselect,
+ * build a synthetic plan, and execute.
+ * In non-interactive (--yes) mode, all items are selected without prompt.
+ */
+async function runInstallMode(
+	options: MigrateOptions,
+	discoveredItems: {
+		agents: import("../portable/types.js").PortableItem[];
+		commands: import("../portable/types.js").PortableItem[];
+		skills: import("../skills/types.js").SkillInfo[];
+		configItem: import("../portable/types.js").PortableItem | null;
+		ruleItems: import("../portable/types.js").PortableItem[];
+		hookItems: import("../portable/types.js").PortableItem[];
+	},
+	// Reserved for future provider-aware filtering (not yet used in picker UI)
+	_selectedProviders: ProviderType[],
+	_installGlobally: boolean,
+): Promise<{
+	agents: import("../portable/types.js").PortableItem[];
+	commands: import("../portable/types.js").PortableItem[];
+	skills: import("../skills/types.js").SkillInfo[];
+	configItem: import("../portable/types.js").PortableItem | null;
+	ruleItems: import("../portable/types.js").PortableItem[];
+	hookItems: import("../portable/types.js").PortableItem[];
+}> {
+	const interactive = process.stdout.isTTY && !options.yes;
+
+	if (!interactive) {
+		// Non-interactive: return all discovered items
+		return discoveredItems;
+	}
+
+	// Interactive: per-type multiselect grouped by type
+	const toOption = (item: { name: string; recommended?: boolean }) => ({
+		value: item.name,
+		label: item.name,
+		hint: item.recommended ? "Recommended" : undefined,
+	});
+
+	let selectedAgents = discoveredItems.agents;
+	let selectedCommands = discoveredItems.commands;
+	let selectedSkills = discoveredItems.skills;
+	let selectedConfig = discoveredItems.configItem;
+	let selectedRules = discoveredItems.ruleItems;
+	let selectedHooks = discoveredItems.hookItems;
+
+	if (discoveredItems.agents.length > 0) {
+		const picked = await p.multiselect({
+			message: `Select agents to install (${discoveredItems.agents.length} available)`,
+			options: discoveredItems.agents.map(toOption),
+			initialValues: discoveredItems.agents.map((a) => a.name),
+			required: false,
+		});
+		if (p.isCancel(picked)) {
+			p.cancel("Migrate cancelled");
+			process.exit(0);
+		}
+		const pickedSet = new Set(picked as string[]);
+		selectedAgents = discoveredItems.agents.filter((a) => pickedSet.has(a.name));
+	}
+
+	if (discoveredItems.commands.length > 0) {
+		const picked = await p.multiselect({
+			message: `Select commands to install (${discoveredItems.commands.length} available)`,
+			options: discoveredItems.commands.map(toOption),
+			initialValues: discoveredItems.commands.map((c) => c.name),
+			required: false,
+		});
+		if (p.isCancel(picked)) {
+			p.cancel("Migrate cancelled");
+			process.exit(0);
+		}
+		const pickedSet = new Set(picked as string[]);
+		selectedCommands = discoveredItems.commands.filter((c) => pickedSet.has(c.name));
+	}
+
+	// Skills are directory-level items — show directory names
+	if (discoveredItems.skills.length > 0) {
+		const picked = await p.multiselect({
+			message: `Select skills to install (${discoveredItems.skills.length} available, directory-level)`,
+			options: discoveredItems.skills.map((s) => ({
+				value: s.name,
+				label: s.name,
+				hint: "skill directory",
+			})),
+			initialValues: discoveredItems.skills.map((s) => s.name),
+			required: false,
+		});
+		if (p.isCancel(picked)) {
+			p.cancel("Migrate cancelled");
+			process.exit(0);
+		}
+		const pickedSet = new Set(picked as string[]);
+		selectedSkills = discoveredItems.skills.filter((s) => pickedSet.has(s.name));
+	}
+
+	// Order: config → rules → hooks to match dashboard TYPE_ORDER
+	// (agents, commands, skills prompted above; config+rules+hooks here)
+
+	// Config: single item, yes/no
+	if (discoveredItems.configItem) {
+		const include = await p.confirm({
+			message: "Include CLAUDE.md config?",
+			initialValue: true,
+		});
+		if (p.isCancel(include)) {
+			p.cancel("Migrate cancelled");
+			process.exit(0);
+		}
+		if (!include) selectedConfig = null;
+	}
+
+	if (discoveredItems.ruleItems.length > 0) {
+		const picked = await p.multiselect({
+			message: `Select rules to install (${discoveredItems.ruleItems.length} available)`,
+			options: discoveredItems.ruleItems.map(toOption),
+			initialValues: discoveredItems.ruleItems.map((r) => r.name),
+			required: false,
+		});
+		if (p.isCancel(picked)) {
+			p.cancel("Migrate cancelled");
+			process.exit(0);
+		}
+		const pickedSet = new Set(picked as string[]);
+		selectedRules = discoveredItems.ruleItems.filter((r) => pickedSet.has(r.name));
+	}
+
+	if (discoveredItems.hookItems.length > 0) {
+		const picked = await p.multiselect({
+			message: `Select hooks to install (${discoveredItems.hookItems.length} available)`,
+			options: discoveredItems.hookItems.map(toOption),
+			initialValues: discoveredItems.hookItems.map((h) => h.name),
+			required: false,
+		});
+		if (p.isCancel(picked)) {
+			p.cancel("Migrate cancelled");
+			process.exit(0);
+		}
+		const pickedSet = new Set(picked as string[]);
+		selectedHooks = discoveredItems.hookItems.filter((h) => pickedSet.has(h.name));
+	}
+
+	return {
+		agents: selectedAgents,
+		commands: selectedCommands,
+		skills: selectedSkills,
+		configItem: selectedConfig,
+		ruleItems: selectedRules,
+		hookItems: selectedHooks,
+	};
 }
 
 /**
  * Map portable item type to provider config path key.
- * Exhaustive switch ensures all types are handled correctly.
+ * Typed to the ReconcileAction.type union so the switch is exhaustive at
+ * compile time — unknown types surface as a type error rather than silently
+ * passing through.
  */
-function getProviderPathKey(type: string): string {
+function getProviderPathKey(type: ReconcileAction["type"]): string {
 	switch (type) {
 		case "agent":
 			return "agents";
@@ -99,8 +373,6 @@ function getProviderPathKey(type: string): string {
 			return "hooks";
 		case "skill":
 			return "skills";
-		default:
-			return type;
 	}
 }
 
@@ -132,8 +404,12 @@ async function executeDeleteAction(
 			action.type,
 			action.provider as ProviderType,
 			action.global,
+			action.targetPath ? { path: action.targetPath } : undefined,
 		);
 		return {
+			operation: "delete",
+			portableType: action.type,
+			itemName: action.item,
 			provider: action.provider as ProviderType,
 			providerDisplayName:
 				providers[action.provider as ProviderType]?.displayName || action.provider,
@@ -146,6 +422,9 @@ async function executeDeleteAction(
 		};
 	} catch (error) {
 		return {
+			operation: "delete",
+			portableType: action.type,
+			itemName: action.item,
 			provider: action.provider as ProviderType,
 			providerDisplayName:
 				providers[action.provider as ProviderType]?.displayName || action.provider,
@@ -191,7 +470,11 @@ async function processMetadataDeletions(
 	if (!existsSync(claudeDir)) return;
 
 	try {
-		const result = await handleDeletions(sourceMetadata, claudeDir);
+		const result = await handleDeletions(
+			sourceMetadata,
+			claudeDir,
+			inferKitTypeFromSourceMetadata(sourceMetadata),
+		);
 		if (result.deletedPaths.length > 0) {
 			logger.verbose(
 				`[migrate] Cleaned up ${result.deletedPaths.length} deprecated path(s): ${result.deletedPaths.join(", ")}`,
@@ -202,12 +485,26 @@ async function processMetadataDeletions(
 	}
 }
 
+function inferKitTypeFromSourceMetadata(sourceMetadata: ClaudeKitMetadata): KitType | undefined {
+	// NOTE: This relies on the source metadata name following the current
+	// claudekit-{kitType} naming convention used by published kits.
+	if (sourceMetadata.name?.includes("marketing")) return "marketing";
+	if (sourceMetadata.name?.includes("engineer")) return "engineer";
+	return undefined;
+}
+
 /**
  * Main migrate command handler
  */
 export async function migrateCommand(options: MigrateOptions): Promise<void> {
 	console.log();
-	p.intro(pc.bgMagenta(pc.black(" ck migrate ")));
+
+	// Validate mutually exclusive flags before doing any I/O
+	const mutexError = validateMutualExclusion(options);
+	if (mutexError) {
+		p.log.error(mutexError);
+		process.exit(1);
+	}
 
 	try {
 		const scope = resolveMigrationScope(process.argv.slice(2), options);
@@ -216,32 +513,45 @@ export async function migrateCommand(options: MigrateOptions): Promise<void> {
 		const spinner = p.spinner();
 		spinner.start("Discovering portable items...");
 
-		const agentSource = scope.agents ? getAgentSourcePath() : null;
-		const commandSource = scope.commands ? getCommandSourcePath() : null;
-		const skillSource = scope.skills ? getSkillSourcePath() : null;
-		const hooksSource = scope.hooks ? getHooksSourcePath() : null;
+		// Honor explicit -g / --global on SOURCE discovery so both SOURCE and
+		// DESTINATION follow the same scope. Without this, SOURCE silently
+		// inherits CWD even when the user asked for a pure global migration.
+		// When --source is provided, it always wins for config (explicit override).
+		const sourceGlobalOnly = options.global === true;
+		const agentSource = scope.agents ? getAgentSourcePath(sourceGlobalOnly) : null;
+		const commandSource = scope.commands ? getCommandSourcePath(sourceGlobalOnly) : null;
+		const skillSource = scope.skills ? getSkillSourcePath(sourceGlobalOnly) : null;
+		const hooksSource = scope.hooks ? getHooksSourcePath(sourceGlobalOnly) : null;
 		// Resolve rules source path for origin tracking (only needed when rules in scope)
-		const rulesSourcePath = scope.rules ? getRulesSourcePath() : null;
+		const rulesSourcePath = scope.rules ? getRulesSourcePath(sourceGlobalOnly) : null;
 
 		const agents = agentSource ? await discoverAgents(agentSource) : [];
 		const commands = commandSource ? await discoverCommands(commandSource) : [];
 		const skills = skillSource ? await discoverSkills(skillSource) : [];
-		const configItem = scope.config ? await discoverConfig(options.source) : null;
+		const configItem = scope.config
+			? await discoverConfig(
+					options.source ?? (sourceGlobalOnly ? getConfigSourcePath(true) : undefined),
+				)
+			: null;
 		// rulesSourcePath is non-null when scope.rules is true (same guard)
 		const ruleItems = rulesSourcePath ? await discoverRules(rulesSourcePath) : [];
-		const {
-			items: hookItems,
-			skippedShellHooks,
-			warnings: hookDiscoveryWarnings,
-		} = hooksSource
+		const { items: discoveredHookItems, skippedShellHooks } = hooksSource
 			? await discoverHooks(hooksSource)
-			: { items: [], skippedShellHooks: [], warnings: undefined };
+			: { items: [], skippedShellHooks: [] };
+		const disabledGeneratedHooks = discoveredHookItems.filter((item) =>
+			isGeneratedContextHookName(item.name),
+		);
+		const hookItems = discoveredHookItems.filter((item) => !isGeneratedContextHookName(item.name));
 		if (skippedShellHooks.length > 0) {
 			logger.warning(
 				`[migrate] Skipping ${skippedShellHooks.length} shell hook(s) not supported for migration (node-runnable only): ${skippedShellHooks.join(", ")}`,
 			);
 		}
-		logHookMigrationWarnings(hookDiscoveryWarnings);
+		if (disabledGeneratedHooks.length > 0) {
+			logger.warning(
+				`[migrate] Disabling ${disabledGeneratedHooks.length} generated-context hook(s): ${disabledGeneratedHooks.map((item) => item.name).join(", ")}`,
+			);
+		}
 
 		spinner.stop("Discovery complete");
 
@@ -253,7 +563,22 @@ export async function migrateCommand(options: MigrateOptions): Promise<void> {
 			ruleItems.length > 0 ||
 			hookItems.length > 0;
 
-		if (!hasItems) {
+		// Phase 2: Select providers
+		const detectedProviders = await detectInstalledProviders();
+
+		// Build the full set of providers that support at least one portable type
+		const allSupportedProviders = Array.from(
+			new Set<ProviderType>([
+				...getProvidersSupporting("agents"),
+				...getProvidersSupporting("commands"),
+				...getProvidersSupporting("skills"),
+				...getProvidersSupporting("config"),
+				...getProvidersSupporting("rules"),
+				...getProvidersSupporting("hooks"),
+			]),
+		);
+
+		if (!hasItems && !options.agent?.length && !options.all && !options.yes) {
 			p.log.error("Nothing to migrate.");
 			p.log.info(
 				pc.dim(
@@ -264,37 +589,6 @@ export async function migrateCommand(options: MigrateOptions): Promise<void> {
 			return;
 		}
 
-		// Show discovery summary with CWD and source attribution
-		p.log.info(pc.dim(`  CWD: ${process.cwd()}`));
-		const parts: string[] = [];
-		if (agents.length > 0) {
-			const origin = resolveSourceOrigin(agentSource);
-			parts.push(`${agents.length} agent(s) ${pc.dim(`<- ${origin}`)}`);
-		}
-		if (commands.length > 0) {
-			const origin = resolveSourceOrigin(commandSource);
-			parts.push(`${commands.length} command(s) ${pc.dim(`<- ${origin}`)}`);
-		}
-		if (skills.length > 0) {
-			const origin = resolveSourceOrigin(skillSource);
-			parts.push(`${skills.length} skill(s) ${pc.dim(`<- ${origin}`)}`);
-		}
-		if (configItem) {
-			const origin = resolveSourceOrigin(configItem.sourcePath);
-			parts.push(`config ${pc.dim(`<- ${origin}`)}`);
-		}
-		if (ruleItems.length > 0) {
-			const origin = resolveSourceOrigin(rulesSourcePath);
-			parts.push(`${ruleItems.length} rule(s) ${pc.dim(`<- ${origin}`)}`);
-		}
-		if (hookItems.length > 0) {
-			const origin = resolveSourceOrigin(hooksSource);
-			parts.push(`${hookItems.length} hook(s) ${pc.dim(`<- ${origin}`)}`);
-		}
-		p.log.info(`Found: ${parts.join(", ")}`);
-
-		// Phase 2: Select providers
-		const detectedProviders = await detectInstalledProviders();
 		let selectedProviders: ProviderType[];
 
 		if (options.agent && options.agent.length > 0) {
@@ -309,65 +603,53 @@ export async function migrateCommand(options: MigrateOptions): Promise<void> {
 			}
 			selectedProviders = options.agent as ProviderType[];
 		} else if (options.all) {
-			// All providers that support at least one type
-			const allProviders = new Set<ProviderType>([
-				...getProvidersSupporting("agents"),
-				...getProvidersSupporting("commands"),
-				...getProvidersSupporting("skills"),
-				...getProvidersSupporting("config"),
-				...getProvidersSupporting("rules"),
-				...getProvidersSupporting("hooks"),
-			]);
-			selectedProviders = Array.from(allProviders);
+			selectedProviders = allSupportedProviders;
 			p.log.info(`Migrating to all ${selectedProviders.length} providers`);
-		} else if (detectedProviders.length === 0) {
-			if (options.yes) {
-				const allProviders = new Set<ProviderType>([
-					...getProvidersSupporting("agents"),
-					...getProvidersSupporting("commands"),
-					...getProvidersSupporting("skills"),
-					...getProvidersSupporting("config"),
-					...getProvidersSupporting("rules"),
-					...getProvidersSupporting("hooks"),
-				]);
-				selectedProviders = Array.from(allProviders);
+		} else if (options.yes) {
+			// Non-interactive: auto-select detected providers, fall back to all
+			if (detectedProviders.length > 0) {
+				selectedProviders = detectedProviders;
+				p.log.info(
+					`Migrating to: ${detectedProviders.map((a) => pc.cyan(providers[a].displayName)).join(", ")}`,
+				);
+			} else {
+				selectedProviders = allSupportedProviders;
 				p.log.info("No providers detected, migrating to all");
+			}
+		} else {
+			// Interactive: grouped multiselect with detected + not-detected sections
+			const detectedSet = new Set(detectedProviders);
+			const notDetected = allSupportedProviders.filter((pv) => !detectedSet.has(pv));
+			const toOption = (key: ProviderType) => ({
+				value: key,
+				label: providers[key].displayName,
+			});
+
+			if (detectedProviders.length > 0) {
+				p.log.info(`Detected ${pc.cyan(String(detectedProviders.length))} installed provider(s)`);
 			} else {
 				p.log.warn("No providers detected on your system.");
-				const allProviders = new Set<ProviderType>([
-					...getProvidersSupporting("agents"),
-					...getProvidersSupporting("commands"),
-					...getProvidersSupporting("skills"),
-					...getProvidersSupporting("config"),
-					...getProvidersSupporting("rules"),
-					...getProvidersSupporting("hooks"),
-				]);
-				const selected = await p.multiselect({
-					message: "Select providers to migrate to",
-					options: Array.from(allProviders).map((key) => ({
-						value: key,
-						label: providers[key].displayName,
-					})),
-					required: true,
-				});
-				if (p.isCancel(selected)) {
-					p.cancel("Migrate cancelled");
-					return;
-				}
-				selectedProviders = selected as ProviderType[];
 			}
-		} else if (detectedProviders.length === 1 || options.yes) {
-			selectedProviders = detectedProviders;
-			p.log.info(
-				`Migrating to: ${detectedProviders.map((a) => pc.cyan(providers[a].displayName)).join(", ")}`,
-			);
-		} else {
-			const selected = await p.multiselect({
+
+			const groupOptions: Record<string, Array<{ value: ProviderType; label: string }>> = {};
+
+			if (detectedProviders.length > 0) {
+				groupOptions[`Detected ${pc.dim("(installed)")}`] = detectedProviders.map(toOption);
+			}
+			if (notDetected.length > 0) {
+				groupOptions[`Not detected ${pc.dim("(select manually if installed)")}`] =
+					notDetected.map(toOption);
+			}
+
+			if (Object.keys(groupOptions).length === 0) {
+				p.cancel("No providers available");
+				return;
+			}
+
+			const selected = await p.groupMultiselect({
 				message: "Select providers to migrate to",
-				options: detectedProviders.map((a) => ({
-					value: a,
-					label: providers[a].displayName,
-				})),
+				options: groupOptions,
+				initialValues: detectedProviders,
 				required: true,
 			});
 			if (p.isCancel(selected)) {
@@ -379,7 +661,8 @@ export async function migrateCommand(options: MigrateOptions): Promise<void> {
 		selectedProviders = Array.from(new Set(selectedProviders));
 
 		// Phase 3: Select scope
-		let installGlobally = options.global ?? false;
+		let requestedGlobal = options.global ?? false;
+		let installGlobally = requestedGlobal;
 		if (options.global === undefined && !options.yes) {
 			const projectTarget = join(process.cwd(), ".claude");
 			const globalTarget = join(homedir(), ".claude");
@@ -387,14 +670,14 @@ export async function migrateCommand(options: MigrateOptions): Promise<void> {
 				message: "Installation scope",
 				options: [
 					{
-						value: false,
-						label: "Project",
-						hint: `-> ${projectTarget}`,
-					},
-					{
 						value: true,
 						label: "Global",
 						hint: `-> ${globalTarget}`,
+					},
+					{
+						value: false,
+						label: "Project",
+						hint: `-> ${projectTarget}`,
 					},
 				],
 			});
@@ -402,71 +685,96 @@ export async function migrateCommand(options: MigrateOptions): Promise<void> {
 				p.cancel("Migrate cancelled");
 				return;
 			}
-			installGlobally = scopeChoice as boolean;
+			requestedGlobal = scopeChoice as boolean;
+			installGlobally = requestedGlobal;
 		}
 
-		const codexCommandsRequireGlobal =
-			scope.commands &&
-			selectedProviders.includes("codex") &&
-			providers.codex.commands !== null &&
-			providers.codex.commands.projectPath === null;
-		if (codexCommandsRequireGlobal && !installGlobally) {
-			installGlobally = true;
-			p.log.info(pc.dim("Codex commands are global-only; scope adjusted to global."));
+		const cleanupResults = await cleanupMigratedHooksForProviders(selectedProviders, {
+			global: installGlobally,
+		});
+		logHookCleanupResults(cleanupResults);
+
+		if (!hasItems) {
+			p.log.info("No migratable items found after generated-context hooks were disabled.");
+			p.outro(pc.green("Hook cleanup complete"));
+			return;
 		}
 
-		// Phase 4: Summary
+		const sourceCounts: PortableSourceCounts = {
+			agents: agents.length,
+			commands: commands.length,
+			config: configItem ? 1 : 0,
+			hooks: hookItems.length,
+			rules: ruleItems.length,
+			skills: skills.length,
+		};
+		const sourceOrigins = [
+			agentSource,
+			commandSource,
+			skillSource,
+			configItem?.sourcePath ?? null,
+			rulesSourcePath,
+			hooksSource,
+		].filter((origin): origin is string => origin !== null);
+		const agentSourceDisplay = agentSource ? formatDisplayPath(agentSource) : "source unavailable";
+		const commandSourceDisplay = commandSource
+			? formatDisplayPath(commandSource)
+			: "source unavailable";
+		const skillSourceDisplay = skillSource ? formatDisplayPath(skillSource) : "source unavailable";
+		const rulesSourceDisplay = rulesSourcePath
+			? formatDisplayPath(rulesSourcePath)
+			: "source unavailable";
+		const hooksSourceDisplay = hooksSource ? formatDisplayPath(hooksSource) : "source unavailable";
+		const preflightRows = buildPreflightRows(sourceCounts, selectedProviders, {
+			requestedGlobal,
+			sourceDisplays: {
+				agents: agentSourceDisplay,
+				commands: commandSourceDisplay,
+				config: configItem ? formatDisplayPath(configItem.sourcePath) : undefined,
+				hooks: hooksSourceDisplay,
+				rules: rulesSourceDisplay,
+				skills: skillSourceDisplay,
+			},
+		});
+
+		console.log();
+		console.log(
+			renderSourceTargetHeader({
+				sourceLines: buildSourceSummaryLines(sourceCounts, sourceOrigins),
+				subtitle: buildProviderScopeSubtitle(selectedProviders, requestedGlobal, sourceCounts),
+				targetLines: buildTargetSummaryLines(preflightRows),
+				title: "ck migrate",
+			}).join("\n"),
+		);
+		// Show CWD only for project-scoped runs. Under -g the CWD is irrelevant for
+		// SOURCE (we read from ~/.claude/), so surfacing it just confuses the scope.
+		if (sourceGlobalOnly) {
+			p.log.info(
+				pc.dim(
+					`  Scope: global (--global / -g) - reading from ${formatDisplayPath(join(homedir(), ".claude"))}`,
+				),
+			);
+		} else {
+			p.log.info(pc.dim(`  CWD: ${process.cwd()}`));
+		}
+		console.log();
+		console.log(
+			renderPanel({
+				title: "Found",
+				zones: [{ label: "ITEMS", lines: buildDiscoverySummaryLines(preflightRows) }],
+			}).join("\n"),
+		);
+
 		console.log();
 		p.log.step(pc.bold("Migrate Summary"));
-		if (agents.length > 0) {
-			p.log.message(`  Agents: ${agents.map((a) => pc.cyan(a.name)).join(", ")}`);
-		}
-		if (commands.length > 0) {
-			const cmdNames = commands.map((c) => pc.cyan(`/${c.displayName || c.name}`)).join(", ");
-			p.log.message(`  Commands: ${cmdNames}`);
-		}
-		if (skills.length > 0) {
-			p.log.message(`  Skills: ${skills.map((s) => pc.cyan(s.name)).join(", ")}`);
-		}
-		if (configItem) {
-			const lines = configItem.body.split("\n").length;
-			p.log.message(`  Config: ${pc.cyan("CLAUDE.md")} (${lines} lines)`);
-		}
-		if (ruleItems.length > 0) {
-			p.log.message(`  Rules: ${pc.cyan(`${ruleItems.length} file(s)`)}`);
-		}
-		if (hookItems.length > 0) {
-			p.log.message(`  Hooks: ${pc.cyan(`${hookItems.length} file(s)`)}`);
-		}
 		const providerNames = selectedProviders
 			.map((prov) => pc.cyan(providers[prov].displayName))
 			.join(", ");
 		p.log.message(`  Providers: ${providerNames}`);
-		const targetDir = installGlobally ? join(homedir(), ".claude") : join(process.cwd(), ".claude");
-		p.log.message(
-			`  Scope: ${installGlobally ? "Global" : "Project"} ${pc.dim(`-> ${targetDir}`)}`,
-		);
-
-		// Show unsupported combos
-		const cmdProviders = getProvidersSupporting("commands");
-		const unsupportedCmd = selectedProviders.filter((pv) => !cmdProviders.includes(pv));
-		if (commands.length > 0 && unsupportedCmd.length > 0) {
-			p.log.info(
-				pc.dim(
-					`  [i] Commands skipped for: ${unsupportedCmd.map((pv) => providers[pv].displayName).join(", ")} (unsupported)`,
-				),
-			);
-		}
-		const hookProviders = getProvidersSupporting("hooks");
-		const unsupportedHooks = selectedProviders.filter((pv) => !hookProviders.includes(pv));
-		if (hookItems.length > 0 && unsupportedHooks.length > 0) {
-			p.log.info(
-				pc.dim(
-					`  [i] Hooks skipped for: ${unsupportedHooks
-						.map((pv) => providers[pv].displayName)
-						.join(", ")} (unsupported)`,
-				),
-			);
+		for (const row of preflightRows) {
+			for (const line of renderPreflightRow(row)) {
+				console.log(line);
+			}
 		}
 
 		// Load CkConfig for taxonomy overrides and apply before conversion
@@ -482,24 +790,85 @@ export async function migrateCommand(options: MigrateOptions): Promise<void> {
 		const reconcileSpinner = p.spinner();
 		reconcileSpinner.start("Computing migration plan...");
 
-		const sourceStates = await computeSourceStates(
-			{
-				agents,
-				commands,
-				config: configItem,
-				rules: ruleItems,
-				hooks: hookItems,
-			},
-			selectedProviders,
-		);
-
-		const targetStates = await computeTargetStates(selectedProviders, installGlobally);
 		const registry = await readPortableRegistry();
 
-		const providerConfigs: ReconcileProviderInput[] = selectedProviders.map((provider) => ({
-			provider,
-			global: installGlobally,
-		}));
+		// Smart mode resolution: any unknown checksums → suggest install mode
+		const hasUnknownChecksums = registry.installations.some(
+			(entry) =>
+				!entry.sourceChecksum ||
+				entry.sourceChecksum === "unknown" ||
+				!entry.targetChecksum ||
+				entry.targetChecksum === "unknown",
+		);
+		const migrationMode = resolveMigrationMode(options, hasUnknownChecksums);
+
+		// In install mode, run interactive picker to narrow item selection
+		let effectiveAgents = agents;
+		let effectiveCommands = commands;
+		let effectiveSkills = skills;
+		let effectiveConfigItem = configItem;
+		let effectiveRuleItems = ruleItems;
+		let effectiveHookItems = hookItems;
+
+		if (migrationMode === "install") {
+			reconcileSpinner.stop("Discovery complete");
+			if (!options.yes && process.stdout.isTTY) {
+				p.log.info(
+					`[i] Smart default: ${hasUnknownChecksums ? "unknown checksums detected" : "--install flag"} — entering install picker mode.`,
+				);
+			}
+			const picked = await runInstallMode(
+				options,
+				{
+					agents,
+					commands,
+					skills,
+					configItem,
+					ruleItems,
+					hookItems,
+				},
+				selectedProviders,
+				installGlobally,
+			);
+			effectiveAgents = picked.agents;
+			effectiveCommands = picked.commands;
+			effectiveSkills = picked.skills;
+			effectiveConfigItem = picked.configItem;
+			effectiveRuleItems = picked.ruleItems;
+			effectiveHookItems = picked.hookItems;
+			reconcileSpinner.start("Computing migration plan...");
+		}
+
+		const sourceStates = await computeSourceStates(
+			{
+				agents: effectiveAgents,
+				commands: effectiveCommands,
+				config: effectiveConfigItem,
+				rules: effectiveRuleItems,
+				hooks: effectiveHookItems,
+			},
+			selectedProviders,
+			installGlobally,
+		);
+
+		const providerConfigs = buildScopedProviderConfigs(selectedProviders, scope, installGlobally);
+		const targetStates = await computeTargetStates(providerConfigs);
+
+		// Compute directory states for empty-dir override logic (P1 feature)
+		const portableTypes = getEnabledPortableTypes(scope).filter((type) => type !== "skill");
+		const typeDirectoryStates = buildTypeDirectoryStates(
+			providerConfigs.map((config) => ({
+				provider: config.provider as ProviderType,
+				global: config.global,
+				types: config.types?.filter((type) => type !== "skill"),
+			})),
+			portableTypes,
+		);
+
+		// Determine reinstallEmptyDirs: default true unless --respect-deletions set
+		const reinstallEmptyDirs = options.respectDeletions
+			? false
+			: (options.reinstallEmptyDirs ?? true);
 
 		const plan = reconcile({
 			sourceItems: sourceStates,
@@ -507,18 +876,32 @@ export async function migrateCommand(options: MigrateOptions): Promise<void> {
 			targetStates,
 			providerConfigs,
 			force: options.force,
+			typeDirectoryStates,
+			respectDeletions: !reinstallEmptyDirs,
 		});
 
 		reconcileSpinner.stop("Plan computed");
 
 		// Display plan
 		const useColor = process.stdout.isTTY && !process.env.NO_COLOR;
+
+		// Render banners (empty-dir notices) before the plan display
+		renderBanners(plan.banners);
+
 		displayReconcilePlan(plan, { color: useColor });
 
 		// Dry-run: show plan and exit
 		if (options.dryRun) {
-			console.log();
-			p.outro(pc.green("Dry run complete — no files written"));
+			displayMigrationSummary(
+				plan,
+				buildDryRunFallbackResults(
+					effectiveSkills,
+					selectedProviders,
+					installGlobally,
+					plan.actions,
+				),
+				{ color: useColor, dryRun: true },
+			);
 			return;
 		}
 
@@ -533,11 +916,11 @@ export async function migrateCommand(options: MigrateOptions): Promise<void> {
 					try {
 						const targetContent = await readFile(action.targetPath, "utf-8");
 						const sourceItem =
-							agents.find((a) => a.name === action.item) ||
-							commands.find((c) => c.name === action.item) ||
-							(configItem?.name === action.item ? configItem : null) ||
-							ruleItems.find((r) => r.name === action.item) ||
-							hookItems.find((h) => h.name === action.item);
+							effectiveAgents.find((a) => a.name === action.item) ||
+							effectiveCommands.find((c) => c.name === action.item) ||
+							(effectiveConfigItem?.name === action.item ? effectiveConfigItem : null) ||
+							effectiveRuleItems.find((r) => r.name === action.item) ||
+							effectiveHookItems.find((h) => h.name === action.item);
 
 						if (sourceItem) {
 							const providerConfig = providers[action.provider as ProviderType];
@@ -548,6 +931,7 @@ export async function migrateCommand(options: MigrateOptions): Promise<void> {
 									sourceItem,
 									pathConfig.format,
 									action.provider as ProviderType,
+									{ global: action.global },
 								);
 								action.diff = generateDiff(targetContent, converted.content, action.item);
 							}
@@ -589,18 +973,34 @@ export async function migrateCommand(options: MigrateOptions): Promise<void> {
 			}
 		}
 
-		const installSpinner = p.spinner();
-		installSpinner.start("Migrating...");
-
-		const allResults: PortableInstallResult[] = [];
-		const installOpts = { global: installGlobally };
-		const agentByName = new Map(agents.map((item) => [item.name, item]));
-		const commandByName = new Map(commands.map((item) => [item.name, item]));
-		const skillByName = new Map(skills.map((item) => [item.name, item]));
-		const configByName = new Map(configItem ? [[configItem.name, configItem]] : []);
-		const ruleByName = new Map(ruleItems.map((item) => [item.name, item]));
-		const hookByName = new Map(hookItems.map((item) => [item.name, item]));
-		const successfulHookFiles = new Map<ProviderType, string[]>();
+		let allResults: PortableInstallResult[] = [];
+		const agentByName = new Map(effectiveAgents.map((item) => [item.name, item]));
+		const commandByName = new Map(effectiveCommands.map((item) => [item.name, item]));
+		const skillByName = new Map(effectiveSkills.map((item) => [item.name, item]));
+		const configByName = new Map(
+			effectiveConfigItem ? [[effectiveConfigItem.name, effectiveConfigItem]] : [],
+		);
+		const ruleByName = new Map(effectiveRuleItems.map((item) => [item.name, item]));
+		const hookByName = new Map(effectiveHookItems.map((item) => [item.name, item]));
+		const successfulHookFiles = new Map<ProviderType, { files: string[]; global: boolean }>();
+		// Absolute paths of installed hook files, per target provider.
+		// Passed to migrateHooksSettings so it can generate Codex wrapper scripts.
+		const successfulHookAbsPaths = new Map<ProviderType, string[]>();
+		const postProgressWarnings: string[] = [];
+		const writeTasks: Array<
+			| {
+					item: PortableItem;
+					provider: ProviderType;
+					type: "agent" | "command" | "config" | "rules" | "hooks";
+					global: boolean;
+			  }
+			| {
+					item: SkillInfo;
+					provider: ProviderType;
+					type: "skill";
+					global: boolean;
+			  }
+		> = [];
 
 		for (const action of plannedExecActions) {
 			const provider = action.provider as ProviderType;
@@ -609,84 +1009,42 @@ export async function migrateCommand(options: MigrateOptions): Promise<void> {
 			if (action.type === "agent") {
 				const item = agentByName.get(action.item);
 				if (!item || !getProvidersSupporting("agents").includes(provider)) continue;
-				allResults.push(...(await installPortableItems([item], [provider], "agent", installOpts)));
+				writeTasks.push({ item, provider, type: "agent", global: action.global });
 				continue;
 			}
 
 			if (action.type === "command") {
 				const item = commandByName.get(action.item);
 				if (!item || !getProvidersSupporting("commands").includes(provider)) continue;
-				allResults.push(
-					...(await installPortableItems([item], [provider], "command", installOpts)),
-				);
+				writeTasks.push({ item, provider, type: "command", global: action.global });
 				continue;
 			}
 
 			if (action.type === "skill") {
 				const item = skillByName.get(action.item);
 				if (!item || !getProvidersSupporting("skills").includes(provider)) continue;
-				allResults.push(...(await installSkillDirectories([item], [provider], installOpts)));
+				writeTasks.push({ item, provider, type: "skill", global: action.global });
 				continue;
 			}
 
 			if (action.type === "config") {
 				const item = configByName.get(action.item);
 				if (!item || !getProvidersSupporting("config").includes(provider)) continue;
-				allResults.push(...(await installPortableItems([item], [provider], "config", installOpts)));
+				writeTasks.push({ item, provider, type: "config", global: action.global });
 				continue;
 			}
 
 			if (action.type === "rules") {
 				const item = ruleByName.get(action.item);
 				if (!item || !getProvidersSupporting("rules").includes(provider)) continue;
-				allResults.push(...(await installPortableItems([item], [provider], "rules", installOpts)));
+				writeTasks.push({ item, provider, type: "rules", global: action.global });
 				continue;
 			}
 
 			if (action.type === "hooks") {
 				const item = hookByName.get(action.item);
 				if (!item || !getProvidersSupporting("hooks").includes(provider)) continue;
-				const hookResults = await installPortableItems([item], [provider], "hooks", installOpts);
-				allResults.push(...hookResults);
-				// Track successfully installed hook filenames for settings.json merge
-				if (hookResults.some((result) => result.success && !result.skipped)) {
-					const existing = successfulHookFiles.get(provider) ?? [];
-					existing.push(item.name);
-					successfulHookFiles.set(provider, existing);
-				}
-			}
-		}
-
-		// After all actions executed, merge hooks into target settings.json per provider
-		const hookTargetProviders = selectedProviders.filter((provider) =>
-			getProvidersSupporting("hooks").includes(provider),
-		);
-		for (const hooksProvider of hookTargetProviders) {
-			const files = collectAvailableHookAssetNames(
-				hooksProvider,
-				installGlobally,
-				hookItems,
-				successfulHookFiles.get(hooksProvider) ?? [],
-			);
-			if (files.length === 0) continue;
-			const mergeResult = await migrateHooksSettings({
-				// Source is claude-code — the merger dynamically checks settingsJsonPath,
-				// so any provider with hooks configuration can serve as source in the future.
-				sourceProvider: "claude-code",
-				targetProvider: hooksProvider,
-				installedHookFiles: files,
-				global: installGlobally,
-			});
-			logHookMigrationWarnings(mergeResult.warnings);
-			if (mergeResult.success && mergeResult.hooksRegistered > 0) {
-				logger.verbose(
-					`Registered ${mergeResult.hooksRegistered} hook(s) in ${hooksProvider} settings.json`,
-				);
-			} else {
-				const feedbackMessage = mergeResult.error ?? mergeResult.message;
-				if (feedbackMessage) {
-					p.log.warn(feedbackMessage);
-				}
+				writeTasks.push({ item, provider, type: "hooks", global: action.global });
 			}
 		}
 
@@ -695,12 +1053,185 @@ export async function migrateCommand(options: MigrateOptions): Promise<void> {
 		const plannedSkillActions = plannedExecActions.filter(
 			(action) => action.type === "skill",
 		).length;
-		if (skills.length > 0 && plannedSkillActions === 0) {
+		if (effectiveSkills.length > 0 && plannedSkillActions === 0) {
 			const skillProviders = selectedProviders.filter((pv) =>
 				getProvidersSupporting("skills").includes(pv),
 			);
-			if (skillProviders.length > 0) {
-				allResults.push(...(await installSkillDirectories(skills, skillProviders, installOpts)));
+			for (const provider of skillProviders) {
+				for (const skill of effectiveSkills) {
+					writeTasks.push({
+						item: skill,
+						provider,
+						type: "skill",
+						global: resolvePortableTypeGlobal(provider, "skill", installGlobally),
+					});
+				}
+			}
+		}
+
+		const progressSink = createMigrateProgressSink(writeTasks.length + plannedDeleteActions.length);
+		const writtenPaths = new Set<string>();
+		type WriteTask = (typeof writeTasks)[number];
+		const recordSuccessfulWrites = (task: WriteTask, taskResults: PortableInstallResult[]) => {
+			for (const result of taskResults.filter((entry) => entry.success && !entry.skipped)) {
+				if (result.path.length > 0) {
+					writtenPaths.add(resolve(result.path));
+				}
+				if (task.type === "hooks") {
+					const existing = successfulHookFiles.get(task.provider) ?? {
+						files: [],
+						global: task.global,
+					};
+					existing.files.push(basename(result.path));
+					successfulHookFiles.set(task.provider, existing);
+					// Track absolute paths for Codex wrapper generation
+					if (result.path.length > 0) {
+						const absExisting = successfulHookAbsPaths.get(task.provider) ?? [];
+						absExisting.push(resolve(result.path));
+						successfulHookAbsPaths.set(task.provider, absExisting);
+					}
+				}
+			}
+		};
+		const commandGroups = new Map<string, WriteTask[]>();
+		for (const task of writeTasks) {
+			if (task.type !== "command") continue;
+			const key = `${task.provider}\0${String(task.global)}`;
+			const group = commandGroups.get(key) ?? [];
+			group.push(task);
+			commandGroups.set(key, group);
+		}
+
+		const processedCommandGroups = new Set<string>();
+		for (const task of writeTasks) {
+			if (task.type === "command") {
+				const key = `${task.provider}\0${String(task.global)}`;
+				if (processedCommandGroups.has(key)) continue;
+				processedCommandGroups.add(key);
+				const group = commandGroups.get(key) ?? [task];
+				const taskResults = annotateInstallResults(
+					await installPortableItems(
+						group.map((entry) => entry.item as PortableItem),
+						[task.provider],
+						"command",
+						{ global: task.global },
+					),
+					"command",
+				);
+				allResults.push(...taskResults);
+				recordSuccessfulWrites(task, taskResults);
+				for (const _ of group) {
+					progressSink.tick(progressLabelForType("command"));
+				}
+				continue;
+			}
+
+			const taskInstallOpts = { global: task.global };
+			const taskResults =
+				task.type === "skill"
+					? annotateInstallResults(
+							await installSkillDirectories([task.item], [task.provider], taskInstallOpts),
+							"skill",
+							task.item.name,
+						)
+					: annotateInstallResults(
+							await installPortableItems([task.item], [task.provider], task.type, taskInstallOpts),
+							task.type,
+							task.item.name,
+						);
+			allResults.push(...taskResults);
+			recordSuccessfulWrites(task, taskResults);
+			progressSink.tick(progressLabelForType(task.type));
+		}
+
+		// Ensure opencode.json has a `model` — migrated agents inherit from global
+		// config; without it, OpenCode throws ProviderModelNotFoundError (#728).
+		// Auth-first resolver (#771): reads ~/.local/share/opencode/auth.json and
+		// picks the best model from the models.dev catalog. Non-interactive with no
+		// auth throws OpenCodeAuthRequiredError — surface it cleanly, not as a crash.
+		if (selectedProviders.includes("opencode")) {
+			try {
+				const result = await ensureOpenCodeModel({
+					global: installGlobally,
+					interactive: process.stdout.isTTY === true && !options.yes,
+				});
+				if (result.action === "created" || result.action === "added") {
+					const reason = result.reason ? ` (${result.reason})` : "";
+					p.log.info(`Set default model "${result.model}" in ${result.path}${reason}`);
+				} else if (result.action === "skipped") {
+					p.log.warn(
+						"Skipped writing default model to opencode.json. Migrated agents may fail with ProviderModelNotFoundError until you set one.",
+					);
+				}
+			} catch (err) {
+				if (err instanceof OpenCodeAuthRequiredError) {
+					// Not a crash — discovery couldn't pick a default. The reason
+					// (no-auth / catalog-unavailable / no-usable-model) tells the
+					// user what specifically to fix, so just surface the error
+					// message rather than hardcoding "no authenticated providers".
+					p.log.warn(err.message);
+					postProgressWarnings.push(`opencode setup is incomplete: ${err.message}`);
+				} else {
+					postProgressWarnings.push(
+						`Could not update opencode.json model (${err instanceof Error ? err.message : String(err)}). Agents may fail with ProviderModelNotFoundError until a model is set.`,
+					);
+				}
+			}
+		}
+
+		// Copy hook companion directories (lib/, scout-block/, etc.) and .ckignore to each
+		// provider's hooks directory so that `require('./lib/*.cjs')` calls inside hooks
+		// resolve correctly. This runs after per-file hook installs and before settings merger.
+		if (hooksSource && successfulHookFiles.size > 0) {
+			for (const [hooksProvider, entry] of successfulHookFiles) {
+				const providerCfg = providers[hooksProvider];
+				const targetHooksDir = entry.global
+					? providerCfg.hooks?.globalPath
+					: providerCfg.hooks?.projectPath;
+				if (!targetHooksDir) continue;
+				const companionResult = await copyHooksCompanionDirs(hooksSource, targetHooksDir);
+				if (companionResult.errors.length > 0) {
+					for (const e of companionResult.errors) {
+						postProgressWarnings.push(`Hook companion copy warning (${e.name}): ${e.error}`);
+					}
+				}
+				logger.verbose(
+					`[migrate] Copied hook companions to ${hooksProvider}: dirs=[${companionResult.copiedDirs.join(",")}] dotfiles=[${companionResult.copiedDotfiles.join(",")}]`,
+				);
+				const companionParts: string[] = [];
+				if (companionResult.copiedDirs.length > 0) {
+					companionParts.push(`${companionResult.copiedDirs.join(", ")}`);
+				}
+				if (companionResult.copiedDotfiles.length > 0) {
+					companionParts.push(companionResult.copiedDotfiles.join(", "));
+				}
+				if (companionParts.length > 0) {
+					p.log.info(
+						pc.dim(`Copied hook companions to ${hooksProvider}: ${companionParts.join(" + ")}`),
+					);
+				}
+			}
+		}
+
+		// After all actions executed, merge hooks into target settings.json per provider
+		for (const [hooksProvider, entry] of successfulHookFiles) {
+			if (entry.files.length === 0) continue;
+			const mergeResult = await migrateHooksSettings({
+				sourceProvider: "claude-code",
+				targetProvider: hooksProvider,
+				installedHookFiles: entry.files,
+				installedHookAbsolutePaths: successfulHookAbsPaths.get(hooksProvider),
+				global: entry.global,
+			});
+			if (mergeResult.success && mergeResult.hooksRegistered > 0) {
+				logger.verbose(
+					`Registered ${mergeResult.hooksRegistered} hook(s) in ${hooksProvider} settings.json`,
+				);
+			} else {
+				const feedbackMessage = mergeResult.error ?? mergeResult.message;
+				if (feedbackMessage) {
+					postProgressWarnings.push(feedbackMessage);
+				}
 			}
 		}
 
@@ -708,18 +1239,17 @@ export async function migrateCommand(options: MigrateOptions): Promise<void> {
 		// This runs AFTER skill installation so new dirs exist before old ones are removed.
 		await processMetadataDeletions(skillSource, installGlobally);
 
-		const writtenPaths = new Set(
-			allResults
-				.filter((result) => result.success && !result.skipped && result.path.length > 0)
-				.map((result) => resolve(result.path)),
-		);
-
 		for (const deleteAction of plannedDeleteActions) {
 			allResults.push(
 				await executeDeleteAction(deleteAction, {
 					preservePaths: writtenPaths,
 				}),
 			);
+			progressSink.tick("Cleanup");
+		}
+		progressSink.done();
+		for (const warning of postProgressWarnings) {
+			p.log.warn(warning);
 		}
 
 		// Best-effort registry healing for checksum-only skips. This covers both
@@ -739,24 +1269,35 @@ export async function migrateCommand(options: MigrateOptions): Promise<void> {
 			const providerConfig = providers[provider];
 			if (providerConfig.agents?.writeStrategy !== "codex-toml") continue;
 
-			const staleSlugs = await cleanupStaleCodexConfigEntries({
-				global: installGlobally,
-				provider,
-			});
+			const providerScopes = [
+				...new Set(
+					plan.actions
+						.filter((action) => action.provider === provider)
+						.map((action) => action.global),
+				),
+			];
+			if (providerScopes.length === 0) providerScopes.push(installGlobally);
 
-			if (staleSlugs.length > 0) {
-				// Batch registry cleanup under lock (consistent with syncPortableRegistry pattern).
-				// Matches stale slugs by basename() for cross-platform path support.
-				const staleSlugSet = new Set(staleSlugs.map((s) => `${s}.toml`));
-				const removed = await removeInstallationsByFilter(
-					(i) =>
-						i.type === "agent" &&
-						i.provider === provider &&
-						i.global === installGlobally &&
-						staleSlugSet.has(basename(i.path)),
-				);
-				for (const entry of removed) {
-					logger.verbose(`[migrate] Cleaned stale registry entry: ${entry.item} (${provider})`);
+			for (const scope of providerScopes) {
+				const staleSlugs = await cleanupStaleCodexConfigEntries({
+					global: scope,
+					provider,
+				});
+
+				if (staleSlugs.length > 0) {
+					// Batch registry cleanup under lock (consistent with syncPortableRegistry pattern).
+					// Matches stale slugs by basename() for cross-platform path support.
+					const staleSlugSet = new Set(staleSlugs.map((s) => `${s}.toml`));
+					const removed = await removeInstallationsByFilter(
+						(i) =>
+							i.type === "agent" &&
+							i.provider === provider &&
+							i.global === scope &&
+							staleSlugSet.has(basename(i.path)),
+					);
+					for (const entry of removed) {
+						logger.verbose(`[migrate] Cleaned stale registry entry: ${entry.item} (${provider})`);
+					}
 				}
 			}
 		}
@@ -782,11 +1323,6 @@ export async function migrateCommand(options: MigrateOptions): Promise<void> {
 			logger.debug("[migrate] Failed to update appliedManifestVersion — will retry on next run");
 		}
 
-		installSpinner.stop("Migrate complete");
-
-		// Display migration summary with plan context
-		displayMigrationSummary(plan, allResults, { color: useColor });
-
 		// Check for partial failure and offer rollback (#407)
 		const failed = allResults.filter((r) => !r.success);
 		const successful = allResults.filter((r) => r.success && !r.skipped);
@@ -808,18 +1344,24 @@ export async function migrateCommand(options: MigrateOptions): Promise<void> {
 				});
 
 				if (!p.isCancel(shouldRollback) && shouldRollback) {
-					await rollbackResults(successful);
+					const rolledBackPaths = await rollbackResults(successful);
+					allResults = allResults.map((result) =>
+						result.path.length > 0 && rolledBackPaths.has(result.path)
+							? { ...result, skipped: true, skipReason: "Rolled back after failure" }
+							: result,
+					);
 					p.log.info(`Rolled back ${newWrites.length} file(s)`);
 				}
 			}
 		}
 
+		// Display migration summary with plan context
+		displayMigrationSummary(plan, allResults, { color: useColor });
+
 		// Show detailed results if there are failures
 		if (failed.length > 0) {
 			console.log();
 			displayResults(allResults);
-		} else {
-			p.outro(pc.green("Migration complete!"));
 		}
 		if (failed.length > 0 || hasEmbeddedPartialFailures) {
 			process.exitCode = 1;
@@ -835,7 +1377,8 @@ export async function migrateCommand(options: MigrateOptions): Promise<void> {
  * Rollback successfully written files from a partial migration failure (#407).
  * Only removes files/dirs that were created in this run — not pre-existing content.
  */
-async function rollbackResults(results: PortableInstallResult[]): Promise<void> {
+async function rollbackResults(results: PortableInstallResult[]): Promise<Set<string>> {
+	const rolledBackPaths = new Set<string>();
 	for (const result of results) {
 		if (!result.path || !existsSync(result.path)) continue;
 
@@ -849,10 +1392,12 @@ async function rollbackResults(results: PortableInstallResult[]): Promise<void> 
 			} else {
 				await unlink(result.path);
 			}
+			rolledBackPaths.add(result.path);
 		} catch {
 			// Best-effort cleanup — don't fail on rollback errors
 		}
 	}
+	return rolledBackPaths;
 }
 
 function warnConversionFallback(warning: ConversionFallbackWarning): void {
@@ -861,33 +1406,6 @@ function warnConversionFallback(warning: ConversionFallbackWarning): void {
 			`[migrate] Falling back to raw checksum for ${warning.provider} ${warning.type} "${warning.item}" because ${warning.format} conversion failed: ${warning.error}`,
 		),
 	);
-}
-
-function logHookMigrationWarnings(warnings: MigrationWarning[] | undefined): void {
-	if (!warnings) return;
-	for (const warning of warnings) {
-		logger.warning(`[migrate] ${warning.message}`);
-	}
-}
-
-function collectAvailableHookAssetNames(
-	provider: ProviderType,
-	global: boolean,
-	hookItems: PortableItem[],
-	successfullyInstalled: string[] = [],
-): string[] {
-	const names = new Set(successfullyInstalled);
-	const pathConfig = providers[provider].hooks;
-	const basePath = global ? pathConfig?.globalPath : pathConfig?.projectPath;
-	if (!basePath) return [...names];
-
-	for (const item of hookItems) {
-		if (existsSync(join(basePath, item.name))) {
-			names.add(item.name);
-		}
-	}
-
-	return [...names];
 }
 
 /**
@@ -903,30 +1421,32 @@ async function computeSourceStates(
 		hooks: PortableItem[];
 	},
 	selectedProviders: ProviderType[],
+	global: boolean,
 ): Promise<SourceItemState[]> {
 	const states: SourceItemState[] = [];
 
 	// Helper to process items of a given type
-	const processItems = async (
+	const processItems = (
 		itemList: PortableItem[],
 		type: "agent" | "command" | "config" | "rules" | "hooks",
 	) => {
 		for (const item of itemList) {
 			states.push(
 				buildSourceItemState(item, type, selectedProviders, {
+					global,
 					onConversionFallback: warnConversionFallback,
 				}),
 			);
 		}
 	};
 
-	await processItems(items.agents, "agent");
-	await processItems(items.commands, "command");
+	processItems(items.agents, "agent");
+	processItems(items.commands, "command");
 	if (items.config) {
-		await processItems([items.config], "config");
+		processItems([items.config], "config");
 	}
-	await processItems(items.rules, "rules");
-	await processItems(items.hooks, "hooks");
+	processItems(items.rules, "rules");
+	processItems(items.hooks, "hooks");
 
 	return states;
 }
@@ -935,13 +1455,17 @@ async function computeSourceStates(
  * Compute target states (what exists on disk) for registry entries
  */
 async function computeTargetStates(
-	selectedProviders: ProviderType[],
-	global: boolean,
+	providerConfigs: ReconcileProviderInput[],
 ): Promise<Map<string, TargetFileState>> {
 	const registry = await readPortableRegistry();
 	const relevantEntries = registry.installations.filter((entry) => {
-		if (!selectedProviders.includes(entry.provider as ProviderType)) return false;
-		if (entry.global !== global) return false;
+		const matchingConfig = providerConfigs.some(
+			(config) =>
+				config.provider === entry.provider &&
+				config.global === entry.global &&
+				providerConfigAppliesToType(config, entry.type),
+		);
+		if (!matchingConfig) return false;
 		return entry.type !== "skill";
 	});
 
@@ -996,11 +1520,74 @@ function displayResults(results: PortableInstallResult[]): void {
 	if (failed.length > 0) summaryParts.push(`${failed.length} failed`);
 
 	if (summaryParts.length === 0) {
-		p.outro(pc.yellow("No installations performed"));
 	} else if (failed.length > 0 && successful.length === 0) {
-		p.outro(pc.red("Migrate failed"));
 		process.exit(1);
-	} else {
-		p.outro(pc.green(`Done! ${summaryParts.join(", ")}`));
 	}
+}
+
+function annotateInstallResults(
+	results: PortableInstallResult[],
+	portableType: PortableInstallResult["portableType"],
+	itemName?: string,
+): PortableInstallResult[] {
+	return results.map((result) => ({
+		...result,
+		itemName: itemName ?? result.itemName,
+		operation: "apply",
+		portableType,
+	}));
+}
+
+function progressLabelForType(type: string): string {
+	switch (type) {
+		case "agent":
+			return "Agents";
+		case "command":
+			return "Commands";
+		case "config":
+			return "Config";
+		case "rules":
+			return "Rules";
+		case "hooks":
+			return "Hooks";
+		case "skill":
+			return "Skills";
+		default:
+			return "Migrating";
+	}
+}
+
+function buildDryRunFallbackResults(
+	skills: SkillInfo[],
+	selectedProviders: ProviderType[],
+	installGlobally: boolean,
+	plannedActions: ReconcileAction[],
+): PortableInstallResult[] {
+	const plannedSkillActions = plannedActions.filter((action) => action.type === "skill").length;
+	if (skills.length === 0 || plannedSkillActions > 0) {
+		return [];
+	}
+
+	const results: PortableInstallResult[] = [];
+	for (const provider of selectedProviders.filter((entry) =>
+		getProvidersSupporting("skills").includes(entry),
+	)) {
+		const basePath = getPortableBasePath(provider, "skills", {
+			global: resolvePortableTypeGlobal(provider, "skill", installGlobally),
+		});
+		if (!basePath) continue;
+		for (const skill of skills) {
+			results.push({
+				itemName: skill.name,
+				operation: "apply",
+				path: join(basePath, skill.name),
+				portableType: "skill",
+				provider,
+				providerDisplayName: providers[provider].displayName,
+				success: true,
+			});
+		}
+	}
+
+	return results;
 }

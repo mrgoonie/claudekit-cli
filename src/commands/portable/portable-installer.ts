@@ -3,13 +3,14 @@
  * Handles all write strategies: per-file, merge-single, yaml-merge, json-merge
  */
 import { existsSync } from "node:fs";
-import { mkdir, readFile, unlink, writeFile } from "node:fs/promises";
+import { lstat, mkdir, readFile, realpath, unlink, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
-import { basename, dirname, join, resolve, sep } from "node:path";
+import { basename, dirname, join, relative, resolve, sep } from "node:path";
 import lockfile from "proper-lockfile";
 import { z } from "zod";
 import { computeContentChecksum } from "./checksum-utils.js";
 import { installCodexToml } from "./codex-toml-installer.js";
+import type { CodexTomlRegistryDeps } from "./codex-toml-installer.js";
 import { buildMergedAgentsMd } from "./converters/fm-strip.js";
 import { type ClineCustomMode, buildClineModesJson } from "./converters/fm-to-json.js";
 import { buildYamlModesFile } from "./converters/fm-to-yaml.js";
@@ -23,7 +24,13 @@ import {
 } from "./merge-single-sections.js";
 import { addPortableInstallation } from "./portable-registry.js";
 import { providers } from "./provider-registry.js";
-import type { PortableInstallResult, PortableItem, PortableType, ProviderType } from "./types.js";
+import type {
+	PortableInstallResult,
+	PortableItem,
+	PortableType,
+	ProviderPathConfig,
+	ProviderType,
+} from "./types.js";
 
 const ClineCustomModeSchema = z.object({
 	slug: z.string(),
@@ -103,6 +110,126 @@ function validateStrategyTargetPath(
 
 type ProviderPathKey = "agents" | "commands" | "skills" | "config" | "rules" | "hooks";
 
+export interface PortableInstallerRegistryDeps extends Partial<CodexTomlRegistryDeps> {
+	addPortableInstallation: typeof addPortableInstallation;
+}
+
+const defaultPortableInstallerRegistryDeps: PortableInstallerRegistryDeps = {
+	addPortableInstallation,
+};
+
+function resolvePortableInstallerRegistryDeps(
+	deps?: Partial<PortableInstallerRegistryDeps>,
+): PortableInstallerRegistryDeps {
+	return {
+		...defaultPortableInstallerRegistryDeps,
+		...deps,
+	};
+}
+
+function resolvePerFileOutputFilename(filename: string, pathConfig: ProviderPathConfig): string {
+	if (pathConfig.nestedCommands !== false || !filename.includes("/")) {
+		return filename;
+	}
+
+	const extIdx = filename.lastIndexOf(".");
+	const ext = extIdx >= 0 ? filename.substring(extIdx) : "";
+	const nameWithoutExt = extIdx >= 0 ? filename.substring(0, extIdx) : filename;
+	return `${nameWithoutExt.replace(/\//g, "-")}${ext}`;
+}
+
+function validateResolvedTargetWithinBase(
+	targetPath: string,
+	basePath: string,
+	pathConfig: ProviderPathConfig,
+): string | null {
+	const resolvedTarget = resolve(targetPath);
+	const resolvedBase =
+		pathConfig.writeStrategy === "single-file" ? resolve(dirname(basePath)) : resolve(basePath);
+	if (!resolvedTarget.startsWith(`${resolvedBase}${sep}`) && resolvedTarget !== resolvedBase) {
+		return "Unsafe path: target escapes base directory";
+	}
+	return null;
+}
+
+async function validateNoSymlinkComponents(
+	targetPath: string,
+	boundaryPath: string,
+): Promise<string | null> {
+	const resolvedTarget = resolve(targetPath);
+	const resolvedBoundary = resolve(boundaryPath);
+
+	if (!isPathWithinBoundary(resolvedTarget, resolvedBoundary)) {
+		return `Unsafe path: target escapes ${resolvedBoundary}`;
+	}
+
+	// Walk segments to find the deepest existing ancestor, then resolve symlinks
+	// via realpath. A symlinked segment is safe as long as its resolved real path
+	// stays within the boundary — this allows in-home dotfile managers (stow,
+	// chezmoi, yadm) while still blocking symlinks that escape $HOME / cwd.
+	const segments = relative(resolvedBoundary, resolvedTarget)
+		.split(/[\\/]+/)
+		.filter(Boolean);
+	let cursor = resolvedBoundary;
+	let deepestExisting = resolvedBoundary;
+	for (const segment of segments) {
+		cursor = join(cursor, segment);
+		try {
+			await lstat(cursor);
+			deepestExisting = cursor;
+		} catch (error) {
+			if (isErrnoCode(error, "ENOENT")) {
+				break;
+			}
+			if (isErrnoCode(error, "ELOOP")) {
+				return `Unsafe path: circular symlink detected at ${cursor}`;
+			}
+			throw error;
+		}
+	}
+
+	let realDeepest: string;
+	try {
+		realDeepest = await realpath(deepestExisting);
+	} catch (error) {
+		if (isErrnoCode(error, "ENOENT")) {
+			return null;
+		}
+		if (isErrnoCode(error, "ELOOP")) {
+			return `Unsafe path: circular symlink detected at ${deepestExisting}`;
+		}
+		throw error;
+	}
+
+	let realBoundary: string;
+	try {
+		realBoundary = await realpath(resolvedBoundary);
+	} catch (error) {
+		// Boundary should always exist ($HOME or process.cwd()), so only swallow ENOENT
+		// from rare race conditions. ELOOP on the boundary itself is unsafe.
+		if (isErrnoCode(error, "ENOENT")) {
+			realBoundary = resolvedBoundary;
+		} else if (isErrnoCode(error, "ELOOP")) {
+			return `Unsafe path: circular symlink detected at boundary ${resolvedBoundary}`;
+		} else {
+			throw error;
+		}
+	}
+	if (!isPathWithinBoundary(realDeepest, realBoundary)) {
+		return `Unsafe path: target path contains symlink that escapes ${realBoundary} (${deepestExisting} -> ${realDeepest})`;
+	}
+
+	return null;
+}
+
+async function validateWritableTargetPath(
+	targetPath: string,
+	options: { global: boolean },
+): Promise<string | null> {
+	const boundary = options.global ? homedir() : process.cwd();
+	return validateNoSymlinkComponents(targetPath, boundary);
+}
+
 function getProviderPathKeyForPortableType(portableType: PortableType): ProviderPathKey {
 	switch (portableType) {
 		case "agent":
@@ -164,6 +291,133 @@ function validatePortableItemSegments(item: PortableItem): string | null {
 	}
 
 	return null;
+}
+
+function buildPerFileCollisionSkips(
+	items: PortableItem[],
+	provider: ProviderType,
+	configDisplayName: string,
+	basePath: string,
+	pathConfig: ProviderPathConfig,
+	options: { global: boolean },
+): Map<number, PortableInstallResult> {
+	const skipped = new Map<number, PortableInstallResult>();
+	const seenTargets = new Map<string, { itemName: string; targetPath: string }>();
+
+	for (let index = 0; index < items.length; index += 1) {
+		const item = items[index];
+		if (validatePortableItemSegments(item)) {
+			continue;
+		}
+
+		const result = convertItem(item, pathConfig.format, provider, { global: options.global });
+		if (result.error) {
+			continue;
+		}
+
+		const resolvedFilename = resolvePerFileOutputFilename(result.filename, pathConfig);
+		const targetPath =
+			pathConfig.writeStrategy === "single-file" ? basePath : join(basePath, resolvedFilename);
+		if (validateResolvedTargetWithinBase(targetPath, basePath, pathConfig)) {
+			continue;
+		}
+
+		const first = seenTargets.get(resolve(targetPath));
+		if (!first) {
+			seenTargets.set(resolve(targetPath), { itemName: item.name, targetPath });
+			continue;
+		}
+
+		skipped.set(index, {
+			provider,
+			providerDisplayName: configDisplayName,
+			success: true,
+			path: targetPath,
+			itemName: item.name,
+			skipped: true,
+			skipReason: `Converted target collides with "${first.itemName}"`,
+			warnings: [
+				`Skipped "${item.name}": converted target collides with "${first.itemName}" at ${targetPath}`,
+			],
+		});
+	}
+
+	return skipped;
+}
+
+async function installPerFileItems(
+	items: PortableItem[],
+	provider: ProviderType,
+	portableType: PortableType,
+	pathConfig: ProviderPathConfig,
+	options: { global: boolean },
+	registryDeps: PortableInstallerRegistryDeps,
+): Promise<PortableInstallResult[]> {
+	const config = providers[provider];
+	const results: PortableInstallResult[] = [];
+	let aggregateChars = 0;
+	const totalCharLimit = pathConfig.totalCharLimit;
+	const basePath = options.global ? pathConfig.globalPath : pathConfig.projectPath;
+	const collisionSkips = basePath
+		? buildPerFileCollisionSkips(items, provider, config.displayName, basePath, pathConfig, options)
+		: new Map<number, PortableInstallResult>();
+
+	for (let index = 0; index < items.length; index += 1) {
+		const item = items[index];
+		const collisionSkip = collisionSkips.get(index);
+		if (collisionSkip) {
+			results.push({ ...collisionSkip, portableType, itemName: item.name });
+			continue;
+		}
+
+		let itemSize = 0;
+		if (totalCharLimit) {
+			try {
+				const converted = convertItem(item, pathConfig.format, provider, {
+					global: options.global,
+				});
+				itemSize = converted.content.length;
+			} catch {
+				results.push({
+					provider,
+					providerDisplayName: config.displayName,
+					success: true,
+					path: "",
+					portableType,
+					itemName: item.name,
+					skipped: true,
+					skipReason: `Failed to measure "${item.name}" for aggregate limit`,
+					warnings: [`Skipped "${item.name}": conversion measurement failed`],
+				});
+				continue;
+			}
+
+			if (aggregateChars + itemSize > totalCharLimit) {
+				results.push({
+					provider,
+					providerDisplayName: config.displayName,
+					success: true,
+					path: "",
+					portableType,
+					itemName: item.name,
+					skipped: true,
+					skipReason: `${aggregateChars + itemSize} of ${totalCharLimit} chars used`,
+					warnings: [
+						`Skipped "${item.name}": would use ${aggregateChars + itemSize} of ${totalCharLimit} char limit`,
+					],
+				});
+				continue;
+			}
+		}
+
+		const result = await installPerFile(item, provider, portableType, options, registryDeps);
+		if (totalCharLimit && result.success && !result.skipped) {
+			aggregateChars += itemSize;
+		}
+		results.push({ ...result, portableType, itemName: item.name });
+	}
+
+	return results;
 }
 
 /**
@@ -286,6 +540,7 @@ async function installPerFile(
 	provider: ProviderType,
 	portableType: PortableType,
 	options: { global: boolean },
+	registryDeps: PortableInstallerRegistryDeps,
 ): Promise<PortableInstallResult> {
 	const config = providers[provider];
 	const typeKey = getProviderPathKeyForPortableType(portableType);
@@ -327,7 +582,7 @@ async function installPerFile(
 	let targetSnapshot: FileSnapshot | null = null;
 	try {
 		// Convert to target format
-		const result = convertItem(item, pathConfig.format, provider);
+		const result = convertItem(item, pathConfig.format, provider, { global: options.global });
 		if (result.error) {
 			return {
 				provider,
@@ -339,28 +594,20 @@ async function installPerFile(
 			};
 		}
 		// Flatten nested filename if provider doesn't support nested commands
-		let resolvedFilename = result.filename;
-		if (pathConfig.nestedCommands === false && resolvedFilename.includes("/")) {
-			const extIdx = resolvedFilename.lastIndexOf(".");
-			const ext = extIdx >= 0 ? resolvedFilename.substring(extIdx) : "";
-			const nameWithoutExt = extIdx >= 0 ? resolvedFilename.substring(0, extIdx) : resolvedFilename;
-			resolvedFilename = `${nameWithoutExt.replace(/\//g, "-")}${ext}`;
-		}
+		const resolvedFilename = resolvePerFileOutputFilename(result.filename, pathConfig);
 
 		targetPath =
 			pathConfig.writeStrategy === "single-file" ? basePath : join(basePath, resolvedFilename);
 
 		// Guard against path traversal
-		const resolvedTarget = resolve(targetPath);
-		const resolvedBase =
-			pathConfig.writeStrategy === "single-file" ? resolve(dirname(basePath)) : resolve(basePath);
-		if (!resolvedTarget.startsWith(resolvedBase + sep) && resolvedTarget !== resolvedBase) {
+		const targetPathError = validateResolvedTargetWithinBase(targetPath, basePath, pathConfig);
+		if (targetPathError) {
 			return {
 				provider,
 				providerDisplayName: config.displayName,
 				success: false,
 				path: targetPath,
-				error: "Unsafe path: target escapes base directory",
+				error: targetPathError,
 			};
 		}
 
@@ -376,6 +623,17 @@ async function installPerFile(
 			};
 		}
 
+		const symlinkError = await validateWritableTargetPath(targetPath, options);
+		if (symlinkError) {
+			return {
+				provider,
+				providerDisplayName: config.displayName,
+				success: false,
+				path: targetPath,
+				error: symlinkError,
+			};
+		}
+
 		await ensureDir(targetPath);
 		targetSnapshot = await captureFileSnapshot(targetPath);
 		const alreadyExists = targetSnapshot.existed;
@@ -385,7 +643,7 @@ async function installPerFile(
 		const sourceChecksum = computeContentChecksum(result.content);
 		const targetChecksum = sourceChecksum; // Same for per-file strategy
 
-		await addPortableInstallation(
+		await registryDeps.addPortableInstallation(
 			item.name,
 			portableType,
 			provider,
@@ -404,6 +662,8 @@ async function installPerFile(
 			providerDisplayName: config.displayName,
 			success: true,
 			path: targetPath,
+			portableType,
+			itemName: item.name,
 			overwritten: alreadyExists,
 			warnings: result.warnings.length > 0 ? result.warnings : undefined,
 		};
@@ -434,6 +694,7 @@ async function installMergeSingle(
 	provider: ProviderType,
 	portableType: PortableType,
 	options: { global: boolean },
+	registryDeps: PortableInstallerRegistryDeps,
 ): Promise<PortableInstallResult> {
 	const config = providers[provider];
 	const typeKey = getProviderPathKeyForPortableType(portableType);
@@ -468,6 +729,17 @@ async function installMergeSingle(
 			success: false,
 			path: targetPath,
 			error: targetPathError,
+		};
+	}
+
+	const symlinkError = await validateWritableTargetPath(targetPath, options);
+	if (symlinkError) {
+		return {
+			provider,
+			providerDisplayName: config.displayName,
+			success: false,
+			path: targetPath,
+			error: symlinkError,
 		};
 	}
 
@@ -529,7 +801,9 @@ async function installMergeSingle(
 						};
 					}
 
-					const result = convertItem(item, pathConfig.format, provider);
+					const result = convertItem(item, pathConfig.format, provider, {
+						global: options.global,
+					});
 					if (result.error) {
 						return {
 							provider,
@@ -612,7 +886,7 @@ async function installMergeSingle(
 					// Use section content as target checksum (not whole file)
 					const targetChecksum = computeContentChecksum(sectionContent);
 
-					await addPortableInstallation(
+					await registryDeps.addPortableInstallation(
 						item.name,
 						portableType,
 						provider,
@@ -673,6 +947,7 @@ async function installYamlMerge(
 	provider: ProviderType,
 	portableType: PortableType,
 	options: { global: boolean },
+	registryDeps: PortableInstallerRegistryDeps,
 ): Promise<PortableInstallResult> {
 	const config = providers[provider];
 	const typeKey = getProviderPathKeyForPortableType(portableType);
@@ -707,6 +982,17 @@ async function installYamlMerge(
 			success: false,
 			path: targetPath,
 			error: targetPathError,
+		};
+	}
+
+	const symlinkError = await validateWritableTargetPath(targetPath, options);
+	if (symlinkError) {
+		return {
+			provider,
+			providerDisplayName: config.displayName,
+			success: false,
+			path: targetPath,
+			error: symlinkError,
 		};
 	}
 
@@ -746,7 +1032,7 @@ async function installYamlMerge(
 				};
 			}
 
-			const result = convertItem(item, pathConfig.format, provider);
+			const result = convertItem(item, pathConfig.format, provider, { global: options.global });
 			if (result.error) {
 				return {
 					provider,
@@ -780,15 +1066,15 @@ async function installYamlMerge(
 		const targetChecksum = computeContentChecksum(content);
 		const ownedSections = items.map((item) => {
 			// Extract slug from converted result (stored in newModes keys)
-			const result = convertItem(item, pathConfig.format, provider);
+			const result = convertItem(item, pathConfig.format, provider, { global: options.global });
 			return result.filename; // Slug for YAML entries
 		});
 
 		for (const item of items) {
-			const result = convertItem(item, pathConfig.format, provider);
+			const result = convertItem(item, pathConfig.format, provider, { global: options.global });
 			const sourceChecksum = computeContentChecksum(result.content);
 
-			await addPortableInstallation(
+			await registryDeps.addPortableInstallation(
 				item.name,
 				portableType,
 				provider,
@@ -838,6 +1124,7 @@ async function installJsonMerge(
 	provider: ProviderType,
 	portableType: PortableType,
 	options: { global: boolean },
+	registryDeps: PortableInstallerRegistryDeps,
 ): Promise<PortableInstallResult> {
 	const config = providers[provider];
 	const typeKey = getProviderPathKeyForPortableType(portableType);
@@ -892,7 +1179,7 @@ async function installJsonMerge(
 				};
 			}
 
-			const result = convertItem(item, pathConfig.format, provider);
+			const result = convertItem(item, pathConfig.format, provider, { global: options.global });
 			if (result.error) {
 				return {
 					provider,
@@ -933,6 +1220,16 @@ async function installJsonMerge(
 		// Write cline_custom_modes.json
 		const modesPath = join(basePath, "cline_custom_modes.json");
 		failurePath = modesPath;
+		const modesSymlinkError = await validateWritableTargetPath(modesPath, options);
+		if (modesSymlinkError) {
+			return {
+				provider,
+				providerDisplayName: config.displayName,
+				success: false,
+				path: modesPath,
+				error: modesSymlinkError,
+			};
+		}
 		await ensureDir(modesPath);
 		const alreadyExists = existsSync(modesPath);
 
@@ -1017,6 +1314,10 @@ async function installJsonMerge(
 			) {
 				throw new Error(`Unsafe path: rule target escapes rules directory (${rulePath})`);
 			}
+			const ruleSymlinkError = await validateWritableTargetPath(rulePath, options);
+			if (ruleSymlinkError) {
+				throw new Error(ruleSymlinkError);
+			}
 			await ensureDir(rulePath);
 			if (!capturedRuleSnapshots.has(rulePath)) {
 				rollbackSnapshots.push(await captureFileSnapshot(rulePath));
@@ -1030,10 +1331,10 @@ async function installJsonMerge(
 		}
 
 		for (const item of items) {
-			const result = convertItem(item, pathConfig.format, provider);
+			const result = convertItem(item, pathConfig.format, provider, { global: options.global });
 			const sourceChecksum = computeContentChecksum(result.content);
 
-			await addPortableInstallation(
+			await registryDeps.addPortableInstallation(
 				item.name,
 				portableType,
 				provider,
@@ -1083,7 +1384,9 @@ export async function installPortableItem(
 	provider: ProviderType,
 	portableType: PortableType,
 	options: { global: boolean },
+	deps?: Partial<PortableInstallerRegistryDeps>,
 ): Promise<PortableInstallResult> {
+	const registryDeps = resolvePortableInstallerRegistryDeps(deps);
 	const config = providers[provider];
 	const typeKey = getProviderPathKeyForPortableType(portableType);
 	const pathConfig = config[typeKey];
@@ -1100,29 +1403,54 @@ export async function installPortableItem(
 
 	switch (pathConfig.writeStrategy) {
 		case "merge-single":
-			return installMergeSingle(items, provider, portableType, options);
+			return installMergeSingle(items, provider, portableType, options, registryDeps);
 		case "yaml-merge":
-			return installYamlMerge(items, provider, portableType, options);
+			return installYamlMerge(items, provider, portableType, options, registryDeps);
 		case "json-merge":
-			return installJsonMerge(items, provider, portableType, options);
+			return installJsonMerge(items, provider, portableType, options, registryDeps);
 		case "codex-toml":
-			return installCodexToml(items, provider, portableType, options);
+			return installCodexToml(items, provider, portableType, options, registryDeps);
 		case "single-file":
-			return installPerFile(items[0], provider, portableType, options);
+			return installPerFile(items[0], provider, portableType, options, registryDeps);
+		case "codex-hooks":
+			// Codex hooks use per-file copy for the raw .cjs scripts; the compatibility
+			// transform + wrapper generation happens in migrateHooksSettings() (hooks-settings-merger.ts)
+			// after the files are installed. Fall through to per-file.
+			return installPerFile(items[0], provider, portableType, options, registryDeps);
 		case "per-file": {
 			// For per-file, install each item individually and aggregate results
 			// Track aggregate char count for providers with totalCharLimit (e.g., Windsurf 12K)
 			const results: PortableInstallResult[] = [];
 			let aggregateChars = 0;
 			const totalCharLimit = pathConfig.totalCharLimit;
+			const basePath = options.global ? pathConfig.globalPath : pathConfig.projectPath;
+			const collisionSkips = basePath
+				? buildPerFileCollisionSkips(
+						items,
+						provider,
+						config.displayName,
+						basePath,
+						pathConfig,
+						options,
+					)
+				: new Map<number, PortableInstallResult>();
 
-			for (const item of items) {
+			for (let index = 0; index < items.length; index += 1) {
+				const item = items[index];
+				const collisionSkip = collisionSkips.get(index);
+				if (collisionSkip) {
+					results.push(collisionSkip);
+					continue;
+				}
+
 				// Pre-compute converted size to enforce aggregate limit BEFORE writing
 				// TODO: refactor installPerFile to return content length to eliminate this double conversion
 				let itemSize = 0;
 				if (totalCharLimit) {
 					try {
-						const converted = convertItem(item, pathConfig.format, provider);
+						const converted = convertItem(item, pathConfig.format, provider, {
+							global: options.global,
+						});
 						itemSize = converted.content.length;
 					} catch {
 						// Cannot measure size — skip to avoid silent budget under-count
@@ -1154,7 +1482,7 @@ export async function installPortableItem(
 					}
 				}
 
-				const result = await installPerFile(item, provider, portableType, options);
+				const result = await installPerFile(item, provider, portableType, options, registryDeps);
 
 				// Track chars written for aggregate limit (only when totalCharLimit is active)
 				if (totalCharLimit && result.success && !result.skipped) {
@@ -1191,7 +1519,9 @@ export async function installPortableItem(
 				path: successes[0]?.path || results[0]?.path || "",
 				overwritten: results.some((r) => r.overwritten),
 				skipped: results.every((r) => r.skipped),
-				skipReason: results.every((r) => r.skipped) ? "All items already at source" : undefined,
+				skipReason: results.every((r) => r.skipped)
+					? (results[0]?.skipReason ?? "All items skipped")
+					: undefined,
 				warnings: warnings.length > 0 ? warnings : undefined,
 			};
 		}
@@ -1206,17 +1536,32 @@ export async function installPortableItems(
 	targetProviders: ProviderType[],
 	portableType: PortableType,
 	options: { global: boolean },
+	deps?: Partial<PortableInstallerRegistryDeps>,
 ): Promise<PortableInstallResult[]> {
+	const registryDeps = resolvePortableInstallerRegistryDeps(deps);
 	const uniqueProviders = Array.from(new Set(targetProviders));
 	const results: PortableInstallResult[] = [];
 	for (const provider of uniqueProviders) {
-		// Override global option for providers that only support global installs
+		const config = providers[provider];
+		const typeKey = getProviderPathKeyForPortableType(portableType);
+		const pathConfig = config[typeKey];
 		const providerOptions = { ...options };
-		if (provider === "codex" && portableType === "command" && !options.global) {
-			// Codex commands are global-only (~/.codex/prompts/)
-			providerOptions.global = true;
+		if (pathConfig?.writeStrategy === "per-file") {
+			results.push(
+				...(await installPerFileItems(
+					items,
+					provider,
+					portableType,
+					pathConfig,
+					providerOptions,
+					registryDeps,
+				)),
+			);
+			continue;
 		}
-		results.push(await installPortableItem(items, provider, portableType, providerOptions));
+		results.push(
+			await installPortableItem(items, provider, portableType, providerOptions, registryDeps),
+		);
 	}
 	return results;
 }

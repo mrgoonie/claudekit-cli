@@ -1,43 +1,37 @@
-import { existsSync } from "node:fs";
 /**
  * Skill discovery - finds available skills from ClaudeKit source
  */
 import { readFile, readdir, stat } from "node:fs/promises";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
+import { findFirstExistingPath, getProjectLayoutCandidates } from "@/shared/kit-layout.js";
 import matter from "gray-matter";
+import { validateSkillFrontmatter } from "../../domains/skills/skill-frontmatter-validator.js";
 import { logger } from "../../shared/logger.js";
-import type { SkillInfo } from "./types.js";
-
-const home = homedir();
+import type { EnrichedSkillInfo, SkillInfo } from "./types.js";
 
 // Directories to skip during discovery
 const SKIP_DIRS = ["node_modules", ".git", "dist", "build", ".venv", "__pycache__", "common"];
 
 /**
- * Get the skill source directory
- * Priority: bundled with engineer package > global ~/.claude/skills
+ * Get the skill source directory.
+ *
+ * @param globalOnly When true, skip bundled and CWD candidates and resolve directly
+ *   to ~/.claude/skills. Used by `ck migrate -g` so SOURCE follows DESTINATION scope.
+ *   Defaults to false: bundled engineer > project .claude/skills > global ~/.claude/skills.
  */
-export function getSkillSourcePath(): string | null {
-	// Check for bundled skills in claudekit-engineer (future)
-	const bundledPaths = [
-		join(process.cwd(), "node_modules/claudekit-engineer/skills"),
-		join(process.cwd(), ".claude/skills"),
-	];
-
-	for (const path of bundledPaths) {
-		if (existsSync(path)) {
-			return path;
-		}
+export function getSkillSourcePath(globalOnly = false): string | null {
+	const globalPath = join(homedir(), ".claude/skills");
+	if (globalOnly) {
+		return findFirstExistingPath([globalPath]);
 	}
-
-	// Fall back to global skills directory
-	const globalSkillsPath = join(home, ".claude/skills");
-	if (existsSync(globalSkillsPath)) {
-		return globalSkillsPath;
-	}
-
-	return null;
+	const bundledRoot = join(process.cwd(), "node_modules", "claudekit-engineer");
+	return findFirstExistingPath([
+		join(bundledRoot, "skills"),
+		...getProjectLayoutCandidates(bundledRoot, "skills"),
+		...getProjectLayoutCandidates(process.cwd(), "skills"),
+		globalPath,
+	]);
 }
 
 /**
@@ -59,7 +53,8 @@ async function hasSkillMd(dir: string): Promise<boolean> {
 async function parseSkillMd(skillMdPath: string): Promise<SkillInfo | null> {
 	try {
 		const content = await readFile(skillMdPath, "utf-8");
-		const { data } = matter(content);
+		// CRITICAL: disable JS engine to prevent code execution from untrusted SKILL.md files
+		const { data } = matter(content, { engines: { javascript: { parse: () => ({}) } } });
 
 		// Always use directory name as canonical ID to prevent duplicate installs
 		const skillDir = dirname(skillMdPath);
@@ -132,6 +127,69 @@ export async function discoverSkills(sourcePath?: string): Promise<SkillInfo[]> 
 
 	// Sort alphabetically by name
 	return skills.sort((a, b) => a.name.localeCompare(b.name));
+}
+
+/**
+ * Coerce a YAML value to string array
+ */
+function toStringArray(v: unknown): string[] | undefined {
+	if (Array.isArray(v)) return v.map(String).filter(Boolean);
+	if (typeof v === "string") return v.split(/,\s*/).filter(Boolean);
+	return undefined;
+}
+
+/**
+ * Extract /ck:command-name cross-references from markdown body
+ * Skips code fences to avoid false positives
+ */
+function extractCrossRefs(body: string): string[] {
+	// Remove code fences before scanning
+	const stripped = body.replace(/```[\s\S]*?```/g, "").replace(/`[^`]*`/g, "");
+	const refs = new Set<string>();
+	const pattern = /\/ck:([a-z0-9-]+)/g;
+	for (const match of stripped.matchAll(pattern)) {
+		refs.add(match[1]);
+	}
+	return Array.from(refs);
+}
+
+/**
+ * Discover skills with enriched metadata from frontmatter and body analysis.
+ * Extends discoverSkills() by re-reading each SKILL.md for additional fields.
+ */
+export async function discoverSkillsEnriched(sourcePath?: string): Promise<EnrichedSkillInfo[]> {
+	const base = await discoverSkills(sourcePath);
+	const enriched: EnrichedSkillInfo[] = [];
+
+	for (const skill of base) {
+		const skillMdPath = join(skill.path, "SKILL.md");
+		try {
+			const content = await readFile(skillMdPath, "utf-8");
+			// CRITICAL: disable JS engine to prevent code execution from untrusted SKILL.md files
+			const { data, content: body } = matter(content, {
+				engines: { javascript: { parse: () => ({}) } },
+			});
+
+			// Validate frontmatter against schema (warn-only)
+			const validation = validateSkillFrontmatter(data as Record<string, unknown>, skill.name);
+			for (const w of validation.warnings) logger.verbose(w);
+
+			enriched.push({
+				...skill,
+				category: data.category != null ? String(data.category) : undefined,
+				keywords: toStringArray(data.keywords),
+				requires: toStringArray(data.requires),
+				related: toStringArray(data.related),
+				maturity: data.maturity != null ? String(data.maturity) : undefined,
+				crossRefs: extractCrossRefs(body),
+			});
+		} catch {
+			// If we can't enrich, keep base info
+			enriched.push({ ...skill });
+		}
+	}
+
+	return enriched;
 }
 
 /**

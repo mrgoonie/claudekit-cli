@@ -5,6 +5,8 @@ import { DEFAULT_HELP_OPTIONS, renderGlobalHelp } from "@/domains/help/help-rend
 describe("help registry coverage", () => {
 	const expectedCommands = [
 		"agents",
+		"api",
+		"backups",
 		"commands",
 		"config",
 		"content",
@@ -12,6 +14,7 @@ describe("help registry coverage", () => {
 		"init",
 		"migrate",
 		"new",
+		"plan",
 		"projects",
 		"setup",
 		"skills",

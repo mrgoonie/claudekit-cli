@@ -810,6 +810,81 @@ describe("ClaudeKitChecker - Enhanced Checks", () => {
 			// Restore mock
 			readdirSpy.mockRestore();
 		});
+
+		test("returns info when project has no metadata but global is installed", async () => {
+			// Project dir with stray .claude/CLAUDE.md but no `ck init` ever ran
+			const projectDir = join(mockProjectDir, "global-only-project", ".claude");
+			mkdirSync(projectDir, { recursive: true });
+			await writeFile(join(projectDir, "CLAUDE.md"), "# Just CLAUDE.md");
+
+			mockSetup.project.path = projectDir;
+			mockSetup.project.metadata = null; // user never opted into project install
+
+			const { checkProjectConfigCompleteness } = await import(
+				"../../../src/domains/health-checks/checkers/config-completeness-checker.js"
+			);
+			const result = await checkProjectConfigCompleteness(
+				mockSetup,
+				join(mockProjectDir, "global-only-project"),
+			);
+
+			expect(result.status).toBe("info");
+			expect(result.message).toBe("Using global ClaudeKit (no project override)");
+			expect(result.details).toBe(
+				"Run 'ck init' here only if you want project-specific agents/skills/rules",
+			);
+		});
+
+		test("warns when neither global nor project is installed", async () => {
+			const projectDir = join(mockProjectDir, "no-install-project", ".claude");
+			mkdirSync(projectDir, { recursive: true });
+
+			mockSetup.global.metadata = null;
+			mockSetup.project.path = projectDir;
+			mockSetup.project.metadata = null;
+
+			const { checkProjectConfigCompleteness } = await import(
+				"../../../src/domains/health-checks/checkers/config-completeness-checker.js"
+			);
+			const result = await checkProjectConfigCompleteness(
+				mockSetup,
+				join(mockProjectDir, "no-install-project"),
+			);
+
+			expect(result.status).toBe("warn");
+			expect(result.message).toBe("ClaudeKit not installed");
+			expect(result.suggestion).toContain("ck init");
+		});
+	});
+
+	describe("ClaudekitChecker.run", () => {
+		test("includes hook-command-path findings from settings.local.json in the aggregate run", async () => {
+			const projectClaudeDir = join(mockProjectDir, ".claude");
+			mkdirSync(projectClaudeDir, { recursive: true });
+			await writeFile(
+				join(projectClaudeDir, "settings.local.json"),
+				JSON.stringify({
+					hooks: {
+						PreToolUse: [
+							{
+								matcher: "Read",
+								hooks: [{ type: "command", command: "node .claude/hooks/scout-block.cjs" }],
+							},
+						],
+					},
+				}),
+			);
+
+			const { ClaudekitChecker } = await import(
+				"../../../src/domains/health-checks/claudekit-checker.js"
+			);
+			const results = await new ClaudekitChecker(mockProjectDir).run();
+			const hookCommandPaths = results.find((result) => result.id === "hook-command-paths");
+
+			expect(hookCommandPaths).toBeDefined();
+			expect(hookCommandPaths?.status).toBe("fail");
+			expect(hookCommandPaths?.details).toContain("project settings.local.json");
+		});
 	});
 
 	describe("Edge Cases", () => {

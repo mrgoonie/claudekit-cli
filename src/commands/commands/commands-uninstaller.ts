@@ -2,8 +2,12 @@
  * Commands uninstaller — removes installed commands from providers
  */
 import { existsSync } from "node:fs";
-import { rm } from "node:fs/promises";
-import { join } from "node:path";
+import { lstat, rm } from "node:fs/promises";
+import { basename, dirname, join, relative, resolve, sep } from "node:path";
+import {
+	CODEX_COMMAND_SKILL_FILENAME,
+	getCodexCommandSkillFilename,
+} from "../portable/converters/codex-command-skill-path.js";
 import {
 	findPortableInstallations,
 	readPortableRegistry,
@@ -24,6 +28,215 @@ export interface CommandUninstallResult {
 	wasOrphaned?: boolean;
 }
 
+export interface CommandRegistryDeps {
+	readPortableRegistry: typeof readPortableRegistry;
+	removePortableInstallation: typeof removePortableInstallation;
+}
+
+export const defaultCommandRegistryDeps: CommandRegistryDeps = {
+	readPortableRegistry,
+	removePortableInstallation,
+};
+
+function resolveCommandRegistryDeps(deps?: Partial<CommandRegistryDeps>): CommandRegistryDeps {
+	return {
+		...defaultCommandRegistryDeps,
+		...deps,
+	};
+}
+
+function isPathWithinBase(targetPath: string, basePath: string): boolean {
+	const resolvedTarget = resolve(targetPath);
+	const resolvedBase = resolve(basePath);
+	return resolvedTarget === resolvedBase || resolvedTarget.startsWith(`${resolvedBase}${sep}`);
+}
+
+function isWindowsAbsolutePath(path: string): boolean {
+	return /^[a-zA-Z]:[\\/]/.test(path) || /^\\\\/.test(path);
+}
+
+function isErrnoCode(error: unknown, code: string): boolean {
+	return (
+		typeof error === "object" &&
+		error !== null &&
+		"code" in error &&
+		(error as NodeJS.ErrnoException).code === code
+	);
+}
+
+function getSafeCommandNameSegments(commandName: string): string[] | null {
+	if (
+		commandName.startsWith("/") ||
+		commandName.startsWith("\\") ||
+		isWindowsAbsolutePath(commandName)
+	) {
+		return null;
+	}
+
+	const segments = commandName.replace(/\\/g, "/").replace(/\.md$/i, "").split("/").filter(Boolean);
+	if (segments.length === 0) {
+		return null;
+	}
+
+	for (const segment of segments) {
+		if (segment === "." || segment === ".." || segment.includes("\0")) {
+			return null;
+		}
+		let decoded: string;
+		try {
+			decoded = decodeURIComponent(segment);
+		} catch {
+			decoded = segment;
+		}
+		const normalized = decoded.normalize("NFC");
+		if (
+			normalized === "." ||
+			normalized.includes("..") ||
+			normalized.includes("/") ||
+			normalized.includes("\\") ||
+			normalized.includes("\0")
+		) {
+			return null;
+		}
+	}
+
+	return segments;
+}
+
+function isCodexCommandSkillPath(targetPath: string, basePath: string): boolean {
+	const targetDir = dirname(targetPath);
+	const resolvedTargetDir = resolve(targetDir);
+	const resolvedBase = resolve(basePath);
+	return (
+		basename(targetPath) === CODEX_COMMAND_SKILL_FILENAME &&
+		basename(targetDir).startsWith("source-command-") &&
+		resolvedTargetDir !== resolvedBase &&
+		isPathWithinBase(targetDir, basePath)
+	);
+}
+
+function getCodexLegacyPromptBasePath(basePath: string | null | undefined): string | null {
+	if (!basePath) {
+		return null;
+	}
+	const parent = dirname(basePath);
+	if (basename(basePath) !== "skills" || basename(parent) !== ".agents") {
+		return null;
+	}
+	return join(dirname(parent), ".codex", "prompts");
+}
+
+function getCodexScopeRootFromBasePath(basePath: string): string {
+	const parent = dirname(basePath);
+	if (
+		(basename(basePath) === "skills" && basename(parent) === ".agents") ||
+		(basename(basePath) === "prompts" && basename(parent) === ".codex")
+	) {
+		return dirname(parent);
+	}
+	return basePath;
+}
+
+function getSafeCommandTargetBasePath(
+	targetPath: string,
+	provider: ProviderType,
+	basePath: string | null | undefined,
+): string | null {
+	if (!basePath) {
+		return null;
+	}
+	if (isPathWithinBase(targetPath, basePath)) {
+		return basePath;
+	}
+	if (provider === "codex") {
+		const legacyPromptBasePath = getCodexLegacyPromptBasePath(basePath);
+		if (legacyPromptBasePath && isPathWithinBase(targetPath, legacyPromptBasePath)) {
+			return legacyPromptBasePath;
+		}
+	}
+	return basePath;
+}
+
+function validateCommandTargetPath(
+	targetPath: string,
+	basePath: string | null | undefined,
+): string | null {
+	if (!basePath) {
+		return "Provider command base path is unavailable";
+	}
+	const resolvedTarget = resolve(targetPath);
+	const resolvedBase = resolve(basePath);
+	if (resolvedTarget === resolvedBase) {
+		return "Unsafe path: refusing to remove provider command base directory";
+	}
+	if (!isPathWithinBase(targetPath, basePath)) {
+		return "Unsafe path: command target escapes provider command directory";
+	}
+	return null;
+}
+
+async function validateNoSymlinkComponents(
+	targetPath: string,
+	boundaryPath: string,
+): Promise<string | null> {
+	const resolvedTarget = resolve(targetPath);
+	const resolvedBoundary = resolve(boundaryPath);
+
+	if (!isPathWithinBase(resolvedTarget, resolvedBoundary)) {
+		return `Unsafe path: target escapes ${resolvedBoundary}`;
+	}
+
+	const segments = relative(resolvedBoundary, resolvedTarget)
+		.split(/[\\/]+/)
+		.filter(Boolean);
+	let cursor = resolvedBoundary;
+	for (const segment of segments) {
+		cursor = join(cursor, segment);
+		try {
+			const stats = await lstat(cursor);
+			if (stats.isSymbolicLink()) {
+				return `Unsafe path: target path contains symlink (${cursor})`;
+			}
+		} catch (error) {
+			if (isErrnoCode(error, "ENOENT")) {
+				break;
+			}
+			throw error;
+		}
+	}
+
+	return null;
+}
+
+async function removeCommandTarget(
+	targetPath: string,
+	provider: ProviderType,
+	basePath: string | null | undefined,
+): Promise<void> {
+	const safeBasePath = getSafeCommandTargetBasePath(targetPath, provider, basePath);
+	const targetError = validateCommandTargetPath(targetPath, safeBasePath);
+	if (targetError) {
+		throw new Error(targetError);
+	}
+	const symlinkBoundary =
+		provider === "codex" && safeBasePath
+			? getCodexScopeRootFromBasePath(safeBasePath)
+			: safeBasePath;
+	if (symlinkBoundary) {
+		const symlinkError = await validateNoSymlinkComponents(targetPath, symlinkBoundary);
+		if (symlinkError) {
+			throw new Error(symlinkError);
+		}
+	}
+
+	if (provider === "codex" && safeBasePath && isCodexCommandSkillPath(targetPath, safeBasePath)) {
+		await rm(dirname(targetPath), { recursive: true, force: true });
+		return;
+	}
+
+	await rm(targetPath, { recursive: true, force: true });
+}
+
 /**
  * Uninstall a command from a specific provider
  */
@@ -31,8 +244,10 @@ export async function uninstallCommandFromProvider(
 	commandName: string,
 	provider: ProviderType,
 	global: boolean,
+	deps?: Partial<CommandRegistryDeps>,
 ): Promise<CommandUninstallResult> {
-	const registry = await readPortableRegistry();
+	const registryDeps = resolveCommandRegistryDeps(deps);
+	const registry = await registryDeps.readPortableRegistry();
 	const installations = findPortableInstallations(
 		registry,
 		commandName,
@@ -55,12 +270,14 @@ export async function uninstallCommandFromProvider(
 
 	const installation = installations[0];
 	const fileExists = existsSync(installation.path);
+	const pathConfig = providers[provider].commands;
+	const basePath = pathConfig ? (global ? pathConfig.globalPath : pathConfig.projectPath) : null;
 
 	try {
 		if (fileExists) {
-			await rm(installation.path, { recursive: true, force: true });
+			await removeCommandTarget(installation.path, provider, basePath);
 		}
-		await removePortableInstallation(commandName, "command", provider, global);
+		await registryDeps.removePortableInstallation(commandName, "command", provider, global);
 
 		return {
 			item: commandName,
@@ -91,7 +308,9 @@ export async function forceUninstallCommandFromProvider(
 	commandName: string,
 	provider: ProviderType,
 	global: boolean,
+	deps?: Partial<CommandRegistryDeps>,
 ): Promise<CommandUninstallResult> {
+	const registryDeps = resolveCommandRegistryDeps(deps);
 	const config = providers[provider];
 	const pathConfig = config.commands;
 
@@ -108,6 +327,18 @@ export async function forceUninstallCommandFromProvider(
 	}
 
 	const basePath = global ? pathConfig.globalPath : pathConfig.projectPath;
+	const commandSegments = getSafeCommandNameSegments(commandName);
+	if (!commandSegments) {
+		return {
+			item: commandName,
+			provider,
+			providerDisplayName: config.displayName,
+			global,
+			path: basePath ?? "",
+			success: false,
+			error: "Invalid command name",
+		};
+	}
 	if (!basePath) {
 		return {
 			item: commandName,
@@ -120,10 +351,25 @@ export async function forceUninstallCommandFromProvider(
 		};
 	}
 
-	const primaryPath = join(basePath, `${commandName}${pathConfig.fileExtension}`);
-	const legacyFlatName = commandName.replace(/[\\/]+/g, "-");
+	const candidatePaths: string[] = [];
+	if (provider === "codex") {
+		candidatePaths.push(join(basePath, getCodexCommandSkillFilename(commandSegments)));
+		const legacyPromptBasePath = getCodexLegacyPromptBasePath(basePath);
+		if (legacyPromptBasePath) {
+			candidatePaths.push(join(legacyPromptBasePath, `${commandSegments.join("/")}.md`));
+			candidatePaths.push(join(legacyPromptBasePath, `${commandSegments.join("-")}.md`));
+		}
+	}
+
+	const normalizedCommandPath = commandSegments.join("/");
+	const primaryPath = join(basePath, `${normalizedCommandPath}${pathConfig.fileExtension}`);
+	candidatePaths.push(primaryPath);
+	const legacyFlatName = commandSegments.join("-");
 	const legacyPath = join(basePath, `${legacyFlatName}${pathConfig.fileExtension}`);
-	const targetPath = existsSync(primaryPath) ? primaryPath : legacyPath;
+	if (legacyPath !== primaryPath) {
+		candidatePaths.push(legacyPath);
+	}
+	const targetPath = candidatePaths.find((path) => existsSync(path)) ?? candidatePaths[0];
 	const fileExists = existsSync(targetPath);
 
 	if (!fileExists) {
@@ -139,8 +385,8 @@ export async function forceUninstallCommandFromProvider(
 	}
 
 	try {
-		await rm(targetPath, { recursive: true, force: true });
-		await removePortableInstallation(commandName, "command", provider, global);
+		await removeCommandTarget(targetPath, provider, basePath);
+		await registryDeps.removePortableInstallation(commandName, "command", provider, global);
 		return {
 			item: commandName,
 			provider,
@@ -168,8 +414,10 @@ export async function forceUninstallCommandFromProvider(
 export async function getInstalledCommands(
 	provider?: ProviderType,
 	global?: boolean,
+	deps?: Partial<CommandRegistryDeps>,
 ): Promise<PortableInstallation[]> {
-	const registry = await readPortableRegistry();
+	const registryDeps = resolveCommandRegistryDeps(deps);
+	const registry = await registryDeps.readPortableRegistry();
 	return registry.installations.filter((i) => {
 		if (i.type !== "command") return false;
 		if (provider && i.provider !== provider) return false;

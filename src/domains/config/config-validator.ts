@@ -4,6 +4,10 @@
 export const VALIDATION_PATTERNS = {
 	// Gemini API keys are exactly 39 chars: "AIza" prefix (4) + 35 base64url chars
 	GEMINI_API_KEY: /^AIza[0-9A-Za-z_-]{35}$/,
+	OPENROUTER_API_KEY: /^sk-or-v1-[A-Za-z0-9_-]+$/,
+	// MiniMax keys do not appear to expose a stable public prefix; use a length/charset guard only.
+	MINIMAX_API_KEY: /^[A-Za-z0-9_-]{16,}$/,
+	IMAGE_GEN_PROVIDER: /^(auto|google|openrouter|minimax)$/,
 	DISCORD_WEBHOOK_URL: /^https:\/\/discord\.com\/api\/webhooks\//,
 	TELEGRAM_BOT_TOKEN: /^\d+:[A-Za-z0-9_-]{35}$/,
 };

@@ -8,6 +8,7 @@ import { homedir } from "node:os";
 import { basename, join, resolve } from "node:path";
 import { ProjectsRegistryManager, scanClaudeProjects } from "@/domains/claudekit-data/index.js";
 import { CkConfigManager } from "@/domains/config/index.js";
+import { buildProjectPlanData } from "@/domains/web-server/project-plan-data.js";
 import {
 	countHooks,
 	countMcpServers,
@@ -16,6 +17,7 @@ import {
 	readSettings,
 	scanSkills,
 } from "@/services/claude-data/index.js";
+import type { ClaudeSettings, Skill } from "@/services/claude-data/index.js";
 import type { RegisteredProject } from "@/types";
 import type { Express, Request, Response } from "express";
 import { z } from "zod";
@@ -54,10 +56,18 @@ export function registerProjectRoutes(app: Express): void {
 			const registeredProjects = await ProjectsRegistryManager.listProjects();
 			const registeredPaths = new Set(registeredProjects.map((p) => p.path));
 
+			// Hoist shared I/O above loop to avoid N+1 filesystem reads
+			const [cachedSettings, cachedSkills] = await Promise.all([readSettings(), scanSkills()]);
+
 			// Build project info for registered projects
 			const projects: ProjectInfo[] = [];
 			for (const registered of registeredProjects) {
-				const projectInfo = await buildProjectInfoFromRegistry(registered);
+				const projectInfo = await buildProjectInfoFromRegistry(
+					registered,
+					cachedSettings,
+					cachedSkills,
+					false,
+				);
 				if (projectInfo) {
 					projects.push(projectInfo);
 				}
@@ -75,6 +85,9 @@ export function registerProjectRoutes(app: Express): void {
 				const projectInfo = await detectAndBuildProjectInfo(
 					discovered.path,
 					`discovered-${discovered.path}`,
+					cachedSettings,
+					cachedSkills,
+					false,
 				);
 				if (projectInfo) {
 					// Use URL-safe base64 ID for discovered projects (path contains /)
@@ -88,13 +101,25 @@ export function registerProjectRoutes(app: Express): void {
 			// If still empty, fall back to CWD + global
 			if (projects.length === 0) {
 				const cwd = process.cwd();
-				const cwdProject = await detectAndBuildProjectInfo(cwd, "current");
+				const cwdProject = await detectAndBuildProjectInfo(
+					cwd,
+					"current",
+					undefined,
+					undefined,
+					false,
+				);
 				if (cwdProject) {
 					projects.push(cwdProject);
 				}
 
 				const globalDir = join(homedir(), ".claude");
-				const globalProject = await detectAndBuildProjectInfo(globalDir, "global");
+				const globalProject = await detectAndBuildProjectInfo(
+					globalDir,
+					"global",
+					undefined,
+					undefined,
+					false,
+				);
 				if (globalProject) {
 					projects.push(globalProject);
 				}
@@ -341,9 +366,15 @@ export function registerProjectRoutes(app: Express): void {
 /**
  * Build ProjectInfo from registered project
  * Returns null if project directory no longer exists
+ *
+ * @param cachedSettings - Pre-fetched settings to avoid redundant reads in loops (optional)
+ * @param cachedSkills   - Pre-fetched skills to avoid redundant reads in loops (optional)
  */
 async function buildProjectInfoFromRegistry(
 	registered: RegisteredProject,
+	cachedSettings?: ClaudeSettings | null,
+	cachedSkills?: Skill[],
+	includePlanData = true,
 ): Promise<ProjectInfo | null> {
 	const claudeDir = join(registered.path, ".claude");
 	const metadataPath = join(claudeDir, "metadata.json");
@@ -371,9 +402,9 @@ async function buildProjectInfoFromRegistry(
 	const hasLocalConfig =
 		hasClaudeDir && CkConfigManager.projectConfigExists(registered.path, false);
 
-	// Get enhanced fields from Claude data services
-	const settings = await readSettings();
-	const skills = await scanSkills();
+	// Use cached values when available to avoid N+1 reads inside loops
+	const settings = cachedSettings !== undefined ? cachedSettings : await readSettings();
+	const skills = cachedSkills !== undefined ? cachedSkills : await scanSkills();
 
 	// Determine health based on settings.json existence
 	const settingsPath = join(homedir(), ".claude", "settings.json");
@@ -381,6 +412,7 @@ async function buildProjectInfoFromRegistry(
 
 	// Model priority: env var > settings.json > default
 	const model = getCurrentModel() || settings?.model || "claude-sonnet-4";
+	const planData = includePlanData ? await buildProjectPlanData(registered.path, "project") : null;
 
 	return {
 		id: registered.id,
@@ -400,25 +432,32 @@ async function buildProjectInfoFromRegistry(
 		tags: registered.tags,
 		addedAt: registered.addedAt,
 		lastOpened: registered.lastOpened,
+		planSettings: planData?.planSettings,
+		activePlans: planData?.activePlans,
 		preferences: registered.preferences,
 	};
 }
 
 /**
- * Legacy detection for CWD and global projects
- * Used as fallback when registry is empty or for special IDs
+ * Build project info from a filesystem path.
+ * Used for discovered projects (from ~/.claude/projects/ scanner) and fallbacks.
+ * Does NOT require .claude/ subdirectory — any existing directory qualifies.
+ *
+ * @param cachedSettings - Pre-fetched settings to avoid redundant reads in loops (optional)
+ * @param cachedSkills   - Pre-fetched skills to avoid redundant reads in loops (optional)
  */
-async function detectAndBuildProjectInfo(path: string, id: string): Promise<ProjectInfo | null> {
-	// Check for ClaudeKit markers
+async function detectAndBuildProjectInfo(
+	path: string,
+	id: string,
+	cachedSettings?: ClaudeSettings | null,
+	cachedSkills?: Skill[],
+	includePlanData = true,
+): Promise<ProjectInfo | null> {
+	// Path must exist on disk
+	if (!existsSync(path)) return null;
+
 	const claudeDir = id === "global" ? path : join(path, ".claude");
 	const metadataPath = join(claudeDir, "metadata.json");
-
-	if (!existsSync(metadataPath)) {
-		// Still return if has .claude directory
-		if (!existsSync(claudeDir)) {
-			return null;
-		}
-	}
 
 	let metadata: Record<string, unknown> = {};
 	try {
@@ -436,9 +475,9 @@ async function detectAndBuildProjectInfo(path: string, id: string): Promise<Proj
 
 	const hasLocalConfig = CkConfigManager.projectConfigExists(path, id === "global");
 
-	// Get enhanced fields from Claude data services
-	const settings = await readSettings();
-	const skills = await scanSkills();
+	// Use cached values when available to avoid N+1 reads inside loops
+	const settings = cachedSettings !== undefined ? cachedSettings : await readSettings();
+	const skills = cachedSkills !== undefined ? cachedSkills : await scanSkills();
 
 	// Determine health based on settings.json existence
 	const settingsPath = join(homedir(), ".claude", "settings.json");
@@ -446,6 +485,10 @@ async function detectAndBuildProjectInfo(path: string, id: string): Promise<Proj
 
 	// Model priority: env var > settings.json > default
 	const model = getCurrentModel() || settings?.model || "claude-sonnet-4";
+	const scope = id === "global" ? "global" : "project";
+	const planData = includePlanData
+		? await buildProjectPlanData(id === "global" ? null : path, scope)
+		: null;
 
 	return {
 		id,
@@ -460,5 +503,7 @@ async function detectAndBuildProjectInfo(path: string, id: string): Promise<Proj
 		activeHooks: settings ? countHooks(settings) : 0,
 		mcpServers: settings ? countMcpServers(settings) : 0,
 		skills: skills.map((s) => s.id),
+		planSettings: planData?.planSettings,
+		activePlans: planData?.activePlans,
 	};
 }

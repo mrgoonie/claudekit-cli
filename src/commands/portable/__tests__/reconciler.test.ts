@@ -1,4 +1,5 @@
 import { describe, expect, it } from "bun:test";
+import type { PortableManifest } from "../portable-manifest.js";
 import type { PortableRegistryV3 } from "../portable-registry.js";
 import type {
 	ReconcileInput,
@@ -7,6 +8,13 @@ import type {
 	TargetFileState,
 } from "../reconcile-types.js";
 import { reconcile } from "../reconciler.js";
+import manifestFixture from "./fixtures/path-migration/manifest.json" with { type: "json" };
+import registryPost343Fixture from "./fixtures/path-migration/registry-post-343.json" with {
+	type: "json",
+};
+import registryPre343Fixture from "./fixtures/path-migration/registry-pre-343.json" with {
+	type: "json",
+};
 
 /**
  * Helper to create source item state
@@ -79,6 +87,69 @@ function makeInput(
 }
 
 describe("reconciler - core decision matrix", () => {
+	it("honors type-scoped provider configs for mixed-scope migrations", () => {
+		const agent = makeSourceItem("reviewer", "agent", "agent-source", { codex: "agent-codex" });
+		const command = makeSourceItem("plan", "command", "command-source", {
+			codex: "command-codex",
+		});
+		const registry = makeRegistry([]);
+		const input = makeInput([agent, command], registry, new Map(), [
+			{ provider: "codex", global: false, types: ["agent"] },
+			{ provider: "codex", global: true, types: ["command"] },
+		]);
+
+		const plan = reconcile(input);
+
+		expect(
+			plan.actions.some(
+				(action) => action.item === "reviewer" && action.type === "agent" && action.global === true,
+			),
+		).toBe(false);
+		expect(
+			plan.actions.some(
+				(action) => action.item === "plan" && action.type === "command" && action.global === false,
+			),
+		).toBe(false);
+		expect(plan.actions).toContainEqual(
+			expect.objectContaining({ item: "reviewer", type: "agent", global: false }),
+		);
+		expect(plan.actions).toContainEqual(
+			expect.objectContaining({ item: "plan", type: "command", global: true }),
+		);
+	});
+
+	it("does not orphan-delete inactive types from a scoped provider config", () => {
+		const command = makeSourceItem("plan", "command", "command-source", {
+			codex: "command-codex",
+		});
+		const registry = makeRegistry([
+			{
+				item: "old-agent",
+				type: "agent",
+				provider: "codex",
+				global: true,
+				path: "/tmp/.codex/agents/old_agent.toml",
+				sourcePath: "/tmp/.claude/agents/old-agent.md",
+				sourceChecksum: "old-source",
+				targetChecksum: "old-target",
+				installSource: "kit",
+				installedAt: "2026-01-01T00:00:00.000Z",
+			},
+		]);
+		const input = makeInput([command], registry, new Map(), [
+			{ provider: "codex", global: true, types: ["command"] },
+		]);
+
+		const plan = reconcile(input);
+
+		expect(
+			plan.actions.some(
+				(action) =>
+					action.action === "delete" && action.item === "old-agent" && action.type === "agent",
+			),
+		).toBe(false);
+	});
+
 	it("case A: new item → install", () => {
 		const source = makeSourceItem("new-skill");
 		const registry = makeRegistry([]);
@@ -959,5 +1030,339 @@ describe("reconciler - force mode", () => {
 		expect(plan.actions[0].action).toBe("install");
 		expect(plan.actions[0].reason).toContain("Force overwrite");
 		expect(plan.summary.install).toBe(1);
+	});
+});
+
+// ---------------------------------------------------------------------------
+// windsurf+cursor path migration (Phase 03 verification)
+// Fixtures: src/commands/portable/__tests__/fixtures/path-migration/
+// Manifest: 3.37.0 forward entries (gemini-cli, windsurf, cursor) +
+//           3.43.0 reversed entries (windsurf .agents→.windsurf, cursor .agents→.cursor)
+// ---------------------------------------------------------------------------
+
+/**
+ * Build a minimal ReconcileInput for path-migration tests.
+ * sourceItems is intentionally empty — detectPathMigrations only walks
+ * the registry, it does not need matching source items.
+ */
+function makeMigrationInput(
+	registry: PortableRegistryV3,
+	manifest: PortableManifest,
+	providerConfigs: ReconcileProviderInput[] = [
+		{ provider: "cursor", global: false },
+		{ provider: "windsurf", global: false },
+	],
+): ReconcileInput {
+	return {
+		sourceItems: [],
+		registry,
+		targetStates: new Map(),
+		manifest,
+		providerConfigs,
+	};
+}
+
+/**
+ * Cast JSON fixture to PortableRegistryV3.
+ * Fixtures are validated to match the schema; cast is safe here.
+ */
+function asRegistry(raw: unknown): PortableRegistryV3 {
+	return raw as PortableRegistryV3;
+}
+
+describe("reconciler - windsurf+cursor path migration (3.43.0)", () => {
+	it("built-in Codex command migration deletes old prompts path and reinstalls as skills", () => {
+		const command = makeSourceItem("local", "command", "new-source", {
+			codex: "new-codex-skill",
+		});
+		const registry = makeRegistry([
+			{
+				item: "local",
+				type: "command",
+				provider: "codex",
+				global: false,
+				path: "/repo/.codex/prompts/local.md",
+				sourcePath: "/repo/.claude/commands/local.md",
+				sourceChecksum: "old-source",
+				targetChecksum: "old-target",
+				installSource: "kit",
+				installedAt: "2026-01-01T00:00:00.000Z",
+			},
+		]);
+		const input = makeInput([command], registry, new Map(), [makeProvider("codex", false)]);
+
+		const plan = reconcile(input);
+
+		expect(plan.actions).toContainEqual(
+			expect.objectContaining({
+				action: "delete",
+				item: "local",
+				type: "command",
+				provider: "codex",
+				global: false,
+				targetPath: "/repo/.codex/prompts/local.md",
+				reasonCode: "path-migrated-cleanup",
+				previousPath: "/repo/.codex/prompts/local.md",
+			}),
+		);
+		expect(plan.actions).toContainEqual(
+			expect.objectContaining({
+				action: "install",
+				item: "local",
+				type: "command",
+				provider: "codex",
+				global: false,
+			}),
+		);
+	});
+
+	// Test 1: cursor upgrade emits delete for .agents/skills/foo
+	it("cursor 3.43 upgrade: emits delete for skill at .agents/skills", () => {
+		const registry = asRegistry(registryPre343Fixture);
+		// Only keep the cursor entry for isolation
+		const cursorOnlyRegistry: PortableRegistryV3 = {
+			...registry,
+			installations: registry.installations.filter((i) => i.provider === "cursor"),
+		};
+
+		const plan = reconcile(
+			makeMigrationInput(cursorOnlyRegistry, manifestFixture as PortableManifest),
+		);
+
+		const migrationDeletes = plan.actions.filter(
+			(a) => a.action === "delete" && a.reasonCode === "path-migrated-cleanup",
+		);
+		expect(migrationDeletes).toHaveLength(1);
+		expect(migrationDeletes[0].item).toBe("foo");
+		expect(migrationDeletes[0].provider).toBe("cursor");
+		expect(migrationDeletes[0].targetPath).toContain(".agents/skills/foo");
+	});
+
+	// Test 2: windsurf upgrade emits delete for .agents/skills/bar (project-relative path)
+	it("windsurf 3.43 upgrade (project path): emits delete for skill at .agents/skills", () => {
+		const registry = asRegistry(registryPre343Fixture);
+		const windsurfOnlyRegistry: PortableRegistryV3 = {
+			...registry,
+			installations: registry.installations.filter((i) => i.provider === "windsurf"),
+		};
+
+		const plan = reconcile(
+			makeMigrationInput(windsurfOnlyRegistry, manifestFixture as PortableManifest),
+		);
+
+		const migrationDeletes = plan.actions.filter(
+			(a) => a.action === "delete" && a.reasonCode === "path-migrated-cleanup",
+		);
+		expect(migrationDeletes).toHaveLength(1);
+		expect(migrationDeletes[0].item).toBe("bar");
+		expect(migrationDeletes[0].provider).toBe("windsurf");
+		expect(migrationDeletes[0].targetPath).toContain(".agents/skills/bar");
+	});
+
+	// Test 3: windsurf upgrade emits delete for global path containing .agents/skills
+	it("windsurf 3.43 upgrade (global path): emits delete for global skill at .agents/skills", () => {
+		const globalRegistry: PortableRegistryV3 = {
+			version: "3.0",
+			appliedManifestVersion: "3.42.5",
+			installations: [
+				{
+					item: "baz",
+					type: "skill",
+					provider: "windsurf",
+					global: true,
+					// Simulate absolute global path containing .agents/skills segments
+					path: "/home/user/.agents/skills/baz",
+					installedAt: "2024-01-01T00:00:00.000Z",
+					sourcePath: "skills/baz",
+					sourceChecksum: "source-baz",
+					targetChecksum: "target-baz",
+					installSource: "kit",
+				},
+			],
+		};
+
+		const plan = reconcile(
+			makeMigrationInput(globalRegistry, manifestFixture as PortableManifest, [
+				{ provider: "windsurf", global: true },
+			]),
+		);
+
+		const migrationDeletes = plan.actions.filter(
+			(a) => a.action === "delete" && a.reasonCode === "path-migrated-cleanup",
+		);
+		expect(migrationDeletes).toHaveLength(1);
+		expect(migrationDeletes[0].item).toBe("baz");
+		expect(migrationDeletes[0].provider).toBe("windsurf");
+		expect(migrationDeletes[0].targetPath).toBe("/home/user/.agents/skills/baz");
+	});
+
+	// Test 4: idempotency — registry already at native paths, appliedManifestVersion=3.43.0
+	it("idempotent: no migration deletes when registry already at native paths (post-3.43.0)", () => {
+		const registry = asRegistry(registryPost343Fixture);
+
+		const plan = reconcile(makeMigrationInput(registry, manifestFixture as PortableManifest));
+
+		const migrationDeletes = plan.actions.filter(
+			(a) => a.action === "delete" && a.reasonCode === "path-migrated-cleanup",
+		);
+		expect(migrationDeletes).toHaveLength(0);
+	});
+
+	// Test 5: semver boundary — appliedManifestVersion === cliVersion === 3.43.0 → no re-trigger
+	it("semver boundary: appliedManifestVersion === 3.43.0 does not re-trigger reversed entries", () => {
+		// Registry at 3.43.0 but still has .agents/skills paths (edge-case data)
+		const boundaryRegistry: PortableRegistryV3 = {
+			version: "3.0",
+			appliedManifestVersion: "3.43.0",
+			installations: [
+				{
+					item: "edge",
+					type: "skill",
+					provider: "cursor",
+					global: false,
+					path: ".agents/skills/edge",
+					installedAt: "2024-01-01T00:00:00.000Z",
+					sourcePath: "skills/edge",
+					sourceChecksum: "source-edge",
+					targetChecksum: "target-edge",
+					installSource: "kit",
+				},
+			],
+		};
+
+		const plan = reconcile(
+			makeMigrationInput(boundaryRegistry, manifestFixture as PortableManifest),
+		);
+
+		// entry.since (3.43.0) must be STRICTLY GREATER than appliedVersion (3.43.0)
+		// getApplicableEntries uses: since > applied && since <= current
+		// 3.43.0 > 3.43.0 is false → entry not applicable → no delete
+		const migrationDeletes = plan.actions.filter(
+			(a) => a.action === "delete" && a.reasonCode === "path-migrated-cleanup",
+		);
+		expect(migrationDeletes).toHaveLength(0);
+	});
+
+	// Test 6: old 3.37.0 entries and new 3.43.0 entries coexist correctly
+	it("3.37.0 and 3.43.0 entries coexist: both sets filter independently", () => {
+		// User at 3.37.0 applied — installs exist at .agents/skills (forward migration happened)
+		// Now upgrading to 3.43.0 — reversed entries should apply
+		const mixedRegistry: PortableRegistryV3 = {
+			version: "3.0",
+			appliedManifestVersion: "3.37.0",
+			installations: [
+				{
+					item: "alpha",
+					type: "skill",
+					provider: "cursor",
+					global: false,
+					path: ".agents/skills/alpha",
+					installedAt: "2024-01-01T00:00:00.000Z",
+					sourcePath: "skills/alpha",
+					sourceChecksum: "source-alpha",
+					targetChecksum: "target-alpha",
+					installSource: "kit",
+				},
+				{
+					item: "beta",
+					type: "skill",
+					provider: "windsurf",
+					global: false,
+					path: ".agents/skills/beta",
+					installedAt: "2024-01-01T00:00:00.000Z",
+					sourcePath: "skills/beta",
+					sourceChecksum: "source-beta",
+					targetChecksum: "target-beta",
+					installSource: "kit",
+				},
+			],
+		};
+
+		const plan = reconcile(makeMigrationInput(mixedRegistry, manifestFixture as PortableManifest));
+
+		// appliedManifestVersion=3.37.0, cliVersion=3.43.0
+		// 3.43.0 entries: since(3.43.0) > applied(3.37.0) && since(3.43.0) <= current(3.43.0) → TRUE
+		// 3.37.0 entries: since(3.37.0) > applied(3.37.0) is FALSE → not applicable
+		// So only the two 3.43.0 reversed entries fire, matching both .agents/skills installs
+		const migrationDeletes = plan.actions.filter(
+			(a) => a.action === "delete" && a.reasonCode === "path-migrated-cleanup",
+		);
+		expect(migrationDeletes).toHaveLength(2);
+
+		const deletedItems = migrationDeletes.map((a) => a.item).sort();
+		expect(deletedItems).toEqual(["alpha", "beta"]);
+
+		const deletedProviders = migrationDeletes.map((a) => a.provider).sort();
+		expect(deletedProviders).toEqual(["cursor", "windsurf"]);
+	});
+
+	// Test 7: no matching installs → zero delete actions
+	it("no matching installs: no migration delete actions when registry is empty", () => {
+		const emptyRegistry: PortableRegistryV3 = {
+			version: "3.0",
+			appliedManifestVersion: "3.42.5",
+			installations: [],
+		};
+
+		const plan = reconcile(makeMigrationInput(emptyRegistry, manifestFixture as PortableManifest));
+
+		const migrationDeletes = plan.actions.filter(
+			(a) => a.action === "delete" && a.reasonCode === "path-migrated-cleanup",
+		);
+		expect(migrationDeletes).toHaveLength(0);
+		expect(plan.summary.delete).toBe(0);
+	});
+
+	// Test 8: mixed registry — only .agents/skills entry gets delete, .cursor/skills entry is untouched
+	it("mixed registry: only .agents/skills entry gets migration delete, native-path entry is unaffected", () => {
+		const mixedRegistry: PortableRegistryV3 = {
+			version: "3.0",
+			appliedManifestVersion: "3.42.5",
+			installations: [
+				{
+					// Old path — should be cleaned up
+					item: "old-skill",
+					type: "skill",
+					provider: "cursor",
+					global: false,
+					path: ".agents/skills/old-skill",
+					installedAt: "2024-01-01T00:00:00.000Z",
+					sourcePath: "skills/old-skill",
+					sourceChecksum: "source-old",
+					targetChecksum: "target-old",
+					installSource: "kit",
+				},
+				{
+					// Already at native path — must NOT be deleted by migration
+					item: "native-skill",
+					type: "skill",
+					provider: "cursor",
+					global: false,
+					path: ".cursor/skills/native-skill",
+					installedAt: "2024-01-01T00:00:00.000Z",
+					sourcePath: "skills/native-skill",
+					sourceChecksum: "source-native",
+					targetChecksum: "target-native",
+					installSource: "kit",
+				},
+			],
+		};
+
+		const plan = reconcile(makeMigrationInput(mixedRegistry, manifestFixture as PortableManifest));
+
+		const migrationDeletes = plan.actions.filter(
+			(a) => a.action === "delete" && a.reasonCode === "path-migrated-cleanup",
+		);
+		expect(migrationDeletes).toHaveLength(1);
+		expect(migrationDeletes[0].item).toBe("old-skill");
+		expect(migrationDeletes[0].targetPath).toContain(".agents/skills/old-skill");
+
+		// native-skill must appear in actions but NOT as a migration delete
+		const nativeAction = plan.actions.find((a) => a.item === "native-skill");
+		// native-skill is in the registry but not in sourceItems, so it becomes an orphan delete
+		// OR it may not appear at all — either way, it must not be a path-migrated-cleanup
+		if (nativeAction) {
+			expect(nativeAction.reasonCode).not.toBe("path-migrated-cleanup");
+		}
 	});
 });

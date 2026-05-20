@@ -8,8 +8,19 @@ describe("PathResolver", () => {
 	const originalEnv = { ...process.env };
 
 	beforeEach(() => {
-		// Reset environment
+		// Reset environment to a clean baseline for each test.
+		// Drop env vars that PathResolver respects in production but that tests
+		// must control explicitly — otherwise a parent shell (e.g. CCS sessions
+		// that export CLAUDE_CONFIG_DIR) leaks into assertions like
+		// `getGlobalKitDir() === ~/.claude`.
 		process.env = { ...originalEnv };
+		// Use `delete` (not `= undefined`) — assigning `undefined` to
+		// process.env.KEY coerces to the string "undefined" in standard Node,
+		// which is truthy and would defeat the purpose of clearing.
+		// biome-ignore lint/performance/noDelete: env var must be unset, not coerced to "undefined" string
+		delete process.env.CLAUDE_CONFIG_DIR;
+		// biome-ignore lint/performance/noDelete: env var must be unset, not coerced to "undefined" string
+		delete process.env.CK_TEST_HOME;
 	});
 
 	afterEach(() => {
@@ -197,16 +208,19 @@ describe("PathResolver", () => {
 			expect(globalKitDir).toBe(join(homedir(), ".claude"));
 		});
 
-		it("should return consistent path regardless of environment variables", () => {
-			// Test that it doesn't depend on APPDATA or other env vars
+		it("should return consistent path regardless of Windows app data environment variables", () => {
 			const originalAppData = process.env.APPDATA;
-			process.env.APPDATA = undefined;
+			const originalLocalAppData = process.env.LOCALAPPDATA;
+			process.env.APPDATA = "C:\\Users\\admin\\AppData\\Roaming";
+			process.env.LOCALAPPDATA = "C:\\Users\\admin\\AppData\\Local";
 
-			const globalKitDir = PathResolver.getGlobalKitDir();
-			expect(globalKitDir).toBe(join(homedir(), ".claude"));
-
-			// Restore
-			process.env.APPDATA = originalAppData;
+			try {
+				const globalKitDir = PathResolver.getGlobalKitDir();
+				expect(globalKitDir).toBe(join(homedir(), ".claude"));
+			} finally {
+				process.env.APPDATA = originalAppData;
+				process.env.LOCALAPPDATA = originalLocalAppData;
+			}
 		});
 
 		it("should respect CLAUDE_CONFIG_DIR when set", () => {

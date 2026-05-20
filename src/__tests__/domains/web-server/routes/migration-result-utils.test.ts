@@ -3,6 +3,7 @@ import type { ProviderPathCollision } from "@/commands/portable/provider-registr
 import type { PortableInstallResult } from "@/commands/portable/types.js";
 import {
 	annotateResultsWithCollisions,
+	dedupeProviderPathCollisions,
 	emptyDiscoveryCounts,
 	toDiscoveryCounts,
 } from "@/domains/web-server/routes/migration-result-utils.js";
@@ -276,6 +277,34 @@ describe("migration-result-utils", () => {
 			// Now add project collision — project result gets annotated
 			annotateResultsWithCollisions(results, [projectCollision]);
 			expect(projectResult.collidingProviders).toEqual(["amp"]);
+		});
+	});
+
+	describe("dedupeProviderPathCollisions", () => {
+		it("deduplicates same collision reported from multiple scopes", () => {
+			const collisions: ProviderPathCollision[] = [
+				{
+					path: ".agents/skills",
+					portableType: "skills",
+					global: false,
+					providers: ["codex", "amp"],
+				},
+				{
+					path: ".agents/skills",
+					portableType: "skills",
+					global: true,
+					providers: ["amp", "codex"],
+				},
+			];
+
+			expect(dedupeProviderPathCollisions(collisions)).toEqual([
+				{
+					path: ".agents/skills",
+					portableType: "skills",
+					global: false,
+					providers: ["codex", "amp"],
+				},
+			]);
 		});
 	});
 });

@@ -31,6 +31,8 @@ export interface FieldRendererProps {
 		description?: string;
 	};
 	disabled?: boolean;
+	enumLabels?: Record<string, string>;
+	editable?: boolean;
 }
 
 /** Text input for string fields */
@@ -121,22 +123,63 @@ export const BooleanField: React.FC<FieldRendererProps> = ({
 	);
 };
 
-/** Select dropdown for enum fields */
+/** Select dropdown for enum fields, with optional editable/combobox mode */
 export const EnumField: React.FC<FieldRendererProps> = ({
 	value,
 	onChange,
 	onFocus,
 	schema,
 	disabled,
+	enumLabels,
+	editable,
 }) => {
 	const options = schema.enum || [];
+	const listId = `enum-list-${options.join("-").slice(0, 32)}`;
 
+	// Editable combobox: input + datalist — allows typing custom values
+	// Datalist value must be the label string (Chrome shows value, not text content)
+	// onChange reverse-lookups the raw ID from the label
+	if (editable) {
+		const getLabel = (opt: unknown) => enumLabels?.[String(opt)] ?? String(opt);
+		const currentLabel = value != null ? getLabel(value) : "";
+
+		return (
+			<>
+				<input
+					type="text"
+					list={listId}
+					value={currentLabel}
+					onChange={(e) => {
+						const typed = e.target.value;
+						// If user picked a label, resolve to its underlying value
+						const match = options.find((opt) => getLabel(opt) === typed);
+						onChange(match != null ? String(match) : typed === "" ? null : typed);
+					}}
+					onFocus={onFocus}
+					disabled={disabled}
+					placeholder="Select or type a model..."
+					className="w-full px-3 py-2 text-sm bg-dash-bg border border-dash-border rounded-lg
+						text-dash-text
+						focus:outline-none focus:ring-2 focus:ring-dash-accent/50 focus:border-dash-accent
+						disabled:opacity-50 disabled:cursor-not-allowed
+						transition-colors"
+				/>
+				<datalist id={listId}>
+					{options.map((opt) => {
+						const label = getLabel(opt);
+						return <option key={String(opt)} value={label} />;
+					})}
+				</datalist>
+			</>
+		);
+	}
+
+	// Default: strict select dropdown
 	return (
 		<select
 			value={value !== null && value !== undefined ? String(value) : ""}
 			onChange={(e) => {
 				const val = e.target.value;
-				// Try to preserve original type (number vs string)
 				if (val === "") {
 					onChange(null);
 				} else if (options.includes(Number(val))) {
@@ -156,7 +199,7 @@ export const EnumField: React.FC<FieldRendererProps> = ({
 			<option value="">-- Select --</option>
 			{options.map((opt) => (
 				<option key={String(opt)} value={String(opt)}>
-					{String(opt)}
+					{enumLabels?.[String(opt)] ?? String(opt)}
 				</option>
 			))}
 		</select>

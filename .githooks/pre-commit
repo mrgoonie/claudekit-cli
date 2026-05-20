@@ -1,5 +1,5 @@
 #!/bin/bash
-# Quality gate (pre-commit): typecheck + lint + build
+# Quality gate (pre-commit): lint + typecheck + build
 # Catches the top 3 CI failure categories BEFORE code leaves the machine.
 # Works in both normal repos and worktrees.
 
