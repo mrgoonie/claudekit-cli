@@ -18,6 +18,7 @@ import {
 	checkHookRuntime,
 	checkHookSyntax,
 	checkHooksExist,
+	checkLegacyHookPrompts,
 	checkPathRefsValid,
 	checkProjectConfigCompleteness,
 	checkProjectInstall,
@@ -101,6 +102,8 @@ export class ClaudekitChecker implements Checker {
 		results.push(await checkHookRuntime(this.projectDir));
 		logger.verbose("ClaudekitChecker: Checking hook command paths");
 		results.push(await checkHookCommandPaths(this.projectDir));
+		logger.verbose("ClaudekitChecker: Checking legacy hook prompts");
+		results.push(await checkLegacyHookPrompts(this.projectDir));
 		logger.verbose("ClaudekitChecker: Checking hook file references");
 		results.push(await checkHookFileReferences(this.projectDir));
 		logger.verbose("ClaudekitChecker: Checking hook config");

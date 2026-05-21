@@ -4,6 +4,7 @@ import { readdir } from "node:fs/promises";
 import { homedir, tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { type SettingsJson, SettingsMerger } from "@/domains/config/settings-merger.js";
+import { isLegacyDescriptiveNamePrompt } from "@/domains/installation/merger/zombie-wirings-pruner.js";
 import { CLAUDEKIT_CLI_NPM_PACKAGE_NAME } from "@/shared/claudekit-constants.js";
 import { repairClaudeHookCommandPath } from "@/shared/command-normalizer.js";
 import { logger } from "@/shared/logger.js";
@@ -49,6 +50,12 @@ export interface HookCommandFinding {
 	command: string;
 	expected: string;
 	issue: "raw-relative" | "invalid-format";
+}
+
+interface LegacyHookPromptFinding {
+	label: string;
+	eventName: string;
+	matcher?: string;
 }
 
 /**
@@ -295,6 +302,191 @@ async function repairHookCommandsInSettingsFile(settingsFile: ClaudeSettingsFile
 	}
 
 	return repaired;
+}
+
+function collectLegacyHookPromptFindings(
+	settings: SettingsJson,
+	settingsFile: ClaudeSettingsFile,
+): LegacyHookPromptFinding[] {
+	const findings: LegacyHookPromptFinding[] = [];
+	if (!settings.hooks) return findings;
+
+	for (const [eventName, entries] of Object.entries(settings.hooks)) {
+		for (const entry of entries) {
+			if (isLegacyDescriptiveNamePrompt(entry as { type?: unknown; prompt?: unknown })) {
+				findings.push({
+					label: settingsFile.label,
+					eventName,
+				});
+			}
+
+			if (!("hooks" in entry) || !Array.isArray(entry.hooks)) {
+				continue;
+			}
+
+			const matcher = "matcher" in entry ? entry.matcher : undefined;
+			for (const hook of entry.hooks) {
+				if (!isLegacyDescriptiveNamePrompt(hook)) {
+					continue;
+				}
+				findings.push({
+					label: settingsFile.label,
+					eventName,
+					matcher,
+				});
+			}
+		}
+	}
+
+	return findings;
+}
+
+async function pruneLegacyHookPromptsInSettingsFile(
+	settingsFile: ClaudeSettingsFile,
+): Promise<number> {
+	const settings = await SettingsMerger.readSettingsFile(settingsFile.path);
+	if (!settings?.hooks) return 0;
+
+	let pruned = 0;
+	const hooksRecord = settings.hooks as Record<string, unknown[]>;
+	for (const [eventName, entries] of Object.entries(hooksRecord)) {
+		const filteredEntries: unknown[] = [];
+		for (const entry of entries) {
+			if (isLegacyDescriptiveNamePrompt(entry as { type?: unknown; prompt?: unknown })) {
+				pruned++;
+				continue;
+			}
+
+			const e = entry as { hooks?: unknown[] };
+			if (Array.isArray(e.hooks)) {
+				const keptHooks = e.hooks.filter((hook) => {
+					if (isLegacyDescriptiveNamePrompt(hook as { type?: unknown; prompt?: unknown })) {
+						pruned++;
+						return false;
+					}
+					return true;
+				});
+				if (keptHooks.length === 0) {
+					continue;
+				}
+				filteredEntries.push({ ...e, hooks: keptHooks });
+				continue;
+			}
+
+			filteredEntries.push(entry);
+		}
+
+		if (filteredEntries.length === 0) {
+			delete hooksRecord[eventName];
+		} else {
+			hooksRecord[eventName] = filteredEntries;
+		}
+	}
+
+	if (Object.keys(hooksRecord).length === 0) {
+		// biome-ignore lint/performance/noDelete: settings cleanup should remove empty hooks
+		delete (settings as Record<string, unknown>).hooks;
+	}
+
+	if (pruned > 0) {
+		await SettingsMerger.writeSettingsFile(settingsFile.path, settings);
+	}
+
+	return pruned;
+}
+
+export async function checkLegacyHookPrompts(projectDir: string): Promise<CheckResult> {
+	const settingsFiles = getClaudeSettingsFiles(projectDir);
+
+	if (settingsFiles.length === 0) {
+		return {
+			id: "legacy-hook-prompts",
+			name: "Legacy Hook Prompts",
+			group: "claudekit",
+			priority: "critical",
+			status: "info",
+			message: "No Claude settings files",
+			autoFixable: false,
+		};
+	}
+
+	const findings: LegacyHookPromptFinding[] = [];
+	for (const settingsFile of settingsFiles) {
+		const settings = await SettingsMerger.readSettingsFile(settingsFile.path);
+		if (!settings) continue;
+		findings.push(...collectLegacyHookPromptFindings(settings, settingsFile));
+	}
+
+	if (findings.length === 0) {
+		return {
+			id: "legacy-hook-prompts",
+			name: "Legacy Hook Prompts",
+			group: "claudekit",
+			priority: "critical",
+			status: "pass",
+			message: "No legacy hook prompts",
+			autoFixable: false,
+		};
+	}
+
+	const details = findings
+		.slice(0, 8)
+		.map((finding) => {
+			const matcher = finding.matcher ? ` [${finding.matcher}]` : "";
+			return `${finding.label} :: ${finding.eventName}${matcher} :: legacy descriptive-name prompt`;
+		})
+		.join("\n");
+
+	return {
+		id: "legacy-hook-prompts",
+		name: "Legacy Hook Prompts",
+		group: "claudekit",
+		priority: "critical",
+		status: "fail",
+		message: `${findings.length} legacy hook prompt(s)`,
+		details,
+		suggestion: "Run: ck doctor --fix",
+		autoFixable: true,
+		fix: {
+			id: "fix-legacy-hook-prompts",
+			description: "Prune legacy prompt-only ClaudeKit hook entries",
+			execute: async () => {
+				try {
+					let pruned = 0;
+					for (const settingsFile of settingsFiles) {
+						pruned += await pruneLegacyHookPromptsInSettingsFile(settingsFile);
+					}
+					if (pruned === 0) {
+						return { success: true, message: "No legacy hook prompts needed pruning" };
+					}
+					return {
+						success: true,
+						message: `Pruned ${pruned} legacy hook prompt(s)`,
+					};
+				} catch (error) {
+					return {
+						success: false,
+						message: `Failed to prune legacy hook prompts: ${error}`,
+					};
+				}
+			},
+		},
+	};
+}
+
+export async function repairLegacyHookPrompts(projectDir = process.cwd()): Promise<number> {
+	const result = await checkLegacyHookPrompts(projectDir);
+	if (result.status !== "fail" || !result.fix) {
+		return 0;
+	}
+
+	const fixResult = await result.fix.execute();
+	if (!fixResult.success) {
+		throw new Error(fixResult.message);
+	}
+
+	const match = fixResult.message.match(/Pruned\s+(\d+)/);
+	return match?.[1] ? Number.parseInt(match[1], 10) : 0;
 }
 
 /**

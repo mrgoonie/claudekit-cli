@@ -21,6 +21,8 @@ export {
 	checkHookDeps,
 	checkHookRuntime,
 	checkHookCommandPaths,
+	checkLegacyHookPrompts,
+	repairLegacyHookPrompts,
 	checkHookConfig,
 	checkHookFileReferences,
 	checkHookLogs,
