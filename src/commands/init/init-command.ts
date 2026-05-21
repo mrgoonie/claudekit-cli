@@ -4,7 +4,10 @@
  */
 
 import { GitHubClient } from "@/domains/github/github-client.js";
-import { repairMissingHookFileReferences } from "@/domains/health-checks/checkers/hook-health-checker.js";
+import {
+	repairLegacyHookPrompts,
+	repairMissingHookFileReferences,
+} from "@/domains/health-checks/checkers/hook-health-checker.js";
 import { maybeShowConfigUpdateNotification } from "@/domains/sync/index.js";
 import { PromptsManager } from "@/domains/ui/prompts.js";
 import { logger } from "@/shared/logger.js";
@@ -159,6 +162,24 @@ async function repairMissingHookFileReferencesAfterInit(ctx: InitContext): Promi
 	}
 }
 
+export async function repairLegacyHookPromptsAfterInit(ctx: InitContext): Promise<void> {
+	if (!ctx.resolvedDir) return;
+
+	const projectDir = ctx.options.global ? process.cwd() : ctx.resolvedDir;
+	try {
+		const repaired = await repairLegacyHookPrompts(projectDir);
+		if (repaired > 0) {
+			logger.info(`Pruned ${repaired} legacy hook prompt(s)`);
+		}
+	} catch (error) {
+		logger.debug(
+			`Legacy hook prompt repair skipped after init: ${
+				error instanceof Error ? error.message : "unknown"
+			}`,
+		);
+	}
+}
+
 /**
  * Internal init command implementation
  * Runs all phases in sequence, passing context through each
@@ -262,6 +283,7 @@ async function executeInit(options: UpdateCommandOptions, prompts: PromptsManage
 	}
 
 	if (!isSyncMode) {
+		await repairLegacyHookPromptsAfterInit(ctx);
 		await repairMissingHookFileReferencesAfterInit(ctx);
 	}
 

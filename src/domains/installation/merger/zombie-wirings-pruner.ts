@@ -125,11 +125,17 @@ export function isLegacyDescriptiveNamePrompt(entry: {
 	const prompt = entry.prompt;
 	if (entry.type !== "prompt" || typeof prompt !== "string") return false;
 
-	return (
+	const lowerPrompt = prompt.toLowerCase();
+	const isOriginalLegacyPrompt =
 		prompt.includes("Use kebab-case file naming") &&
 		prompt.includes("self-documenting") &&
-		prompt.includes("Grep, Glob, Search")
-	);
+		prompt.includes("Grep, Glob, Search");
+	const isDescriptiveNameKebabPrompt =
+		lowerPrompt.includes("descriptive-name") &&
+		lowerPrompt.includes("kebab-case") &&
+		(lowerPrompt.includes("file") || lowerPrompt.includes("filename"));
+
+	return isOriginalLegacyPrompt || isDescriptiveNameKebabPrompt;
 }
 
 /**
