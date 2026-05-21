@@ -12,7 +12,10 @@ import { builtinModules } from "node:module";
 import { join } from "node:path";
 import { promisify } from "node:util";
 import { CkConfigManager } from "@/domains/config/ck-config-manager.js";
-import { repairMissingHookFileReferences } from "@/domains/health-checks/checkers/hook-health-checker.js";
+import {
+	repairLegacyHookPrompts,
+	repairMissingHookFileReferences,
+} from "@/domains/health-checks/checkers/hook-health-checker.js";
 import { getInstalledKits } from "@/domains/migration/metadata-migration.js";
 import { versionsMatch } from "@/domains/versioning/checking/version-utils.js";
 import { getClaudeKitSetup } from "@/services/file-operations/claudekit-scanner.js";
@@ -443,6 +446,7 @@ export interface PromptMigrateUpdateDeps {
 	loadFullConfigFn?: PromptKitUpdateConfigLoader;
 	execAsyncFn?: ExecAsyncFn;
 	repairHookFileReferencesFn?: (projectDir: string) => Promise<number>;
+	repairLegacyHookPromptsFn?: (projectDir: string) => Promise<number>;
 	cleanupMigratedHooksFn?: (
 		providers: string[],
 		options: { global: boolean },
@@ -451,7 +455,7 @@ export interface PromptMigrateUpdateDeps {
 	>;
 }
 
-export { repairMissingHookFileReferences };
+export { repairLegacyHookPrompts, repairMissingHookFileReferences };
 
 /**
  * Step 3 of the update pipeline: independently check and run migration.
@@ -461,6 +465,21 @@ export { repairMissingHookFileReferences };
 export async function promptMigrateUpdate(deps?: PromptMigrateUpdateDeps): Promise<void> {
 	try {
 		const repairFn = deps?.repairHookFileReferencesFn ?? repairMissingHookFileReferences;
+		const repairLegacyPromptsFn = deps?.repairLegacyHookPromptsFn ?? repairLegacyHookPrompts;
+		const repairLegacyHookPromptsSafely = async () => {
+			try {
+				const repaired = await repairLegacyPromptsFn(process.cwd());
+				if (repaired > 0) {
+					logger.info(`Pruned ${repaired} legacy hook prompt(s)`);
+				}
+			} catch (error) {
+				logger.verbose(
+					`Legacy hook prompt repair skipped: ${
+						error instanceof Error ? error.message : "unknown"
+					}`,
+				);
+			}
+		};
 		const repairHookFileReferencesSafely = async () => {
 			try {
 				const repaired = await repairFn(process.cwd());
@@ -474,6 +493,7 @@ export async function promptMigrateUpdate(deps?: PromptMigrateUpdateDeps): Promi
 			}
 		};
 
+		await repairLegacyHookPromptsSafely();
 		await repairHookFileReferencesSafely();
 
 		const providerRegistry =
@@ -531,6 +551,7 @@ export async function promptMigrateUpdate(deps?: PromptMigrateUpdateDeps): Promi
 			);
 		}
 
+		await repairLegacyHookPromptsSafely();
 		await repairHookFileReferencesSafely();
 
 		const targets = allProviders.filter((p) => p !== "claude-code");

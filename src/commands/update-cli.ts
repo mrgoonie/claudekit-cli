@@ -46,6 +46,7 @@ export {
 	fetchLatestReleaseTag,
 	promptKitUpdate,
 	promptMigrateUpdate,
+	repairLegacyHookPrompts,
 	repairMissingHookFileReferences,
 	resolveCkInitSpawnCommand,
 	readMetadataFile,

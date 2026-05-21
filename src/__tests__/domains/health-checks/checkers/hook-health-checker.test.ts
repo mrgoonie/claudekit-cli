@@ -11,6 +11,7 @@ import {
 	checkHookLogs,
 	checkHookRuntime,
 	checkHookSyntax,
+	checkLegacyHookPrompts,
 	checkPythonVenv,
 	parseDoctorCliVersionOutput,
 	repairMissingHookFileReferences,
@@ -622,6 +623,118 @@ describe("checkHookCommandPaths", () => {
 		expect(repaired.hooks.UserPromptSubmit[0].hooks[0].command).toBe(
 			'node "$CLAUDE_PROJECT_DIR"/.claude/hooks/session-state.cjs',
 		);
+	});
+});
+
+describe("checkLegacyHookPrompts", () => {
+	let tempDir: string;
+	let projectDir: string;
+	let originalCkTestHome: string | undefined;
+
+	const legacyPrompt =
+		"Use kebab-case file naming with a long descriptive name to ensure this file name is self-documenting, so that when LLM is using tools (Grep, Glob, Search) to list files, it can guess what the file does right away without reading the file.";
+
+	beforeEach(async () => {
+		tempDir = join(
+			tmpdir(),
+			`legacy-hook-prompts-test-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+		);
+		projectDir = join(tempDir, "project");
+		await mkdir(projectDir, { recursive: true });
+
+		originalCkTestHome = process.env.CK_TEST_HOME;
+		process.env.CK_TEST_HOME = tempDir;
+	});
+
+	afterEach(async () => {
+		await rm(tempDir, { recursive: true, force: true });
+
+		if (originalCkTestHome === undefined) {
+			process.env.CK_TEST_HOME = undefined;
+		} else {
+			process.env.CK_TEST_HOME = originalCkTestHome;
+		}
+	});
+
+	test("detects and prunes legacy descriptive-name prompt hooks from project and global settings", async () => {
+		await mkdir(join(projectDir, ".claude"), { recursive: true });
+		await mkdir(join(tempDir, ".claude"), { recursive: true });
+
+		const projectSettingsPath = join(projectDir, ".claude", "settings.json");
+		const globalSettingsPath = join(tempDir, ".claude", "settings.json");
+		await writeFile(
+			projectSettingsPath,
+			JSON.stringify({
+				hooks: {
+					PreToolUse: [
+						{
+							matcher: "Write",
+							hooks: [
+								{ type: "prompt", prompt: legacyPrompt },
+								{
+									type: "prompt",
+									prompt: "Before writing release notes, include the release channel.",
+								},
+							],
+						},
+					],
+				},
+			}),
+		);
+		await writeFile(
+			globalSettingsPath,
+			JSON.stringify({
+				hooks: {
+					PreToolUse: [
+						{
+							matcher: "Write",
+							hooks: [{ type: "prompt", prompt: legacyPrompt }],
+						},
+					],
+				},
+			}),
+		);
+
+		const result = await checkLegacyHookPrompts(projectDir);
+
+		expect(result.status).toBe("fail");
+		expect(result.message).toBe("2 legacy hook prompt(s)");
+		expect(result.details).toContain("project settings.json");
+		expect(result.details).toContain("global settings.json");
+		expect(result.autoFixable).toBe(true);
+
+		const fixResult = await result.fix?.execute();
+		expect(fixResult?.success).toBe(true);
+		expect(fixResult?.message).toBe("Pruned 2 legacy hook prompt(s)");
+
+		const projectSettings = JSON.parse(await readFile(projectSettingsPath, "utf-8"));
+		expect(projectSettings.hooks.PreToolUse[0].hooks).toHaveLength(1);
+		expect(projectSettings.hooks.PreToolUse[0].hooks[0].prompt).toContain("release channel");
+
+		const globalSettings = JSON.parse(await readFile(globalSettingsPath, "utf-8"));
+		expect(globalSettings.hooks).toBeUndefined();
+	});
+
+	test("passes when settings contain only unrelated prompt hooks", async () => {
+		await mkdir(join(projectDir, ".claude"), { recursive: true });
+		await writeFile(
+			join(projectDir, ".claude", "settings.json"),
+			JSON.stringify({
+				hooks: {
+					PreToolUse: [
+						{
+							matcher: "Write",
+							hooks: [{ type: "prompt", prompt: "Use project-specific fixture names." }],
+						},
+					],
+				},
+			}),
+		);
+
+		const result = await checkLegacyHookPrompts(projectDir);
+
+		expect(result.status).toBe("pass");
+		expect(result.message).toBe("No legacy hook prompts");
 	});
 });
 

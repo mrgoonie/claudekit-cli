@@ -24,6 +24,7 @@ const loadFullConfigMock = mock(
 const execCalls: string[] = [];
 const cleanupCalls: Array<{ providers: string[]; global: boolean }> = [];
 const repairCalls: string[] = [];
+const legacyRepairCalls: string[] = [];
 const orderedCalls: string[] = [];
 
 function makeDeps(): PromptMigrateUpdateDeps {
@@ -58,6 +59,11 @@ function makeDeps(): PromptMigrateUpdateDeps {
 			repairCalls.push(projectDir);
 			return 0;
 		},
+		repairLegacyHookPromptsFn: async (projectDir) => {
+			orderedCalls.push("legacy");
+			legacyRepairCalls.push(projectDir);
+			return 0;
+		},
 	};
 }
 
@@ -66,6 +72,7 @@ describe("promptMigrateUpdate (step 3 of update pipeline)", () => {
 		execCalls.length = 0;
 		cleanupCalls.length = 0;
 		repairCalls.length = 0;
+		legacyRepairCalls.length = 0;
 		orderedCalls.length = 0;
 		detectInstalledProvidersMock.mockReset();
 		detectInstalledProvidersMock.mockResolvedValue([]);
@@ -93,6 +100,7 @@ describe("promptMigrateUpdate (step 3 of update pipeline)", () => {
 	test("skips when autoMigrateAfterUpdate is not configured", async () => {
 		detectInstalledProvidersMock.mockResolvedValue(["claude-code", "codex"]);
 		await promptMigrateUpdate(makeDeps());
+		expect(legacyRepairCalls).toEqual([process.cwd(), process.cwd()]);
 		expect(repairCalls).toEqual([process.cwd(), process.cwd()]);
 		expect(execCalls).toEqual([]);
 	});
@@ -102,7 +110,23 @@ describe("promptMigrateUpdate (step 3 of update pipeline)", () => {
 			config: { updatePipeline: { autoMigrateAfterUpdate: true } },
 		});
 		await promptMigrateUpdate(makeDeps());
+		expect(legacyRepairCalls).toEqual([process.cwd()]);
 		expect(repairCalls).toEqual([process.cwd()]);
+		expect(execCalls).toEqual([]);
+	});
+
+	test("logs legacy hook prompt repairs even when no providers are detected", async () => {
+		const deps = makeDeps();
+		deps.repairLegacyHookPromptsFn = async (projectDir) => {
+			orderedCalls.push("legacy");
+			legacyRepairCalls.push(projectDir);
+			return 2;
+		};
+
+		await promptMigrateUpdate(deps);
+
+		expect(legacyRepairCalls).toEqual([process.cwd()]);
+		expect(logger.info).toHaveBeenCalledWith("Pruned 2 legacy hook prompt(s)");
 		expect(execCalls).toEqual([]);
 	});
 
@@ -157,7 +181,8 @@ describe("promptMigrateUpdate (step 3 of update pipeline)", () => {
 
 		await promptMigrateUpdate(deps);
 
-		expect(orderedCalls).toEqual(["repair", "cleanup", "repair"]);
+		expect(orderedCalls).toEqual(["legacy", "repair", "cleanup", "legacy", "repair"]);
+		expect(legacyRepairCalls).toEqual([process.cwd(), process.cwd()]);
 		expect(repairCalls).toEqual([process.cwd(), process.cwd()]);
 		expect(cleanupCalls).toEqual([{ providers: ["claude-code"], global: false }]);
 		expect(logger.info).toHaveBeenCalledWith("Cleaned up 2 generated-context hook artifact(s)");

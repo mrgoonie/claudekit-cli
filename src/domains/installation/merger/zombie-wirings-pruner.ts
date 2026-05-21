@@ -118,8 +118,11 @@ function shouldPruneEntry(entry: HookEntry, hookDir: string, pruned: string[]): 
 	return true;
 }
 
-function isLegacyDescriptiveNamePrompt(entry: HookEntry): boolean {
-	const prompt = (entry as HookEntry & { prompt?: unknown }).prompt;
+export function isLegacyDescriptiveNamePrompt(entry: {
+	type?: unknown;
+	prompt?: unknown;
+}): boolean {
+	const prompt = entry.prompt;
 	if (entry.type !== "prompt" || typeof prompt !== "string") return false;
 
 	return (
