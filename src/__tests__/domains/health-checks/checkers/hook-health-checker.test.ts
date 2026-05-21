@@ -656,12 +656,14 @@ describe("checkLegacyHookPrompts", () => {
 		}
 	});
 
-	test("detects and prunes legacy descriptive-name prompt hooks from project and global settings", async () => {
+	test("detects and prunes legacy descriptive-name prompt hooks from project, global, and .ccs settings", async () => {
 		await mkdir(join(projectDir, ".claude"), { recursive: true });
 		await mkdir(join(tempDir, ".claude"), { recursive: true });
+		await mkdir(join(tempDir, ".ccs"), { recursive: true });
 
 		const projectSettingsPath = join(projectDir, ".claude", "settings.json");
 		const globalSettingsPath = join(tempDir, ".claude", "settings.json");
+		const ccsSettingsPath = join(tempDir, ".ccs", "znguyen.settings.json");
 		await writeFile(
 			projectSettingsPath,
 			JSON.stringify({
@@ -694,18 +696,32 @@ describe("checkLegacyHookPrompts", () => {
 				},
 			}),
 		);
+		await writeFile(
+			ccsSettingsPath,
+			JSON.stringify({
+				hooks: {
+					PreToolUse: [
+						{
+							matcher: "Write",
+							hooks: [{ type: "prompt", prompt: legacyPrompt }],
+						},
+					],
+				},
+			}),
+		);
 
 		const result = await checkLegacyHookPrompts(projectDir);
 
 		expect(result.status).toBe("fail");
-		expect(result.message).toBe("2 legacy hook prompt(s)");
+		expect(result.message).toBe("3 legacy hook prompt(s)");
 		expect(result.details).toContain("project settings.json");
 		expect(result.details).toContain("global settings.json");
+		expect(result.details).toContain(".ccs/znguyen.settings.json");
 		expect(result.autoFixable).toBe(true);
 
 		const fixResult = await result.fix?.execute();
 		expect(fixResult?.success).toBe(true);
-		expect(fixResult?.message).toBe("Pruned 2 legacy hook prompt(s)");
+		expect(fixResult?.message).toBe("Pruned 3 legacy hook prompt(s)");
 
 		const projectSettings = JSON.parse(await readFile(projectSettingsPath, "utf-8"));
 		expect(projectSettings.hooks.PreToolUse[0].hooks).toHaveLength(1);
@@ -713,6 +729,9 @@ describe("checkLegacyHookPrompts", () => {
 
 		const globalSettings = JSON.parse(await readFile(globalSettingsPath, "utf-8"));
 		expect(globalSettings.hooks).toBeUndefined();
+
+		const ccsSettings = JSON.parse(await readFile(ccsSettingsPath, "utf-8"));
+		expect(ccsSettings.hooks).toBeUndefined();
 	});
 
 	test("passes when settings contain only unrelated prompt hooks", async () => {
