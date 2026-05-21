@@ -16,6 +16,7 @@
 	},
 	"files": [
 		"bin/ck.js",
+		"bin/postinstall-self-heal.cjs",
 		"dist/index.js",
 		"dist/ui/",
 		"cli-manifest.json"
@@ -47,6 +48,7 @@
 		"ci:local": "bash scripts/ci-local.sh",
 		"install:hooks": "./.githooks/install.sh",
 		"prepare": "node -e \"try{require('child_process').execSync('git rev-parse --git-dir',{stdio:'ignore'});require('child_process').execSync('bash .githooks/install.sh',{stdio:'inherit'})}catch(e){console.warn('[i] Hook install skipped:',e.message)}\"",
+		"postinstall": "node bin/postinstall-self-heal.cjs",
 		"help:check-parity": "bun run scripts/check-help-parity.ts",
 		"manifest:generate": "bun run scripts/generate-cli-manifest.ts",
 		"docs:generate": "bun run scripts/generate-cli-reference.ts",

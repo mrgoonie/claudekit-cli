@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { existsSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
 import { readdir } from "node:fs/promises";
 import { homedir, tmpdir } from "node:os";
 import { join, resolve } from "node:path";
@@ -109,6 +109,7 @@ function getCanonicalGlobalCommandRoot(): string {
 
 function getClaudeSettingsFiles(projectDir: string): ClaudeSettingsFile[] {
 	const globalClaudeDir = PathResolver.getGlobalKitDir();
+	const ccsSettingsDir = join(process.env.CK_TEST_HOME ?? homedir(), ".ccs");
 	const candidates: ClaudeSettingsFile[] = [
 		{
 			path: resolve(projectDir, ".claude", "settings.json"),
@@ -131,6 +132,19 @@ function getClaudeSettingsFiles(projectDir: string): ClaudeSettingsFile[] {
 			root: getCanonicalGlobalCommandRoot(),
 		},
 	];
+
+	try {
+		for (const dirent of readdirSync(ccsSettingsDir, { withFileTypes: true })) {
+			if (!dirent.isFile() || !dirent.name.endsWith(".settings.json")) continue;
+			candidates.push({
+				path: resolve(ccsSettingsDir, dirent.name),
+				label: `.ccs/${dirent.name}`,
+				root: "$HOME",
+			});
+		}
+	} catch {
+		// Optional compatibility directory; ignore when absent or unreadable.
+	}
 
 	return candidates.filter((candidate) => existsSync(candidate.path));
 }
