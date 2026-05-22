@@ -10,6 +10,8 @@ import {
 import type { RegisteredProject } from "@/types";
 import express, { type Express } from "express";
 
+const testFetch = globalThis.fetch.bind(globalThis);
+
 const TMP = join(tmpdir(), `.test-plan-list-all-${Date.now()}`);
 
 function writePlanInRoot(plansRoot: string, slug: string, status: string): void {
@@ -104,7 +106,7 @@ describe("GET /api/plan/list-all", () => {
 
 		process.chdir(TMP);
 		try {
-			const res = await fetch(`${baseUrl}/api/plan/list-all`);
+			const res = await testFetch(`${baseUrl}/api/plan/list-all`);
 			expect(res.status).toBe(200);
 
 			const body = (await res.json()) as {
@@ -149,7 +151,7 @@ describe("GET /api/plan/list-all", () => {
 
 		process.chdir(TMP);
 		try {
-			const res = await fetch(`${baseUrl}/api/plan/list-all`);
+			const res = await testFetch(`${baseUrl}/api/plan/list-all`);
 			expect(res.status).toBe(200);
 			expect(await res.json()).toEqual({ projects: [], totalPlans: 0 });
 		} finally {
@@ -180,7 +182,7 @@ describe("GET /api/plan/list-all", () => {
 		] satisfies RegisteredProject[]);
 		scanClaudeProjectsSpy.mockReturnValue([]);
 
-		const res = await fetch(`${baseUrl}/api/plan/list-all`);
+		const res = await testFetch(`${baseUrl}/api/plan/list-all`);
 		expect(res.status).toBe(200);
 
 		const body = (await res.json()) as {
@@ -217,7 +219,7 @@ describe("GET /api/plan/list-all", () => {
 
 		process.chdir(TMP);
 		try {
-			const res = await fetch(`${baseUrl}/api/plan/list-all`);
+			const res = await testFetch(`${baseUrl}/api/plan/list-all`);
 			expect(res.status).toBe(200);
 
 			const body = (await res.json()) as {
@@ -243,7 +245,7 @@ describe("GET /api/plan/list-all", () => {
 
 		process.chdir(currentProject);
 		try {
-			const res = await fetch(`${baseUrl}/api/plan/list-all`);
+			const res = await testFetch(`${baseUrl}/api/plan/list-all`);
 			expect(res.status).toBe(200);
 
 			const body = (await res.json()) as {
@@ -270,7 +272,7 @@ describe("GET /api/plan/list-all", () => {
 
 		process.chdir(currentProject);
 		try {
-			const res = await fetch(`${baseUrl}/api/plan/list-all`);
+			const res = await testFetch(`${baseUrl}/api/plan/list-all`);
 			expect(res.status).toBe(200);
 
 			const body = (await res.json()) as {
@@ -299,7 +301,7 @@ describe("GET /api/plan/list-all", () => {
 
 		process.chdir(currentProject);
 		try {
-			const res = await fetch(`${baseUrl}/api/plan/list-all`);
+			const res = await testFetch(`${baseUrl}/api/plan/list-all`);
 			expect(res.status).toBe(200);
 
 			const body = (await res.json()) as {
@@ -328,7 +330,7 @@ describe("GET /api/plan/list-all", () => {
 		writePlanInRoot(externalPlansDir, "260414-external", "pending");
 		scanClaudeProjectsSpy.mockReturnValue([{ path: discoveredProject, lastModified: new Date() }]);
 
-		const res = await fetch(`${baseUrl}/api/plan/list-all`);
+		const res = await testFetch(`${baseUrl}/api/plan/list-all`);
 		expect(res.status).toBe(200);
 
 		const body = (await res.json()) as {

@@ -104,6 +104,19 @@ describe("codex-capabilities", () => {
 			// Feature flag required
 			expect(entry.requiresFeatureFlag).toBe(true);
 		});
+
+		it("v0.130.0 entry tracks current public Codex hook docs", () => {
+			const entry = CODEX_CAPABILITY_TABLE.find((e) => e.version === "0.130.0");
+			expect(entry).toBeDefined();
+			if (!entry) return;
+
+			expect(entry.events.SessionStart.allowedMatchers).toEqual(["startup", "resume", "clear"]);
+			expect(entry.events.PreToolUse.supportsAdditionalContext).toBe(true);
+			expect(entry.events.PreToolUse.allowedMatchers).toBeUndefined();
+			expect(entry.events.PostToolUse.allowedMatchers).toBeUndefined();
+			expect(entry.events.PermissionRequest.allowedMatchers).toBeUndefined();
+			expect(entry.events.PreToolUse.permissionDecisionValues).toEqual(["deny", "allow", "block"]);
+		});
 	});
 
 	describe("detectCodexCapabilities", () => {

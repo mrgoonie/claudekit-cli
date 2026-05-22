@@ -60,6 +60,36 @@ describe("reconcile state builders", () => {
 		expect(warnings).toEqual(["codex:fm-to-codex-toml"]);
 	});
 
+	it("buildSourceItemState hashes normalized Codex hook content from source files", async () => {
+		const tempDir = await mkdtemp(join(tmpdir(), "ck-reconcile-hook-checksum-"));
+		tempDirs.push(tempDir);
+		const hookPath = join(tempDir, "wrapper.cjs");
+		const sourceContent = [
+			'const relativeHook = ".claude/hooks/scout-block.cjs";',
+			'const homeHookDir = "$HOME/.claude/hooks";',
+			"module.exports = { relativeHook, homeHookDir };",
+		].join("\n");
+		await writeFile(hookPath, sourceContent, "utf-8");
+
+		const item = {
+			name: "wrapper.cjs",
+			description: "Hook wrapper",
+			type: "hooks" as const,
+			sourcePath: hookPath,
+			frontmatter: {},
+			body: sourceContent,
+		};
+
+		const state = buildSourceItemState(item, "hooks", ["codex"]);
+		const converted = convertItem(item, providers.codex.hooks?.format ?? "direct-copy", "codex");
+
+		expect(converted.content).toContain(".codex/hooks");
+		expect(converted.content).not.toContain(".claude/hooks");
+		expect(state.sourceChecksum).toBe(computeContentChecksum(sourceContent));
+		expect(state.convertedChecksums.codex).toBe(computeContentChecksum(converted.content));
+		expect(state.convertedChecksums.codex).not.toBe(state.sourceChecksum);
+	});
+
 	it("buildTargetStates indexes managed section checksums for merge-single paths", async () => {
 		const tempDir = await mkdtemp(join(tmpdir(), "ck-reconcile-state-builders-"));
 		tempDirs.push(tempDir);

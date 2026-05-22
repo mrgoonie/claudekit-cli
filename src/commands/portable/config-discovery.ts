@@ -1,18 +1,27 @@
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { cp, mkdir, readFile, readdir, stat } from "node:fs/promises";
 import { homedir } from "node:os";
-import { basename, extname, join, relative, resolve, sep } from "node:path";
+import { basename, dirname, extname, join, relative, resolve, sep } from "node:path";
 import {
 	findExistingProjectConfigPath,
 	findExistingProjectLayoutPath,
 } from "@/shared/kit-layout.js";
-import type { PortableItem } from "./types.js";
+import {
+	type HooksSection,
+	extractHookReferencesFromCommand,
+	hookAssetBasename,
+	isExcludedHookAsset,
+	normalizeHookAssetPath,
+} from "./hook-migration-compatibility.js";
+import type { MigrationWarning, PortableItem } from "./types.js";
 
 /** Node-runnable hook scripts — what Claude Code settings.json references via `node` command */
 const HOOK_EXTENSIONS = new Set([".js", ".cjs", ".mjs", ".ts"]);
 
 /** Shell/batch hook extensions that are skipped (not node-runnable) */
 const SHELL_HOOK_EXTENSIONS = new Set([".sh", ".ps1", ".bat", ".cmd"]);
+const HOOK_ASSET_EXTENSIONS = new Set([...HOOK_EXTENSIONS, ...SHELL_HOOK_EXTENSIONS]);
+const HOOK_DEPENDENCY_SKIP_SEGMENTS = new Set(["__tests__", "tests", "docs", ".logs"]);
 
 /**
  * Subdirectory names that must never be copied to a target hooks directory.
@@ -262,6 +271,7 @@ export async function discoverRules(sourcePath?: string): Promise<PortableItem[]
 export interface HookDiscoveryResult {
 	items: PortableItem[];
 	skippedShellHooks: string[];
+	warnings?: MigrationWarning[];
 }
 
 /** Discover .claude/hooks/ files. Returns node-runnable hooks and names of skipped shell hooks. */
@@ -272,42 +282,198 @@ export async function discoverHooks(sourcePath?: string): Promise<HookDiscoveryR
 		return { items: [], skippedShellHooks: [] };
 	}
 
-	// Single readdir pass — classify entries into node-runnable and shell hooks
-	let entries: Array<import("node:fs").Dirent<string>>;
-	try {
-		entries = await readdir(path, { withFileTypes: true, encoding: "utf8" });
-	} catch {
-		return { items: [], skippedShellHooks: [] };
-	}
-
 	const skippedShellHooks: string[] = [];
-	const items: PortableItem[] = [];
+	const warnings: MigrationWarning[] = [];
+	const discoveredFiles = await collectHookFiles(path);
+	const fileMap = new Map(discoveredFiles.map((file) => [file.name, file]));
+	const settingsHooks = await readHooksNearHooksDir(path);
+	const referencedAssets = settingsHooks
+		? collectReferencedHookAssets(settingsHooks, warnings)
+		: new Set<string>();
+	const selectedAssets =
+		referencedAssets.size > 0
+			? expandHookDependencyClosure(referencedAssets, fileMap)
+			: new Set(
+					discoveredFiles
+						.filter((file) => !file.name.includes("/") && HOOK_EXTENSIONS.has(file.ext))
+						.map((file) => file.name),
+				);
 
-	for (const entry of entries) {
-		if (!entry.isFile() || entry.name.startsWith(".")) continue;
-		const ext = extname(entry.name).toLowerCase();
-		if (SHELL_HOOK_EXTENSIONS.has(ext)) {
-			skippedShellHooks.push(entry.name);
+	const items: PortableItem[] = [];
+	for (const file of discoveredFiles) {
+		if (isExcludedHookAsset(file.name)) {
+			if (selectedAssets.has(file.name) || hookAssetBasename(file.name) === file.name) {
+				warnings.push({
+					reason: "excluded-hook",
+					hookFile: file.name,
+					message: `Skipped excluded hook ${file.name}`,
+				});
+			}
 			continue;
 		}
-		if (!HOOK_EXTENSIONS.has(ext)) continue;
-		const fullPath = join(path, entry.name);
+		if (!selectedAssets.has(file.name)) {
+			if (SHELL_HOOK_EXTENSIONS.has(file.ext) && !skippedShellHooks.includes(file.name)) {
+				skippedShellHooks.push(file.name);
+			}
+			continue;
+		}
+		if (SHELL_HOOK_EXTENSIONS.has(file.ext) && !referencedAssets.has(file.name)) {
+			skippedShellHooks.push(file.name);
+			continue;
+		}
+
 		try {
-			const content = await readFile(fullPath, "utf-8");
+			const content = await readFile(file.fullPath, "utf-8");
 			items.push({
-				name: entry.name,
-				description: `Hook: ${entry.name}`,
+				name: file.name,
+				segments: file.name.split("/"),
+				description: `Hook: ${file.name}`,
 				type: "hooks",
-				sourcePath: fullPath,
+				sourcePath: file.fullPath,
 				frontmatter: {},
 				body: content,
 			});
 		} catch (_err) {
-			// Individual file read errors are non-fatal — skip and continue discovery
+			warnings.push({
+				reason: "unreadable-hook-file",
+				hookFile: file.name,
+				message: `Skipped unreadable hook file ${file.name}`,
+			});
 		}
 	}
 
-	return { items, skippedShellHooks };
+	return {
+		items,
+		skippedShellHooks,
+		warnings: warnings.length > 0 ? warnings : undefined,
+	};
+}
+
+interface HookFileInfo {
+	name: string;
+	fullPath: string;
+	ext: string;
+}
+
+async function readHooksNearHooksDir(hooksDir: string): Promise<HooksSection | null> {
+	const settingsPath = join(dirname(hooksDir), "settings.json");
+	if (!existsSync(settingsPath)) return null;
+	try {
+		const parsed = JSON.parse(await readFile(settingsPath, "utf-8")) as { hooks?: unknown };
+		return parsed.hooks && typeof parsed.hooks === "object" ? (parsed.hooks as HooksSection) : null;
+	} catch {
+		return null;
+	}
+}
+
+function collectReferencedHookAssets(
+	hooks: HooksSection,
+	warnings: MigrationWarning[],
+): Set<string> {
+	const referenced = new Set<string>();
+	for (const [event, groups] of Object.entries(hooks)) {
+		for (const group of groups) {
+			for (const entry of group.hooks) {
+				for (const ref of extractHookReferencesFromCommand(entry.command)) {
+					const normalized = normalizeHookAssetPath(ref);
+					if (!normalized) continue;
+					if (isExcludedHookAsset(normalized)) {
+						warnings.push({
+							reason: "excluded-hook",
+							event,
+							hookFile: normalized,
+							message: `Skipped excluded hook ${hookAssetBasename(normalized)}`,
+						});
+						continue;
+					}
+					referenced.add(normalized);
+				}
+			}
+		}
+	}
+	return referenced;
+}
+
+async function collectHookFiles(dir: string, baseDir = dir): Promise<HookFileInfo[]> {
+	const files: HookFileInfo[] = [];
+	let entries: Array<import("node:fs").Dirent<string>>;
+	try {
+		entries = await readdir(dir, { withFileTypes: true, encoding: "utf8" });
+	} catch {
+		return files;
+	}
+
+	for (const entry of entries) {
+		const fullPath = join(dir, entry.name);
+		const relPath = relative(baseDir, fullPath).split(/[/\\]/).join("/");
+		if (entry.isSymbolicLink()) continue;
+		if (entry.isDirectory()) {
+			if (!entry.name.startsWith(".") && !HOOK_DEPENDENCY_SKIP_SEGMENTS.has(entry.name)) {
+				files.push(...(await collectHookFiles(fullPath, baseDir)));
+			}
+			continue;
+		}
+		if (!entry.isFile()) continue;
+		const ext = extname(entry.name).toLowerCase();
+		const isHookLocalDotfile = entry.name === ".ckignore" || entry.name === ".ck.json";
+		if (!HOOK_ASSET_EXTENSIONS.has(ext) && !isHookLocalDotfile) continue;
+		if (entry.name.startsWith(".") && !isHookLocalDotfile) continue;
+		files.push({ name: relPath, fullPath, ext });
+	}
+
+	return files;
+}
+
+function expandHookDependencyClosure(
+	initialAssets: Set<string>,
+	fileMap: Map<string, HookFileInfo>,
+): Set<string> {
+	const selected = new Set<string>();
+	const queue = [...initialAssets];
+
+	while (queue.length > 0) {
+		const current = normalizeHookAssetPath(queue.shift() ?? "");
+		const file = fileMap.get(current) ?? fileMap.get(hookAssetBasename(current));
+		if (!file || selected.has(file.name) || isExcludedHookAsset(file.name)) continue;
+
+		selected.add(file.name);
+		for (const dep of collectStaticRequireCandidates(file.name, fileMap)) {
+			if (!selected.has(dep)) queue.push(dep);
+		}
+	}
+
+	return selected;
+}
+
+function collectStaticRequireCandidates(
+	assetName: string,
+	fileMap: Map<string, HookFileInfo>,
+): string[] {
+	const file = fileMap.get(assetName);
+	if (!file || !HOOK_EXTENSIONS.has(file.ext)) return [];
+	let content = "";
+	try {
+		content = readFileSync(file.fullPath, "utf-8");
+	} catch {
+		return [];
+	}
+
+	const deps: string[] = [];
+	for (const match of content.matchAll(/require\(["'](\.{1,2}\/[^"']+)["']\)/g)) {
+		const raw = match[1];
+		const base = dirname(assetName);
+		const candidate = normalizeHookAssetPath(join(base, raw).split(/[/\\]/).join("/"));
+		const ext = extname(candidate);
+		const variants = ext
+			? [candidate]
+			: [`${candidate}.cjs`, `${candidate}.js`, `${candidate}.mjs`];
+		for (const variant of variants) {
+			if (fileMap.has(variant)) deps.push(variant);
+		}
+	}
+	if (content.includes(".ckignore") && fileMap.has(".ckignore")) deps.push(".ckignore");
+	if (content.includes(".ck.json") && fileMap.has(".ck.json")) deps.push(".ck.json");
+	return deps;
 }
 
 interface DiscoverPortableFileOptions {

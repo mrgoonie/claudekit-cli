@@ -6,6 +6,8 @@ import { ProjectsRegistryManager } from "@/domains/claudekit-data/projects-regis
 import { registerActionRoutes } from "@/domains/web-server/routes/action-routes.js";
 import express, { type Express } from "express";
 
+const testFetch = globalThis.fetch.bind(globalThis);
+
 interface TestServer {
 	server: ReturnType<Express["listen"]>;
 	baseUrl: string;
@@ -22,6 +24,10 @@ async function setupServer(): Promise<TestServer> {
 	registerActionRoutes(app);
 
 	const server = app.listen(0);
+	await new Promise<void>((resolveListening, rejectListening) => {
+		server.once("listening", resolveListening);
+		server.once("error", rejectListening);
+	});
 	const address = server.address();
 	if (!address || typeof address === "string") {
 		throw new Error("Failed to start test server");
@@ -52,7 +58,7 @@ describe("action routes validation", () => {
 	});
 
 	test("rejects invalid open request body", async () => {
-		const res = await fetch(`${ctx.baseUrl}/api/actions/open`, {
+		const res = await testFetch(`${ctx.baseUrl}/api/actions/open`, {
 			method: "POST",
 			headers: { "Content-Type": "application/json" },
 			body: JSON.stringify({ action: "terminal" }),
@@ -65,7 +71,7 @@ describe("action routes validation", () => {
 
 	test("rejects invalid options query", async () => {
 		const invalidProjectId = "a".repeat(300);
-		const res = await fetch(`${ctx.baseUrl}/api/actions/options?projectId=${invalidProjectId}`);
+		const res = await testFetch(`${ctx.baseUrl}/api/actions/options?projectId=${invalidProjectId}`);
 
 		expect(res.status).toBe(400);
 		const body = (await res.json()) as { error: string };
@@ -76,7 +82,7 @@ describe("action routes validation", () => {
 		const sandboxPath = join(ctx.testHome, "outside-registry");
 		await mkdir(sandboxPath, { recursive: true });
 
-		const res = await fetch(`${ctx.baseUrl}/api/actions/open`, {
+		const res = await testFetch(`${ctx.baseUrl}/api/actions/open`, {
 			method: "POST",
 			headers: { "Content-Type": "application/json" },
 			body: JSON.stringify({
@@ -98,7 +104,7 @@ describe("action routes validation", () => {
 			alias: "allowed-project",
 		});
 
-		const res = await fetch(`${ctx.baseUrl}/api/actions/open`, {
+		const res = await testFetch(`${ctx.baseUrl}/api/actions/open`, {
 			method: "POST",
 			headers: { "Content-Type": "application/json" },
 			body: JSON.stringify({

@@ -9,7 +9,7 @@ import {
 } from "../converters/claude-to-codex-hooks.js";
 import type { HooksSection } from "../converters/claude-to-codex-hooks.js";
 
-// Use the real v0.124.0-alpha.3 capabilities entry for all tests
+// Use the newest known capabilities for default conversion behavior.
 const caps: CodexCapabilities = CODEX_CAPABILITY_TABLE[0];
 
 // Fixture: typical Claude Code hooks.json hooks section
@@ -131,7 +131,7 @@ describe("convertClaudeHooksToCodex", () => {
 			expect(result.SessionStart?.[0]?.matcher).toBe("startup");
 		});
 
-		it("drops SessionStart groups with clear|compact matchers", () => {
+		it("preserves current SessionStart matchers and drops unsupported compact matcher", () => {
 			const hooks: HooksSection = {
 				SessionStart: [
 					{
@@ -149,9 +149,8 @@ describe("convertClaudeHooksToCodex", () => {
 				],
 			};
 			const result = convertClaudeHooksToCodex(hooks, caps);
-			// Only startup should survive
-			expect(result.SessionStart).toHaveLength(1);
-			expect(result.SessionStart?.[0]?.matcher).toBe("startup");
+			expect(result.SessionStart).toHaveLength(2);
+			expect(result.SessionStart?.map((group) => group.matcher)).toEqual(["clear", "startup"]);
 		});
 
 		it("preserves resume matcher on SessionStart", () => {
@@ -174,7 +173,7 @@ describe("convertClaudeHooksToCodex", () => {
 			expect(result.PreToolUse?.[0]?.matcher).toBe("Bash");
 		});
 
-		it("drops non-Bash matchers on PreToolUse (Edit, Write not supported)", () => {
+		it("preserves non-Bash matchers on current Codex PreToolUse", () => {
 			const hooks: HooksSection = {
 				PreToolUse: [
 					{
@@ -192,16 +191,16 @@ describe("convertClaudeHooksToCodex", () => {
 				],
 			};
 			const result = convertClaudeHooksToCodex(hooks, caps);
-			expect(result.PreToolUse).toHaveLength(1);
-			expect(result.PreToolUse?.[0]?.matcher).toBe("Bash");
+			expect(result.PreToolUse).toHaveLength(3);
+			expect(result.PreToolUse?.map((group) => group.matcher)).toEqual(["Edit", "Bash", "Write"]);
 		});
 	});
 
 	describe("permissionDecision scrubbing (failure mode 6)", () => {
-		it("removes permissionDecision:allow from PreToolUse (only deny allowed)", () => {
+		it("preserves permissionDecision:allow from PreToolUse on current Codex", () => {
 			const result = convertClaudeHooksToCodex(CLAUDE_HOOKS, caps);
 			const entry = result.PreToolUse?.[0]?.hooks?.[0];
-			expect(entry?.permissionDecision).toBeUndefined();
+			expect(entry?.permissionDecision).toBe("allow");
 		});
 
 		it("preserves permissionDecision:deny on PreToolUse", () => {
@@ -264,17 +263,17 @@ describe("convertClaudeHooksToCodex", () => {
 			expect(Object.keys(result)).toHaveLength(0);
 		});
 
-		it("drops event when all hooks in all groups are empty", () => {
+		it("drops event when all groups are filtered out by current capabilities", () => {
 			const hooks: HooksSection = {
-				PreToolUse: [
+				SessionStart: [
 					{
-						matcher: "Edit", // not allowed — whole group gets dropped
+						matcher: "compact", // not allowed — whole group gets dropped
 						hooks: [{ type: "command", command: "node hook.cjs" }],
 					},
 				],
 			};
 			const result = convertClaudeHooksToCodex(hooks, caps);
-			expect(result.PreToolUse).toBeUndefined();
+			expect(result.SessionStart).toBeUndefined();
 		});
 	});
 

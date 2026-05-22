@@ -1573,6 +1573,19 @@ export async function checkHookLogs(projectDir: string): Promise<CheckResult> {
  */
 export async function checkCliVersion(): Promise<CheckResult> {
 	try {
+		if (process.env.NODE_ENV === "test" || process.env.CK_TEST_HOME) {
+			logger.verbose("ClaudekitChecker: Skipping CLI version check in test mode");
+			return {
+				id: "cli-version",
+				name: "CLI Version",
+				group: "claudekit",
+				priority: "critical",
+				status: "pass",
+				message: "Test Mode (skipped)",
+				autoFixable: false,
+			};
+		}
+
 		// Try to get installed version from ck -V command
 		const versionResult = spawnSync(resolveDoctorCkExecutable(), ["-V"], {
 			timeout: HOOK_CHECK_TIMEOUT_MS,

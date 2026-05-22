@@ -5,6 +5,8 @@ import { join } from "node:path";
 import { registerCkConfigRoutes } from "@/domains/web-server/routes/ck-config-routes.js";
 import express, { type Express } from "express";
 
+const testFetch = globalThis.fetch.bind(globalThis);
+
 let baseUrl = "";
 let server: ReturnType<Express["listen"]>;
 const tempDirs: string[] = [];
@@ -57,7 +59,7 @@ describe("PUT /api/ck-config", () => {
 		);
 
 		const projectId = `discovered-${Buffer.from(projectDir).toString("base64url")}`;
-		const response = await fetch(`${baseUrl}/api/ck-config`, {
+		const response = await testFetch(`${baseUrl}/api/ck-config`, {
 			method: "PUT",
 			headers: { "Content-Type": "application/json" },
 			body: JSON.stringify({
@@ -113,7 +115,7 @@ describe("PUT /api/ck-config", () => {
 		);
 
 		const projectId = `discovered-${Buffer.from(projectDir).toString("base64url")}`;
-		const response = await fetch(`${baseUrl}/api/ck-config`, {
+		const response = await testFetch(`${baseUrl}/api/ck-config`, {
 			method: "PUT",
 			headers: { "Content-Type": "application/json" },
 			body: JSON.stringify({

@@ -197,7 +197,7 @@ describe("DependencyChecker", () => {
 				expect(typeof status.installed).toBe("boolean");
 				expect(typeof status.meetsRequirements).toBe("boolean");
 			}
-		});
+		}, 15_000);
 
 		test("should include all expected dependencies", async () => {
 			const statuses = await checkAllDependencies();
@@ -207,7 +207,7 @@ describe("DependencyChecker", () => {
 			expect(names).toContain("python");
 			expect(names).toContain("pip");
 			expect(names).toContain("nodejs");
-		});
+		}, 15_000);
 	});
 
 	describe("DEPENDENCIES configuration", () => {

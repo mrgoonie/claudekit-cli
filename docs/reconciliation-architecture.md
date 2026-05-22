@@ -72,6 +72,17 @@ flowchart TD
 - Includes warnings and per-provider results for CLI + dashboard.
 - CLI summary output now includes destination-aware preflight rows plus a boxed WHERE / WHAT / NEXT footer so the target path stays visible before confirmation.
 
+## Codex Hook Compatibility
+
+Codex hook migration is a compatibility subset of Claude Code hooks:
+
+- Supported Codex events are `SessionStart`, `PreToolUse`, `PermissionRequest`, `PostToolUse`, `UserPromptSubmit`, and `Stop`.
+- Unsupported CKM events such as `SubagentStart`, `PreCompact`, and `SessionEnd` are skipped with structured warnings.
+- Claude-specific or deprecated hooks are not copied or registered: `usage-context-awareness`, `usage-quota-cache-refresh`, `team-context-inject`, and `teammate-idle-handler`.
+- Wrapper commands such as `bash .claude/hooks/node-hook-runner.sh .claude/hooks/scout-block.cjs` are matched against the wrapped hook asset, not only the runner script.
+- Hook script contents and registered commands are normalized to `.codex/hooks` or `~/.codex/hooks` when targeting Codex.
+- Repeated migrations prune CK-owned unsupported or excluded entries from `.codex/hooks.json`, while preserving user-authored hook commands outside CK-managed Codex hook paths.
+
 ## Core Components
 
 - `src/commands/portable/reconciler.ts`: pure decision engine
@@ -79,6 +90,7 @@ flowchart TD
 - `src/commands/portable/portable-manifest.ts`: renames/path migrations evolution model
 - `src/commands/portable/portable-installer.ts`: execution strategies + rollback
 - `src/commands/portable/codex-toml-installer.ts`: Codex TOML writer + sentinel merge
+- `src/commands/portable/hook-migration-compatibility.ts`: Codex hook event/filter/path compatibility helpers
 - `src/commands/migrate/skill-directory-installer.ts`: directory install + rollback
 - `src/domains/web-server/routes/migration-routes.ts`: dashboard API entrypoints
 

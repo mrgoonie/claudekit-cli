@@ -5,7 +5,7 @@
  * features that version actually supports. Transform logic uses this to avoid emitting
  * fields / events that Codex will hard-error on.
  *
- * Reference: https://developers.openai.com/codex/hooks (April 2026, v0.124.0-alpha.3)
+ * Reference: https://developers.openai.com/codex/hooks
  */
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
@@ -55,6 +55,41 @@ export interface CodexCapabilities {
  * The lookup uses semver-prefix matching (see detectCodexCapabilities).
  */
 export const CODEX_CAPABILITY_TABLE: CodexCapabilities[] = [
+	{
+		// v0.130.0 — May 2026 public hooks docs baseline.
+		version: "0.130.0",
+		events: {
+			SessionStart: {
+				supported: true,
+				supportsAdditionalContext: true,
+				allowedMatchers: ["startup", "resume", "clear"],
+			},
+			UserPromptSubmit: {
+				supported: true,
+				supportsAdditionalContext: true,
+			},
+			PreToolUse: {
+				supported: true,
+				supportsAdditionalContext: true,
+				// Current Codex supports deny, allow+updatedInput, and legacy decision:block.
+				permissionDecisionValues: ["deny", "allow", "block"],
+			},
+			PostToolUse: {
+				supported: true,
+				supportsAdditionalContext: true,
+			},
+			PermissionRequest: {
+				supported: true,
+				supportsAdditionalContext: false,
+			},
+			Stop: {
+				supported: true,
+				supportsAdditionalContext: false,
+			},
+		},
+		sessionStartMatchersOnly: ["startup", "resume", "clear"],
+		requiresFeatureFlag: true,
+	},
 	{
 		// v0.124.0-alpha.3 — April 2026 baseline (source: issue #730 + spec)
 		version: "0.124.0-alpha.3",
@@ -144,6 +179,9 @@ export async function detectCodexCapabilities(): Promise<CodexCapabilities> {
 		// ORDERING INVARIANT: last entry in table is oldest.
 		return CODEX_CAPABILITY_TABLE[CODEX_CAPABILITY_TABLE.length - 1];
 	}
+	if (process.env.CK_CODEX_COMPAT === "optimistic") {
+		return CODEX_CAPABILITY_TABLE[0];
+	}
 
 	// Platform-aware binary candidates: try codex.exe first on Windows (explicit suffix),
 	// then codex as fallback. On POSIX, only codex is tried.
@@ -174,18 +212,14 @@ export async function detectCodexCapabilities(): Promise<CodexCapabilities> {
 		logger.warning(
 			`[!] Codex version ${version} not found in ck capability table; using most-restrictive baseline. Set CK_CODEX_COMPAT=optimistic to use newest known capabilities instead.`,
 		);
-		return process.env.CK_CODEX_COMPAT === "optimistic"
-			? CODEX_CAPABILITY_TABLE[0]
-			: FALLBACK_CAPABILITIES;
+		return FALLBACK_CAPABILITIES;
 	}
 
 	// All binary candidates failed — binary missing or timed out
 	logger.warning(
 		"[!] Could not detect Codex version; using most-restrictive capability baseline. Set CK_CODEX_COMPAT=optimistic to use newest known capabilities instead.",
 	);
-	return process.env.CK_CODEX_COMPAT === "optimistic"
-		? CODEX_CAPABILITY_TABLE[0]
-		: FALLBACK_CAPABILITIES;
+	return FALLBACK_CAPABILITIES;
 }
 
 /**
