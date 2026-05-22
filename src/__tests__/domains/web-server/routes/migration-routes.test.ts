@@ -83,7 +83,7 @@ mock.module("@/commands/portable/portable-installer.js", () => ({
 }));
 
 const installSkillDirectoriesMock = mock(
-	async (skills: Array<{ name: string }>, providers: string[]) => {
+	async (skills: Array<{ name: string }>, providers: string[], _options?: { global?: boolean }) => {
 		return providers.flatMap((provider) =>
 			skills.map((skill) => ({
 				provider,
@@ -566,6 +566,266 @@ describe.serial("migration reconcile route", () => {
 		expect(installSkillDirectoriesMock.mock.calls[0]?.[0]?.[0]?.name).toBe("skill-a");
 		expect(body.results.every((entry) => entry.itemName !== "skill-b")).toBe(true);
 		expect(body.discovery.skills).toBe(1);
+	});
+
+	test("skills fallback respects skipped skill actions in reconcile plans", async () => {
+		getSkillSourcePathMock.mockReturnValueOnce("/tmp/skills");
+		discoverSkillsMock.mockResolvedValueOnce([
+			{
+				name: "skill-a",
+				displayName: "Skill A",
+				description: "",
+				version: "1.0.0",
+				license: "MIT",
+				path: "/tmp/skill-a",
+			},
+			{
+				name: "skill-b",
+				displayName: "Skill B",
+				description: "",
+				version: "1.0.0",
+				license: "MIT",
+				path: "/tmp/skill-b",
+			},
+		]);
+
+		installSkillDirectoriesMock.mockImplementationOnce(async (skills, providers) =>
+			providers.flatMap((provider) =>
+				skills.map((skill) => ({
+					provider,
+					providerDisplayName: provider,
+					success: true,
+					path: `/tmp/${provider}/${skill.name}`,
+				})),
+			),
+		);
+
+		const plan = {
+			actions: [
+				{
+					action: "skip",
+					item: "skill-a",
+					type: "skill",
+					provider: "codex",
+					global: false,
+					targetPath: "/tmp/skill-a",
+					reason: "User flipped this skill to skip",
+				},
+			],
+			summary: { install: 0, update: 0, skip: 1, conflict: 0, delete: 0 },
+			hasConflicts: false,
+			meta: {
+				include: {
+					agents: false,
+					commands: false,
+					skills: true,
+					config: false,
+					rules: false,
+					hooks: false,
+				},
+				providers: ["codex"],
+				items: { skills: ["skill-a", "skill-b"] },
+			},
+		};
+
+		const res = await fetch(`${ctx.baseUrl}/api/migrate/execute`, {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({ plan, resolutions: {} }),
+		});
+
+		expect(res.status).toBe(200);
+		expect(installSkillDirectoriesMock).toHaveBeenCalledTimes(1);
+		const installedSkillNames = installSkillDirectoriesMock.mock.calls
+			.flatMap((call) => call[0]?.map((skill) => skill.name) ?? [])
+			.sort();
+		expect(installedSkillNames).toEqual(["skill-b"]);
+	});
+
+	test("skills fallback scopes skipped skill actions to the matching provider", async () => {
+		getSkillSourcePathMock.mockReturnValueOnce("/tmp/skills");
+		discoverSkillsMock.mockResolvedValueOnce([
+			{
+				name: "skill-a",
+				displayName: "Skill A",
+				description: "",
+				version: "1.0.0",
+				license: "MIT",
+				path: "/tmp/skill-a",
+			},
+			{
+				name: "skill-b",
+				displayName: "Skill B",
+				description: "",
+				version: "1.0.0",
+				license: "MIT",
+				path: "/tmp/skill-b",
+			},
+		]);
+
+		const plan = {
+			actions: [
+				{
+					action: "skip",
+					item: "skill-a",
+					type: "skill",
+					provider: "codex",
+					global: false,
+					targetPath: "/tmp/codex/skill-a",
+					reason: "User flipped this Codex skill to skip",
+				},
+			],
+			summary: { install: 0, update: 0, skip: 1, conflict: 0, delete: 0 },
+			hasConflicts: false,
+			meta: {
+				include: {
+					agents: false,
+					commands: false,
+					skills: true,
+					config: false,
+					rules: false,
+					hooks: false,
+				},
+				providers: ["codex", "cursor"],
+				items: { skills: ["skill-a", "skill-b"] },
+			},
+		};
+
+		const res = await fetch(`${ctx.baseUrl}/api/migrate/execute`, {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({ plan, resolutions: {} }),
+		});
+
+		expect(res.status).toBe(200);
+		const installedPairs = installSkillDirectoriesMock.mock.calls
+			.map((call) => `${call[1]?.[0]}:${call[0]?.[0]?.name}`)
+			.sort();
+		expect(installedPairs).toEqual(["codex:skill-b", "cursor:skill-a", "cursor:skill-b"]);
+	});
+
+	test("skills fallback scopes skipped skill actions to the matching global scope", async () => {
+		getSkillSourcePathMock.mockReturnValueOnce("/tmp/skills");
+		discoverSkillsMock.mockResolvedValueOnce([
+			{
+				name: "skill-a",
+				displayName: "Skill A",
+				description: "",
+				version: "1.0.0",
+				license: "MIT",
+				path: "/tmp/skill-a",
+			},
+			{
+				name: "skill-b",
+				displayName: "Skill B",
+				description: "",
+				version: "1.0.0",
+				license: "MIT",
+				path: "/tmp/skill-b",
+			},
+		]);
+
+		const plan = {
+			actions: [
+				{
+					action: "skip",
+					item: "skill-a",
+					type: "skill",
+					provider: "codex",
+					global: false,
+					targetPath: "/tmp/project/skill-a",
+					reason: "User flipped this project skill to skip",
+				},
+				{
+					action: "skip",
+					item: "skill-a",
+					type: "skill",
+					provider: "codex",
+					global: true,
+					targetPath: "/tmp/global/skill-a",
+					reason: "User flipped this global skill to skip",
+				},
+			],
+			summary: { install: 0, update: 0, skip: 2, conflict: 0, delete: 0 },
+			hasConflicts: false,
+			meta: {
+				include: {
+					agents: false,
+					commands: false,
+					skills: true,
+					config: false,
+					rules: false,
+					hooks: false,
+				},
+				providers: ["codex"],
+				items: { skills: ["skill-a", "skill-b"] },
+			},
+		};
+
+		const res = await fetch(`${ctx.baseUrl}/api/migrate/execute`, {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({ plan, resolutions: {} }),
+		});
+
+		expect(res.status).toBe(200);
+		const installedScopes = installSkillDirectoriesMock.mock.calls
+			.map((call) => `${call[2]?.global ? "global" : "project"}:${call[0]?.[0]?.name}`)
+			.sort();
+		expect(installedScopes).toEqual(["global:skill-b", "project:skill-b"]);
+	});
+
+	test("skills fallback preserves legacy no-items behavior for skip-only skill plans", async () => {
+		getSkillSourcePathMock.mockReturnValueOnce("/tmp/skills");
+		discoverSkillsMock.mockResolvedValueOnce([
+			{
+				name: "skill-a",
+				displayName: "Skill A",
+				description: "",
+				version: "1.0.0",
+				license: "MIT",
+				path: "/tmp/skill-a",
+			},
+			{
+				name: "skill-b",
+				displayName: "Skill B",
+				description: "",
+				version: "1.0.0",
+				license: "MIT",
+				path: "/tmp/skill-b",
+			},
+		]);
+
+		const plan = {
+			actions: [
+				{
+					action: "skip",
+					item: "skill-a",
+					type: "skill",
+					provider: "codex",
+					global: false,
+					targetPath: "/tmp/skill-a",
+					reason: "Legacy skip action",
+				},
+			],
+			summary: { install: 0, update: 0, skip: 1, conflict: 0, delete: 0 },
+			hasConflicts: false,
+			meta: {
+				providers: ["codex"],
+			},
+		};
+
+		const res = await fetch(`${ctx.baseUrl}/api/migrate/execute`, {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({ plan, resolutions: {} }),
+		});
+
+		expect(res.status).toBe(200);
+		const installedSkillNames = installSkillDirectoriesMock.mock.calls
+			.map((call) => call[0]?.[0]?.name)
+			.sort();
+		expect(installedSkillNames).toEqual(["skill-a", "skill-b"]);
 	});
 
 	test("skills fallback installs discovered skills for legacy plan without include/items meta", async () => {

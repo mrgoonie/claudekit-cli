@@ -119,6 +119,11 @@ const SKIP_TO_INSTALL_CODES: Set<ReconcileReason> = new Set([
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
+function canExecuteSkippedAction(action: ReconcileAction, sourceTab: ActionTabKey): boolean {
+	if (sourceTab !== "skip") return true;
+	return action.reasonCode !== undefined && SKIP_TO_INSTALL_CODES.has(action.reasonCode);
+}
+
 function isDisallowedControlCode(codePoint: number): boolean {
 	return (
 		(codePoint >= 0x00 && codePoint <= 0x08) ||
@@ -388,7 +393,7 @@ export const ReconcilePlanView: React.FC<ReconcilePlanViewProps> = ({
 										key={actionKey(action)}
 										action={action}
 										sourceTab={activeTab}
-										isFlippedToSkip={flips.get(actionKey(action)) === "skip"}
+										flipDecision={flips.get(actionKey(action))}
 										onFlip={(decision) => onFlip(action, decision)}
 										hasConflict={action.action === "conflict"}
 										resolutions={resolutions}
@@ -477,7 +482,7 @@ const SkipTabContent: React.FC<SkipTabContentProps> = ({
 										key={actionKey(action)}
 										action={action}
 										sourceTab={activeTab}
-										isFlippedToSkip={flips.get(actionKey(action)) === "skip"}
+										flipDecision={flips.get(actionKey(action))}
 										onFlip={(decision) => onFlip(action, decision)}
 										hasConflict={false}
 										resolutions={new Map()}
@@ -629,7 +634,7 @@ const TypeSubSection: React.FC<TypeSubSectionProps> = ({
 interface ActionItemProps {
 	action: ReconcileAction;
 	sourceTab: ActionTabKey;
-	isFlippedToSkip: boolean;
+	flipDecision?: "execute" | "skip";
 	onFlip: (decision: "execute" | "skip") => void;
 	hasConflict: boolean;
 	resolutions: Map<string, ConflictResolution>;
@@ -640,7 +645,7 @@ interface ActionItemProps {
 const ActionItem: React.FC<ActionItemProps> = ({
 	action,
 	sourceTab,
-	isFlippedToSkip,
+	flipDecision,
 	onFlip,
 	hasConflict,
 	resolutions,
@@ -652,7 +657,9 @@ const ActionItem: React.FC<ActionItemProps> = ({
 
 	// Checkbox is checked when the item is "execute" (not skipped)
 	// Default: checked for install/update/delete, unchecked for skip tab
-	const isChecked = !isFlippedToSkip;
+	const isSkipped = flipDecision ? flipDecision === "skip" : action.action === "skip";
+	const isChecked = !isSkipped;
+	const canToggleToExecute = !isSkipped || canExecuteSkippedAction(action, sourceTab);
 
 	const displayName = `${sanitizeDisplayString(action.provider)}/${sanitizeDisplayString(action.item)}`;
 	const displayReason =
@@ -668,7 +675,7 @@ const ActionItem: React.FC<ActionItemProps> = ({
 	return (
 		<div
 			className={`px-3 py-2 bg-dash-bg rounded-md border border-dash-border transition-opacity ${
-				isFlippedToSkip ? "opacity-50" : "opacity-100"
+				isSkipped ? "opacity-50" : "opacity-100"
 			}`}
 		>
 			<div className="flex items-start gap-2">
@@ -677,8 +684,9 @@ const ActionItem: React.FC<ActionItemProps> = ({
 					type="checkbox"
 					checked={isChecked}
 					onChange={handleCheckboxChange}
+					disabled={!canToggleToExecute}
 					aria-label={`${t("migrateFlip_toggleItem")}: ${displayName}`}
-					className="mt-0.5 shrink-0 accent-dash-accent cursor-pointer"
+					className="mt-0.5 shrink-0 accent-dash-accent cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
 				/>
 
 				{/* Content */}
@@ -721,12 +729,7 @@ const ActionItem: React.FC<ActionItemProps> = ({
 				</div>
 
 				{/* Kebab flip menu */}
-				<FlipMenu
-					sourceTab={sourceTab}
-					action={action}
-					isFlippedToSkip={isFlippedToSkip}
-					onFlip={onFlip}
-				/>
+				<FlipMenu sourceTab={sourceTab} action={action} isSkipped={isSkipped} onFlip={onFlip} />
 			</div>
 		</div>
 	);
@@ -737,11 +740,11 @@ const ActionItem: React.FC<ActionItemProps> = ({
 interface FlipMenuProps {
 	sourceTab: ActionTabKey;
 	action: ReconcileAction;
-	isFlippedToSkip: boolean;
+	isSkipped: boolean;
 	onFlip: (decision: "execute" | "skip") => void;
 }
 
-const FlipMenu: React.FC<FlipMenuProps> = ({ sourceTab, action, isFlippedToSkip, onFlip }) => {
+const FlipMenu: React.FC<FlipMenuProps> = ({ sourceTab, action, isSkipped, onFlip }) => {
 	const { t } = useI18n();
 	const [open, setOpen] = useState(false);
 	const menuRef = useRef<HTMLDivElement>(null);
@@ -761,14 +764,9 @@ const FlipMenu: React.FC<FlipMenuProps> = ({ sourceTab, action, isFlippedToSkip,
 	// Determine valid flip destinations
 	const allowedDests = FLIP_DESTINATIONS[sourceTab];
 	const canFlipToInstall =
-		sourceTab === "skip" &&
-		allowedDests.includes("install") &&
-		action.reasonCode !== undefined &&
-		SKIP_TO_INSTALL_CODES.has(action.reasonCode);
+		allowedDests.includes("install") && canExecuteSkippedAction(action, sourceTab);
 
-	const hasActions = isFlippedToSkip
-		? canFlipToInstall || sourceTab !== "skip"
-		: allowedDests.length > 0;
+	const hasActions = isSkipped ? canFlipToInstall || sourceTab !== "skip" : allowedDests.length > 0;
 
 	if (!hasActions) return null;
 
@@ -791,7 +789,7 @@ const FlipMenu: React.FC<FlipMenuProps> = ({ sourceTab, action, isFlippedToSkip,
 			{open && (
 				<div className="absolute right-0 top-6 z-10 min-w-[140px] bg-dash-surface border border-dash-border rounded-lg shadow-lg py-1">
 					{/* Skip → Install option */}
-					{isFlippedToSkip && (canFlipToInstall || sourceTab !== "skip") && (
+					{isSkipped && (canFlipToInstall || sourceTab !== "skip") && (
 						<button
 							type="button"
 							onClick={() => {
@@ -804,7 +802,7 @@ const FlipMenu: React.FC<FlipMenuProps> = ({ sourceTab, action, isFlippedToSkip,
 						</button>
 					)}
 					{/* Execute → Skip option */}
-					{!isFlippedToSkip && (
+					{!isSkipped && (
 						<button
 							type="button"
 							onClick={() => {
@@ -814,19 +812,6 @@ const FlipMenu: React.FC<FlipMenuProps> = ({ sourceTab, action, isFlippedToSkip,
 							className="w-full px-3 py-1.5 text-xs text-left text-dash-text hover:bg-dash-surface-hover"
 						>
 							{t("migrateFlip_moveToSkip")}
-						</button>
-					)}
-					{/* Skip → Install (only for eligible skip reasons) */}
-					{!isFlippedToSkip && sourceTab === "skip" && canFlipToInstall && (
-						<button
-							type="button"
-							onClick={() => {
-								onFlip("execute");
-								setOpen(false);
-							}}
-							className="w-full px-3 py-1.5 text-xs text-left text-dash-text hover:bg-dash-surface-hover"
-						>
-							{t("migrateFlip_moveToInstall")}
 						</button>
 					)}
 				</div>
