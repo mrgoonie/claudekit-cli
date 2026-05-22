@@ -743,6 +743,15 @@ function getPlanItemsByType(
 	return Array.from(new Set(normalized));
 }
 
+function hasPlanItemsForType(
+	plan: z.infer<typeof RECONCILE_PLAN_SCHEMA>,
+	type: MigrationPortableType,
+): boolean {
+	const meta = getPlanMeta(plan);
+	if (!meta?.items || typeof meta.items !== "object") return false;
+	return Array.isArray((meta.items as Partial<Record<MigrationPortableType, unknown>>)[type]);
+}
+
 function providerSupportsType(provider: ProviderTypeValue, type: PortableType): boolean {
 	if (type === "agent") return getProvidersSupporting("agents").includes(provider);
 	if (type === "command") return getProvidersSupporting("commands").includes(provider);
@@ -1897,6 +1906,12 @@ export function registerMigrationRoutes(app: Express, deps?: MigrationRouteDeps)
 				const plannedSkillActions = execActions.filter((a) => a.type === "skill").length;
 				if (includeFromPlan.skills && discovered.skills.length > 0 && plannedSkillActions === 0) {
 					const allowedSkillNames = getPlanItemsByType(plan, "skills");
+					const hasExplicitSkillItems = hasPlanItemsForType(plan, "skills");
+					const skippedSkillKeys = new Set(
+						plan.actions
+							.filter((action) => action.type === "skill" && action.action === "skip")
+							.map((action) => JSON.stringify([action.provider, action.global, action.item])),
+					);
 					const plannedSkills =
 						allowedSkillNames.length > 0
 							? discovered.skills.filter((skill) => allowedSkillNames.includes(skill.name))
@@ -1907,17 +1922,29 @@ export function registerMigrationRoutes(app: Express, deps?: MigrationRouteDeps)
 						providerSupportsType(provider, "skill"),
 					);
 					if (skillProviders.length > 0) {
-						for (const skill of plannedSkills) {
-							for (const provider of skillProviders) {
-								const globalFromPlan =
-									plan.actions.find(
-										(action) => action.provider === provider && action.type === "skill",
-									)?.global ?? false;
-								const batch = await installSkillDirectories([skill], [provider], {
-									global: globalFromPlan,
-								});
-								tagResults(batch, "skills", skill.name);
-								allResults.push(...batch);
+						for (const provider of skillProviders) {
+							const skillScopes = new Set(
+								plan.actions
+									.filter((action) => action.provider === provider && action.type === "skill")
+									.map((action) => action.global),
+							);
+							const scopes = skillScopes.size > 0 ? Array.from(skillScopes) : [false];
+							for (const globalFromPlan of scopes) {
+								const providerSkills = hasExplicitSkillItems
+									? plannedSkills.filter(
+											(skill) =>
+												!skippedSkillKeys.has(
+													JSON.stringify([provider, globalFromPlan, skill.name]),
+												),
+										)
+									: plannedSkills;
+								for (const skill of providerSkills) {
+									const batch = await installSkillDirectories([skill], [provider], {
+										global: globalFromPlan,
+									});
+									tagResults(batch, "skills", skill.name);
+									allResults.push(...batch);
+								}
 							}
 						}
 					}

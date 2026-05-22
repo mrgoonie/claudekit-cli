@@ -212,7 +212,7 @@ test.describe("Scenario A — empty-dir reinstall banner", () => {
 		await selectCodexAndRun(page);
 
 		// Wait for Execute Migration button
-		const execButton = page.getByRole("button", { name: "Execute Migration" });
+		const execButton = page.locator("aside").getByRole("button", { name: "Execute Migration" });
 		await expect(execButton).toBeVisible({ timeout: 15_000 });
 		await execButton.click();
 
