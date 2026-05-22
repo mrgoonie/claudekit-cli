@@ -180,9 +180,8 @@ function scrubHookEntry(
  * Phase 1 — Per-file substitution (GH-730 N1 fix):
  *   If `pathRewrite.commandSubstitutions` is provided, scan the command string for any
  *   path substring that matches a key in the map (after normalising `$HOME` / `~` to
- *   the real home directory).  When a match is found, replace that specific path with
- *   the corresponding hash-prefixed wrapper path and return immediately — the per-file
- *   mapping is authoritative and takes precedence over the directory-level rewrite.
+ *   the real home directory).  Each matching hook script path is replaced with its
+ *   corresponding hash-prefixed wrapper path before the directory fallback runs.
  *
  * Phase 2 — Directory-level fallback:
  *   If no per-file match was found (hook not covered by substitution map, or no map
@@ -191,44 +190,85 @@ function scrubHookEntry(
  *   (e.g. `.claude/hooks-extra` vs `.claude/hooks`).
  */
 export function rewriteCommandPath(command: string, pathRewrite: PathRewriteMap): string {
+	const normalizeSlashes = (s: string) => s.replace(/\\/g, "/");
 	let rewritten = command;
 
 	// Phase 1: per-file substitution — wrapper paths take precedence over dir rewrite
 	if (pathRewrite.commandSubstitutions && pathRewrite.commandSubstitutions.size > 0) {
 		const home = homedir();
+		// Forward-slash form of homedir — Claude Code writes hook commands as
+		// `node "$HOME/.claude/hooks/X.cjs"` on ALL platforms including Windows.
+		// So the command always uses forward slashes and literal `$HOME`, never
+		// the platform abs path or `%USERPROFILE%`. We must match that form.
+		const homeForward = normalizeSlashes(home);
 
 		for (const [originalAbsPath, wrapperAbsPath] of pathRewrite.commandSubstitutions) {
-			// Build a set of representations the command string may contain for this path.
-			// We use a normalised absolute form so that commands written with $HOME or ~
-			// also resolve to the same key.
-			const candidates = new Set<string>([
-				originalAbsPath, // already absolute (primary form)
-				originalAbsPath.replace(home, "$HOME"),
-				originalAbsPath.replace(home, "~"),
-			]);
+			// Forward-slash form of the original absolute path key.
+			const originalAbsForward = normalizeSlashes(originalAbsPath);
 
+			// Compute the path relative to home (if originalAbsPath is under home).
+			// e.g. home=C:\Users\test, abs=C:\Users\test\.claude\hooks\X.cjs
+			//      → rel = .claude/hooks/X.cjs (no leading slash)
+			let relFromHome: string | null = null;
+			if (originalAbsForward.startsWith(`${homeForward}/`)) {
+				relFromHome = originalAbsForward.slice(homeForward.length + 1); // strip "home/"
+			} else if (originalAbsForward === homeForward) {
+				relFromHome = "";
+			}
+
+			// Build candidates covering every form Claude Code may write in a command:
+			//   1. Raw absolute path (both slash forms) — primary form on POSIX
+			//   2. $HOME/<rel>  ← Claude's universal form on ALL platforms (THE missing one)
+			//   3. ~/<rel>
+			//   4. %USERPROFILE%/<rel>  — Windows belt-and-suspenders
+			//   5. ${HOME}/<rel>
+			const candidates: string[] = [
+				originalAbsForward, // forward-slash absolute (covers POSIX and normalized Windows)
+				originalAbsPath, // raw key (may have backslashes on Windows)
+			];
+			if (relFromHome !== null && relFromHome !== "") {
+				candidates.push(`$HOME/${relFromHome}`); // Claude's universal form
+				candidates.push(`~/${relFromHome}`);
+				candidates.push(`%USERPROFILE%/${relFromHome}`);
+				candidates.push(`\${HOME}/${relFromHome}`);
+			}
+
+			// Normalize both the command and each candidate to forward slashes before
+			// includes() so that backslash/forward-slash variants never cause a miss.
+			// The wrapper output uses the wrapperAbsPath as-is; callers (hooks-settings-merger)
+			// supply absolute platform-appropriate wrapper paths.
+			const wrapperForward = normalizeSlashes(wrapperAbsPath);
 			for (const candidate of candidates) {
-				if (rewritten.includes(candidate)) {
+				const candidateNorm = normalizeSlashes(candidate);
+				const rewrittenNorm = normalizeSlashes(rewritten);
+				if (rewrittenNorm.includes(candidateNorm)) {
 					// Replace every matched hook script path with its wrapper. Do not
 					// return early: runner commands can contain both a shell runner and
 					// the actual Node hook path, and all matching hook paths must be
 					// processed before the directory-level fallback rewrites leftovers.
-					rewritten = replaceCommandCandidate(rewritten, candidate, wrapperAbsPath);
+					rewritten = replaceCommandCandidate(rewrittenNorm, candidateNorm, wrapperForward);
 				}
 			}
 		}
 	}
 
 	// Phase 2: directory-level fallback
-	const src = pathRewrite.sourceDir.endsWith("/")
-		? pathRewrite.sourceDir
-		: `${pathRewrite.sourceDir}/`;
-	const tgt = pathRewrite.targetDir.endsWith("/")
-		? pathRewrite.targetDir
-		: `${pathRewrite.targetDir}/`;
+	// Normalize separators to forward-slash for matching (handles Windows backslash paths).
+	const src = normalizeSlashes(
+		pathRewrite.sourceDir.endsWith("/") || pathRewrite.sourceDir.endsWith("\\")
+			? pathRewrite.sourceDir
+			: `${pathRewrite.sourceDir}/`,
+	);
+	const tgt = normalizeSlashes(
+		pathRewrite.targetDir.endsWith("/") || pathRewrite.targetDir.endsWith("\\")
+			? pathRewrite.targetDir
+			: `${pathRewrite.targetDir}/`,
+	);
 	// Short-circuit when source and target are identical (no-op rewrite)
 	if (src === tgt) return rewritten;
-	return rewritten.replaceAll(src, tgt);
+	const normalizedRewritten = normalizeSlashes(rewritten);
+	if (!normalizedRewritten.includes(src)) return rewritten;
+	return normalizedRewritten.replaceAll(src, tgt);
 }
 
 function replaceCommandCandidate(command: string, candidate: string, replacement: string): string {

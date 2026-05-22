@@ -3,6 +3,7 @@ import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { InstalledSettingsTracker } from "@/domains/config/installed-settings-tracker.js";
 import { type SettingsJson, SettingsMerger } from "@/domains/config/settings-merger.js";
+import { pruneZombieEngineerWirings } from "@/domains/installation/merger/zombie-wirings-pruner.js";
 import { normalizeCommand, repairClaudeHookCommandPath } from "@/shared/command-normalizer.js";
 import { logger } from "@/shared/logger.js";
 import { PathResolver } from "@/shared/path-resolver.js";
@@ -26,6 +27,8 @@ export class SettingsProcessor {
 	private installingKit: string | undefined;
 	private cachedVersion: string | null | undefined = undefined;
 	private deletionPatterns: string[] = [];
+	/** Hook directory for zombie pruner. When set, pruneZombieEngineerWirings runs post-merge. */
+	private zombiePrunerHookDir: string | null = null;
 
 	/**
 	 * Set global flag to enable path variable replacement in settings.json
@@ -71,6 +74,15 @@ export class SettingsProcessor {
 	 */
 	setDeletions(deletions: string[]): void {
 		this.deletionPatterns = deletions;
+	}
+
+	/**
+	 * Set the hook directory for zombie wiring pruning.
+	 * When set, pruneZombieEngineerWirings() runs after every canonical merge to remove
+	 * engineer-tagged hook entries whose referenced files no longer exist on disk.
+	 */
+	setZombiePrunerHookDir(hookDir: string): void {
+		this.zombiePrunerHookDir = hookDir;
 	}
 
 	/**
@@ -255,6 +267,20 @@ export class SettingsProcessor {
 		const hooksPruned = this.pruneDeletedHooks(mergeResult.merged);
 		if (hooksPruned > 0) {
 			logger.info(`Pruned ${hooksPruned} stale hook(s) referencing deleted files`);
+		}
+
+		// Prune zombie engineer-tagged wirings whose hook files no longer exist on disk.
+		// Runs after canonical merge so every install auto-cleans stale entries from older kits.
+		if (this.zombiePrunerHookDir) {
+			const { pruned: zombiePruned } = pruneZombieEngineerWirings(
+				mergeResult.merged,
+				this.zombiePrunerHookDir,
+			);
+			if (zombiePruned.length > 0) {
+				logger.info(
+					`Pruned ${zombiePruned.length} zombie hook entries: ${zombiePruned.join(", ")}`,
+				);
+			}
 		}
 
 		// Write merged settings

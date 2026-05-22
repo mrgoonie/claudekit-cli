@@ -6,9 +6,16 @@
  */
 
 import { exec, spawn } from "node:child_process";
+import { existsSync } from "node:fs";
+import { readdir } from "node:fs/promises";
+import { builtinModules } from "node:module";
 import { join } from "node:path";
 import { promisify } from "node:util";
 import { CkConfigManager } from "@/domains/config/ck-config-manager.js";
+import {
+	repairLegacyHookPrompts,
+	repairMissingHookFileReferences,
+} from "@/domains/health-checks/checkers/hook-health-checker.js";
 import { getInstalledKits } from "@/domains/migration/metadata-migration.js";
 import { versionsMatch } from "@/domains/versioning/checking/version-utils.js";
 import { getClaudeKitSetup } from "@/services/file-operations/claudekit-scanner.js";
@@ -33,6 +40,7 @@ const execAsync = promisify(exec);
 
 // Only allow alphanumeric chars and hyphens in provider names (defense-in-depth against injection)
 const SAFE_PROVIDER_NAME = /^[a-z0-9-]+$/;
+const HOOK_DEPENDENCY_EXTENSIONS = [".js", ".cjs", ".mjs", ".json"];
 
 // ─── Kit selection ────────────────────────────────────────────────────────────
 
@@ -207,6 +215,39 @@ export interface PromptKitUpdateDeps {
 	loadFullConfigFn?: PromptKitUpdateConfigLoader;
 	confirmFn?: PromptKitUpdateConfirmFn;
 	isCancelFn?: PromptKitUpdateCancelFn;
+	findMissingHookDependenciesFn?: (claudeDir: string) => Promise<string[]>;
+}
+
+async function findMissingHookDependencies(claudeDir: string): Promise<string[]> {
+	const hooksDir = join(claudeDir, "hooks");
+	if (!existsSync(hooksDir)) return [];
+
+	const files = await readdir(hooksDir);
+	const cjsFiles = files.filter((file) => file.endsWith(".cjs"));
+	const missing: string[] = [];
+	const nodeBuiltins = new Set([
+		...builtinModules,
+		...builtinModules.map((name) => `node:${name}`),
+	]);
+
+	for (const file of cjsFiles) {
+		const content = await readFile(join(hooksDir, file), "utf8");
+		const requireRegex = /require\(['"]([^'"]+)['"]\)/g;
+		for (let match = requireRegex.exec(content); match; match = requireRegex.exec(content)) {
+			const depPath = match[1];
+			if (!depPath || nodeBuiltins.has(depPath) || !depPath.startsWith(".")) continue;
+			const resolvedPath = join(hooksDir, depPath);
+			const exists =
+				existsSync(resolvedPath) ||
+				HOOK_DEPENDENCY_EXTENSIONS.some((ext) => existsSync(resolvedPath + ext)) ||
+				existsSync(join(resolvedPath, "index.js")) ||
+				existsSync(join(resolvedPath, "index.cjs")) ||
+				existsSync(join(resolvedPath, "index.mjs"));
+			if (!exists) missing.push(`${file}: ${depPath}`);
+		}
+	}
+
+	return missing;
 }
 
 /**
@@ -226,6 +267,8 @@ export async function promptKitUpdate(
 		const confirmFn = deps?.confirmFn ?? confirm;
 		const isCancelFn = deps?.isCancelFn ?? isCancel;
 		const getSetupFn = deps?.getSetupFn ?? getClaudeKitSetup;
+		const findMissingHookDepsFn =
+			deps?.findMissingHookDependenciesFn ?? findMissingHookDependencies;
 		const setup = await getSetupFn();
 		const hasLocal = !!setup.project.metadata;
 		const hasGlobal = !!setup.global.metadata;
@@ -262,12 +305,28 @@ export async function promptKitUpdate(
 			const getTagFn = deps?.getLatestReleaseTagFn ?? fetchLatestReleaseTag;
 			const latestTag = await getTagFn(selection.kit, beta || isBetaInstalled);
 			if (latestTag && versionsMatch(kitVersion, latestTag)) {
-				logger.success(
-					`Already at latest version (${selection.kit}@${kitVersion}), skipping reinstall`,
-				);
 				alreadyAtLatest = true;
 			} else if (latestTag) {
 				logger.info(`Kit update available: ${kitVersion} -> ${latestTag}`);
+			}
+		}
+
+		if (alreadyAtLatest) {
+			try {
+				const claudeDir = selection.isGlobal ? setup.global.path : setup.project.path;
+				const missingHookDeps = claudeDir ? await findMissingHookDepsFn(claudeDir) : [];
+				if (missingHookDeps.length > 0) {
+					logger.warning(
+						`Detected ${missingHookDeps.length} missing hook dependency(ies); reinstalling kit content`,
+					);
+					alreadyAtLatest = false;
+				}
+			} catch (error) {
+				logger.verbose(
+					`Hook dependency self-heal check skipped: ${
+						error instanceof Error ? error.message : "unknown"
+					}`,
+				);
 			}
 		}
 
@@ -280,7 +339,12 @@ export async function promptKitUpdate(
 			// Non-fatal — fall back to manual prompt
 		}
 
-		if (alreadyAtLatest && !autoInit) return;
+		if (alreadyAtLatest && !autoInit) {
+			logger.success(
+				`Already at latest version (${selection.kit}@${kitVersion}), skipping reinstall`,
+			);
+			return;
+		}
 
 		// Prompt user unless --yes, autoInit, or already at latest
 		if (!yes && !autoInit) {
@@ -382,6 +446,7 @@ export interface PromptMigrateUpdateDeps {
 	loadFullConfigFn?: PromptKitUpdateConfigLoader;
 	execAsyncFn?: ExecAsyncFn;
 	repairHookFileReferencesFn?: (projectDir: string) => Promise<number>;
+	repairLegacyHookPromptsFn?: (projectDir: string) => Promise<number>;
 	cleanupMigratedHooksFn?: (
 		providers: string[],
 		options: { global: boolean },
@@ -390,23 +455,7 @@ export interface PromptMigrateUpdateDeps {
 	>;
 }
 
-export async function repairMissingHookFileReferences(projectDir = process.cwd()): Promise<number> {
-	const { checkHookFileReferences } = await import(
-		"@/domains/health-checks/checkers/hook-health-checker.js"
-	);
-	const result = await checkHookFileReferences(projectDir);
-	if (result.status !== "fail" || !result.fix) {
-		return 0;
-	}
-
-	const fixResult = await result.fix.execute();
-	if (!fixResult.success) {
-		throw new Error(fixResult.message);
-	}
-
-	const match = fixResult.message.match(/Pruned\s+(\d+)/);
-	return match?.[1] ? Number.parseInt(match[1], 10) : 0;
-}
+export { repairLegacyHookPrompts, repairMissingHookFileReferences };
 
 /**
  * Step 3 of the update pipeline: independently check and run migration.
@@ -415,17 +464,37 @@ export async function repairMissingHookFileReferences(projectDir = process.cwd()
  */
 export async function promptMigrateUpdate(deps?: PromptMigrateUpdateDeps): Promise<void> {
 	try {
-		try {
-			const repairFn = deps?.repairHookFileReferencesFn ?? repairMissingHookFileReferences;
-			const repaired = await repairFn(process.cwd());
-			if (repaired > 0) {
-				logger.info(`Repaired ${repaired} missing hook file reference(s)`);
+		const repairFn = deps?.repairHookFileReferencesFn ?? repairMissingHookFileReferences;
+		const repairLegacyPromptsFn = deps?.repairLegacyHookPromptsFn ?? repairLegacyHookPrompts;
+		const repairLegacyHookPromptsSafely = async () => {
+			try {
+				const repaired = await repairLegacyPromptsFn(process.cwd());
+				if (repaired > 0) {
+					logger.info(`Pruned ${repaired} legacy hook prompt(s)`);
+				}
+			} catch (error) {
+				logger.verbose(
+					`Legacy hook prompt repair skipped: ${
+						error instanceof Error ? error.message : "unknown"
+					}`,
+				);
 			}
-		} catch (error) {
-			logger.verbose(
-				`Hook file reference repair skipped: ${error instanceof Error ? error.message : "unknown"}`,
-			);
-		}
+		};
+		const repairHookFileReferencesSafely = async () => {
+			try {
+				const repaired = await repairFn(process.cwd());
+				if (repaired > 0) {
+					logger.info(`Repaired ${repaired} missing hook file reference(s)`);
+				}
+			} catch (error) {
+				logger.verbose(
+					`Hook file reference repair skipped: ${error instanceof Error ? error.message : "unknown"}`,
+				);
+			}
+		};
+
+		await repairLegacyHookPromptsSafely();
+		await repairHookFileReferencesSafely();
 
 		const providerRegistry =
 			deps?.detectInstalledProvidersFn && deps?.getProviderConfigFn
@@ -481,6 +550,9 @@ export async function promptMigrateUpdate(deps?: PromptMigrateUpdateDeps): Promi
 				`Migrated hook cleanup skipped: ${error instanceof Error ? error.message : "unknown"}`,
 			);
 		}
+
+		await repairLegacyHookPromptsSafely();
+		await repairHookFileReferencesSafely();
 
 		const targets = allProviders.filter((p) => p !== "claude-code");
 		if (targets.length === 0) {

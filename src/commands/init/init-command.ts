@@ -4,6 +4,10 @@
  */
 
 import { GitHubClient } from "@/domains/github/github-client.js";
+import {
+	repairLegacyHookPrompts,
+	repairMissingHookFileReferences,
+} from "@/domains/health-checks/checkers/hook-health-checker.js";
 import { maybeShowConfigUpdateNotification } from "@/domains/sync/index.js";
 import { PromptsManager } from "@/domains/ui/prompts.js";
 import { logger } from "@/shared/logger.js";
@@ -140,6 +144,42 @@ function createInitContext(rawOptions: UpdateCommandOptions, prompts: PromptsMan
 	};
 }
 
+async function repairMissingHookFileReferencesAfterInit(ctx: InitContext): Promise<void> {
+	if (!ctx.resolvedDir) return;
+
+	const projectDir = ctx.options.global ? process.cwd() : ctx.resolvedDir;
+	try {
+		const repaired = await repairMissingHookFileReferences(projectDir);
+		if (repaired > 0) {
+			logger.info(`Repaired ${repaired} missing hook file reference(s)`);
+		}
+	} catch (error) {
+		logger.debug(
+			`Hook file reference repair skipped after init: ${
+				error instanceof Error ? error.message : "unknown"
+			}`,
+		);
+	}
+}
+
+export async function repairLegacyHookPromptsAfterInit(ctx: InitContext): Promise<void> {
+	if (!ctx.resolvedDir) return;
+
+	const projectDir = ctx.options.global ? process.cwd() : ctx.resolvedDir;
+	try {
+		const repaired = await repairLegacyHookPrompts(projectDir);
+		if (repaired > 0) {
+			logger.info(`Pruned ${repaired} legacy hook prompt(s)`);
+		}
+	} catch (error) {
+		logger.debug(
+			`Legacy hook prompt repair skipped after init: ${
+				error instanceof Error ? error.message : "unknown"
+			}`,
+		);
+	}
+}
+
 /**
  * Internal init command implementation
  * Runs all phases in sequence, passing context through each
@@ -240,6 +280,11 @@ async function executeInit(options: UpdateCommandOptions, prompts: PromptsManage
 		logger.success(
 			`\nInstalled ${installedKits.length} kits: ${installedKits.map((k) => AVAILABLE_KITS[k].name).join(", ")}`,
 		);
+	}
+
+	if (!isSyncMode) {
+		await repairLegacyHookPromptsAfterInit(ctx);
+		await repairMissingHookFileReferencesAfterInit(ctx);
 	}
 
 	// Success outro (only for normal mode - sync has its own outro)

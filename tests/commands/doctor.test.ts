@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { mkdir, rm, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { doctorCommand } from "@/commands/doctor.js";
 import { getClaudeKitSetup } from "@/services/file-operations/claudekit-scanner.js";
@@ -58,6 +58,7 @@ describe("Doctor Command", () => {
 	});
 
 	afterEach(async () => {
+		process.exitCode = 0;
 		// Cleanup test directory
 		if (testDir) {
 			await rm(testDir, { recursive: true, force: true });
@@ -235,6 +236,73 @@ describe("Doctor Command", () => {
 				}
 			}
 		}, 30000); // 30 second timeout
+
+		test("fix mode re-runs checks and renders the post-fix state", async () => {
+			for (let i = 0; i < 20; i++) {
+				const skillDir = join(mockClaudeDir, "skills", `budget-skill-${i}`);
+				await mkdir(skillDir, { recursive: true });
+				await writeFile(
+					join(skillDir, "SKILL.md"),
+					[
+						"---",
+						`name: ck:budget-skill-${i}`,
+						`description: Short description ${i}`,
+						"---",
+						"",
+						`# Budget Skill ${i}`,
+					].join("\n"),
+					"utf8",
+				);
+			}
+
+			const originalCwd = process.cwd();
+			const originalCI = process.env.CI;
+			const originalNodeEnv = process.env.NODE_ENV;
+			const originalCkTestHome = process.env.CK_TEST_HOME;
+			const originalConsoleLog = console.log;
+			const output: string[] = [];
+			console.log = (...args: unknown[]) => {
+				output.push(args.map(String).join(" "));
+			};
+			process.env.CI = "true";
+			process.env.NODE_ENV = "test";
+			process.env.CK_TEST_HOME = testDir;
+			process.exitCode = 0;
+
+			try {
+				process.chdir(testDir);
+
+				await doctorCommand({ fix: true });
+
+				const rendered = output.join("\n");
+				expect(rendered).toContain("AUTO-HEAL RESULTS");
+				expect(rendered).toContain("Project defaults configured");
+				expect(rendered).not.toContain("Needs skillListingBudgetFraction");
+
+				const settings = JSON.parse(await readFile(join(mockClaudeDir, "settings.json"), "utf8"));
+				expect(settings.skillListingBudgetFraction).toBeGreaterThanOrEqual(0.03);
+				expect(settings.skillListingMaxDescChars).toBe(512);
+			} finally {
+				console.log = originalConsoleLog;
+				process.chdir(originalCwd);
+				process.exitCode = 0;
+				if (originalCI === undefined) {
+					process.env.CI = undefined;
+				} else {
+					process.env.CI = originalCI;
+				}
+				if (originalNodeEnv === undefined) {
+					process.env.NODE_ENV = undefined;
+				} else {
+					process.env.NODE_ENV = originalNodeEnv;
+				}
+				if (originalCkTestHome === undefined) {
+					process.env.CK_TEST_HOME = undefined;
+				} else {
+					process.env.CK_TEST_HOME = originalCkTestHome;
+				}
+			}
+		}, 30000);
 	});
 
 	describe("Component counting logic", () => {

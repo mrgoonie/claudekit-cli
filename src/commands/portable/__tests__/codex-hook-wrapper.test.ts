@@ -27,9 +27,13 @@ describe("buildWrapperScript", () => {
 		expect(script).toContain("/home/user/.claude/hooks/session-init.cjs");
 	});
 
-	it("generates a valid CommonJS shebang", () => {
+	it("Phase 2: wrapper starts with // comment header (no shebang — invoked via `node <path>`)", () => {
+		// Shebang removed in Phase 2: wrapper is always invoked as `node <wrapper>` in hooks.json.
+		// Removing the shebang makes it portable across Windows (where .cjs shebangs don't execute).
 		const script = buildWrapperScript("/hook.cjs", caps);
-		expect(script.startsWith("#!/usr/bin/env node")).toBe(true);
+		expect(script.startsWith("#!/usr/bin/env node")).toBe(false);
+		const firstLine = script.split("\n")[0];
+		expect(firstLine.trimStart().startsWith("//")).toBe(true);
 	});
 
 	it("contains the AUTO-GENERATED marker", () => {

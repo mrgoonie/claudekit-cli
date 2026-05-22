@@ -48,8 +48,15 @@ export class AutoHealer {
 		}
 
 		const start = Date.now();
+		let timeoutId: ReturnType<typeof setTimeout> | undefined;
+		const timeoutPromise = new Promise<never>((_, reject) => {
+			timeoutId = setTimeout(
+				() => reject(new Error(`Fix timed out after ${this.timeout}ms`)),
+				this.timeout,
+			);
+		});
 		try {
-			const result = await Promise.race([fix.execute(), this.createTimeout()]);
+			const result = await Promise.race([fix.execute(), timeoutPromise]);
 			const attempt = this.buildAttempt(check, fix.id, result);
 			attempt.duration = Date.now() - start;
 			return attempt;
@@ -64,6 +71,10 @@ export class AutoHealer {
 				error: err,
 				duration: Date.now() - start,
 			};
+		} finally {
+			if (timeoutId) {
+				clearTimeout(timeoutId);
+			}
 		}
 	}
 
@@ -77,11 +88,5 @@ export class AutoHealer {
 			error: result.success ? undefined : result.message,
 			duration: 0,
 		};
-	}
-
-	private createTimeout(): Promise<never> {
-		return new Promise((_, reject) => {
-			setTimeout(() => reject(new Error(`Fix timed out after ${this.timeout}ms`)), this.timeout);
-		});
 	}
 }

@@ -88,6 +88,15 @@ export class FileMerger {
 	}
 
 	/**
+	 * Set the hooks directory for zombie engineer-wiring pruning.
+	 * Global install:   ~/.claude/hooks
+	 * Project install:  <projectDir>/.claude/hooks
+	 */
+	setZombiePrunerHookDir(hookDir: string): void {
+		this.copyExecutor.setZombiePrunerHookDir(hookDir);
+	}
+
+	/**
 	 * Set release manifest for selective merge optimization
 	 * When set, files with matching checksums will be skipped during copy
 	 */

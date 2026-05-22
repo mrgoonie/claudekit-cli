@@ -457,7 +457,7 @@
 				"descriptive-name": {
 					"type": "boolean",
 					"default": true,
-					"description": "PreToolUse hook - enforces kebab-case descriptive file naming for scripts"
+					"description": "PreToolUse hook - injects language-aware descriptive file naming guidance"
 				},
 				"dev-rules-reminder": {
 					"type": "boolean",

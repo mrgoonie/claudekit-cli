@@ -434,9 +434,10 @@ describe("codex hook compat integration — feature flag (failure mode 8)", () =
 	}, 10000);
 });
 
-describe("codex hook compat integration — Windows short-circuit (failure mode — platform guard)", () => {
-	it("skips hook installation on Windows with a warning", async () => {
-		const dir = setupTestDir("windows-skip");
+describe("codex hook compat integration — Windows platform (gate removed, pipeline runs)", () => {
+	it("does NOT short-circuit on win32 — returns pipeline result, not skipped-windows", async () => {
+		// Phase 3: the Windows short-circuit gate was removed. The pipeline now runs on win32.
+		const dir = setupTestDir("windows-pipeline");
 		writeFileSync(
 			join(dir, ".claude", "settings.json"),
 			makeSourceSettings({
@@ -466,9 +467,9 @@ describe("codex hook compat integration — Windows short-circuit (failure mode 
 				global: false,
 			});
 
-			expect(result.status).toBe("skipped-windows");
+			// Gate removed: win32 no longer returns skipped-windows
+			expect(result.status).not.toBe("skipped-windows");
 			expect(result.success).toBe(true);
-			expect(result.message).toContain("Windows");
 		} finally {
 			if (platformDescriptor) {
 				Object.defineProperty(process, "platform", platformDescriptor);
