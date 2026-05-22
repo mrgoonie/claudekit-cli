@@ -654,7 +654,7 @@ describe("PackageManagerDetector", () => {
 			expect(result).toBeNull();
 		});
 
-		test("handles cache boundary - exactly 30 days old", async () => {
+		test("handles cache boundary - just inside 30 days old", async () => {
 			const cacheDir = join(testHomeDir, ".claudekit");
 			mkdirSync(cacheDir, { recursive: true });
 

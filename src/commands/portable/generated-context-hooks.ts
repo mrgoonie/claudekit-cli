@@ -8,6 +8,7 @@ const GENERATED_CONTEXT_HOOK_FILENAMES = new Set([
 	"session-state.cjs",
 	"subagent-init.cjs",
 	"team-context-inject.cjs",
+	"teammate-idle-handler.cjs",
 	"usage-context-awareness.cjs",
 ]);
 

@@ -5,6 +5,8 @@ import {
 } from "@/domains/web-server/routes/health-routes.js";
 import express, { type Express } from "express";
 
+const testFetch = globalThis.fetch.bind(globalThis);
+
 interface TestServer {
 	server: ReturnType<Express["listen"]>;
 	baseUrl: string;
@@ -46,7 +48,7 @@ describe("GET /api/health", () => {
 	});
 
 	it("returns status ok with correct shape", async () => {
-		const res = await fetch(`${ctx.baseUrl}/api/health`);
+		const res = await testFetch(`${ctx.baseUrl}/api/health`);
 
 		expect(res.status).toBe(200);
 
@@ -64,7 +66,7 @@ describe("GET /api/health", () => {
 	});
 
 	it("features array is non-empty and includes plans-dashboard", async () => {
-		const res = await fetch(`${ctx.baseUrl}/api/health`);
+		const res = await testFetch(`${ctx.baseUrl}/api/health`);
 		const body = (await res.json()) as { features: string[] };
 
 		expect(body.features.length).toBeGreaterThan(0);
@@ -72,7 +74,7 @@ describe("GET /api/health", () => {
 	});
 
 	it("features array matches DASHBOARD_FEATURES constant", async () => {
-		const res = await fetch(`${ctx.baseUrl}/api/health`);
+		const res = await testFetch(`${ctx.baseUrl}/api/health`);
 		const body = (await res.json()) as { features: string[] };
 
 		expect(body.features).toEqual([...DASHBOARD_FEATURES]);

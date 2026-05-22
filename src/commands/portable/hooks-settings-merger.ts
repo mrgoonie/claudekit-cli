@@ -7,7 +7,7 @@
 import { existsSync } from "node:fs";
 import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
-import { basename, dirname, join, resolve } from "node:path";
+import { basename, dirname, extname, join, resolve } from "node:path";
 import type { CodexCapabilities } from "./codex-capabilities.js";
 import { detectCodexCapabilities } from "./codex-capabilities.js";
 import { ensureCodexHooksFeatureFlag } from "./codex-features-flag.js";
@@ -22,8 +22,18 @@ import {
 	requiresHookMapping,
 	rewriteMatcherToolNames,
 } from "./converters/gemini-hook-event-map.js";
+import {
+	commandReferencesInstalledAsset,
+	dedupeWarnings,
+	extractHookReferencesFromCommand,
+	filterHooksForTarget,
+	hookAssetBasename,
+	isCodexSupportedHookEvent,
+	isExcludedHookAsset,
+	normalizeHookAssetPath,
+} from "./hook-migration-compatibility.js";
 import { providers } from "./provider-registry.js";
-import type { ProviderType } from "./types.js";
+import type { MigrationWarning, ProviderType } from "./types.js";
 
 // HookEntry, HookGroup, HooksSection are imported from converters/claude-to-codex-hooks.ts
 // (single source of truth — M7 fix).
@@ -38,6 +48,7 @@ interface HooksSettingsReadResult {
 
 export type HooksMigrationStatus =
 	| "registered"
+	| "no-compatible-hooks"
 	| "no-installed-files"
 	| "unsupported-source"
 	| "unsupported-target"
@@ -67,6 +78,8 @@ export interface MigrateHooksSettingsResult {
 	success: boolean;
 	backupPath: string | null;
 	hooksRegistered: number;
+	hooksPruned?: number;
+	warnings?: MigrationWarning[];
 	error?: string;
 	message?: string;
 	sourceSettingsPath: string | null;
@@ -77,6 +90,20 @@ export interface MigrateHooksSettingsResult {
 	codexCapabilitiesVersion?: string;
 	/** Codex-only: whether hooks feature flag was written to config.toml */
 	codexFeatureFlagWritten?: boolean;
+}
+
+interface MergeHooksOptions {
+	targetProvider?: ProviderType;
+	targetHooksDir?: string;
+}
+
+const CODEX_WRAPPABLE_HOOK_EXTENSIONS = new Set([".js", ".cjs", ".mjs", ".ts"]);
+
+function isCodexWrappableHookPath(filePath: string): boolean {
+	return (
+		hookAssetBasename(filePath) !== "node-hook-runner.sh" &&
+		CODEX_WRAPPABLE_HOOK_EXTENSIONS.has(extname(filePath).toLowerCase())
+	);
 }
 
 /**
@@ -167,10 +194,7 @@ export function rewriteHookPaths(
 	targetHooksDir: string,
 ): HooksSection {
 	if (sourceHooksDir === targetHooksDir) return hooks;
-
-	// Append trailing slash so we match exact directory, not substrings like `.claude/hooks-extra`
-	const src = sourceHooksDir.endsWith("/") ? sourceHooksDir : `${sourceHooksDir}/`;
-	const tgt = targetHooksDir.endsWith("/") ? targetHooksDir : `${targetHooksDir}/`;
+	const rewritePairs = buildHookDirRewritePairs(sourceHooksDir, targetHooksDir);
 
 	const rewritten: HooksSection = {};
 	for (const [event, groups] of Object.entries(hooks)) {
@@ -181,11 +205,51 @@ export function rewriteHookPaths(
 				// replaceAll rewrites ALL occurrences in the command string — including
 				// arguments and env vars that reference the hooks directory. This is intentional:
 				// the entire hook should be self-contained within the hooks directory.
-				command: entry.command.replaceAll(src, tgt),
+				command: rewritePairs.reduce(
+					(command, [src, tgt]) => command.replaceAll(src, tgt),
+					entry.command,
+				),
 			})),
 		}));
 	}
 	return rewritten;
+}
+
+function normalizeDirPattern(value: string): string {
+	return value.replace(/\\/g, "/").replace(/\/+$/, "").replace(/^\.\//, "");
+}
+
+function homeRelativeDir(value: string): string {
+	const normalized = normalizeDirPattern(value);
+	const home = normalizeDirPattern(homedir());
+	return normalized.startsWith(`${home}/`) ? normalized.slice(home.length + 1) : normalized;
+}
+
+function buildHookDirRewritePairs(
+	sourceHooksDir: string,
+	targetHooksDir: string,
+): [string, string][] {
+	const source = normalizeDirPattern(sourceHooksDir);
+	const target = normalizeDirPattern(targetHooksDir);
+	const sourceHomeRelative = homeRelativeDir(sourceHooksDir);
+	const targetHomeRelative = homeRelativeDir(targetHooksDir);
+	const candidates: [string, string][] = [
+		[source, target],
+		[`$HOME/${sourceHomeRelative}`, `$HOME/${targetHomeRelative}`],
+		[`~/${sourceHomeRelative}`, `~/${targetHomeRelative}`],
+		[sourceHomeRelative, targetHomeRelative],
+	];
+	const seen = new Set<string>();
+	return candidates
+		.filter(([src]) => src.length > 0)
+		.map(([src, tgt]) => [`${src}/`, `${tgt}/`] as [string, string])
+		.filter(([src, tgt]) => {
+			const key = `${src}\0${tgt}`;
+			if (src === tgt || seen.has(key)) return false;
+			seen.add(key);
+			return true;
+		})
+		.sort((left, right) => right[0].length - left[0].length);
 }
 
 /**
@@ -195,17 +259,25 @@ export function rewriteHookPaths(
 export function filterToInstalledHooks(
 	hooks: HooksSection,
 	installedFiles: string[],
+	options: { targetProvider?: ProviderType; warnings?: MigrationWarning[] } = {},
 ): HooksSection {
-	const installedSet = new Set(installedFiles);
+	if (options.targetProvider) {
+		const result = filterHooksForTarget(hooks, installedFiles, options.targetProvider);
+		options.warnings?.push(...result.warnings);
+		return result.hooks;
+	}
+
+	const installedSet = new Set(installedFiles.map(normalizeHookAssetPath));
+	for (const file of installedFiles) {
+		installedSet.add(hookAssetBasename(file));
+	}
 	const filtered: HooksSection = {};
 
 	for (const [event, groups] of Object.entries(hooks)) {
 		const filteredGroups: HookGroup[] = [];
 		for (const group of groups) {
 			const matchingHooks = group.hooks.filter((entry) => {
-				// Extract filename from command string (e.g., 'node "$HOME/.claude/hooks/session-init.cjs"')
-				const filename = extractFilenameFromCommand(entry.command);
-				return filename ? installedSet.has(filename) : false;
+				return commandReferencesInstalledAsset(entry.command, installedSet);
 			});
 			if (matchingHooks.length > 0) {
 				filteredGroups.push({ ...group, hooks: matchingHooks });
@@ -249,35 +321,14 @@ export function mapHookEventsForProvider(
 }
 
 /**
- * Extract the hook filename from a command string.
- * E.g., 'node "$HOME/.claude/hooks/session-init.cjs"' -> 'session-init.cjs'
- */
-function extractFilenameFromCommand(command: string): string | null {
-	// Strip pipes, redirects, and trailing args before extracting filename
-	const normalized = command.replace(/\s*[|>&].*$/, "").trim();
-	// Try quoted path first — handles spaces in filenames/directories
-	const quotedMatch = normalized.match(/["']([^"']+\.(?:js|cjs|mjs|ts))["']/);
-	if (quotedMatch) return quotedMatch[1].split(/[\\/]/).pop() ?? null;
-	// Match unquoted path/file.ext pattern (handles trailing args like --verbose)
-	const match = normalized.match(/[\\/]([^"\\/\s]+\.\w+)/);
-	if (match) return match[1];
-	// Fallback: find first token with a file extension
-	const tokens = normalized.split(/\s+/);
-	for (const token of tokens) {
-		const clean = token.replace(/["']/g, "");
-		if (/\.\w+$/.test(clean)) return basename(clean);
-	}
-	return null;
-}
-
-/**
  * Merge new hooks into target settings.json.
  * Creates backup of existing file, deduplicates by command string per event+matcher.
  */
 export async function mergeHooksIntoSettings(
 	targetSettingsPath: string,
 	newHooks: HooksSection,
-): Promise<{ backupPath: string | null }> {
+	options: MergeHooksOptions = {},
+): Promise<{ backupPath: string | null; hooksPruned: number }> {
 	// Read existing settings (create empty object if missing)
 	let existingSettings: Record<string, unknown> = {};
 	let backupPath: string | null = null;
@@ -298,13 +349,16 @@ export async function mergeHooksIntoSettings(
 		} catch {
 			backupPath = null;
 		}
+	} else if (Object.keys(newHooks).length === 0) {
+		return { backupPath: null, hooksPruned: 0 };
 	}
 
 	const existingHooks = (existingSettings.hooks ?? {}) as HooksSection;
+	const incompatibleCleanup = pruneIncompatibleHookRegistrations(existingHooks, options);
 	// Self-heal stale ck-managed entries: drop hooks whose command is an
 	// absolute file path pointing at a missing file. Fixes the "duplicates"
 	// symptom after users purge ~/.codex/hooks/ without clearing hooks.json (#739).
-	const pruned = pruneStaleFileHooks(existingHooks);
+	const pruned = pruneStaleFileHooks(incompatibleCleanup.hooks);
 	const merged = deduplicateMerge(pruned, newHooks);
 	existingSettings.hooks = merged;
 
@@ -320,7 +374,48 @@ export async function mergeHooksIntoSettings(
 		throw new Error(`Failed to write settings: ${err}. Backup preserved at: ${backupPath}`);
 	}
 
-	return { backupPath };
+	return { backupPath, hooksPruned: incompatibleCleanup.hooksPruned };
+}
+
+function pruneIncompatibleHookRegistrations(
+	hooks: HooksSection,
+	options: MergeHooksOptions,
+): { hooks: HooksSection; hooksPruned: number } {
+	if (options.targetProvider !== "codex") return { hooks, hooksPruned: 0 };
+	const targetHooksDir = options.targetHooksDir || ".codex/hooks";
+	let hooksPruned = 0;
+	const pruned: HooksSection = {};
+
+	for (const [event, groups] of Object.entries(hooks)) {
+		const keptGroups: HookGroup[] = [];
+		for (const group of groups) {
+			const keptHooks = group.hooks.filter((entry) => {
+				const refs = extractHookReferencesFromCommand(entry.command);
+				const targetOwned = commandTargetsHookDir(entry.command, targetHooksDir);
+				const incompatible =
+					!isCodexSupportedHookEvent(event) || refs.some((ref) => isExcludedHookAsset(ref));
+				if (targetOwned && incompatible) {
+					hooksPruned += 1;
+					return false;
+				}
+				return true;
+			});
+			if (keptHooks.length > 0) keptGroups.push({ ...group, hooks: keptHooks });
+		}
+		if (keptGroups.length > 0) pruned[event] = keptGroups;
+	}
+
+	return { hooks: pruned, hooksPruned };
+}
+
+function commandTargetsHookDir(command: string, targetHooksDir: string): boolean {
+	const normalizedCommand = command.replace(/\\/g, "/");
+	const normalizedDir = targetHooksDir.replace(/\\/g, "/").replace(/\/+$/, "");
+	return (
+		normalizedCommand.includes(`${normalizedDir}/`) ||
+		normalizedCommand.includes("$HOME/.codex/hooks/") ||
+		normalizedCommand.includes("~/.codex/hooks/")
+	);
 }
 
 /**
@@ -581,7 +676,11 @@ export async function migrateHooksSettings(
 		: (targetConfig.hooks?.projectPath ?? "");
 
 	// Pipeline: filter -> rewrite paths -> map events/matchers -> merge
-	const filtered = filterToInstalledHooks(sourceHooks, installedHookFiles);
+	const warnings: MigrationWarning[] = [];
+	const filtered = filterToInstalledHooks(sourceHooks, installedHookFiles, {
+		targetProvider,
+		warnings,
+	});
 	const rewritten = rewriteHookPaths(filtered, sourceHooksDir, targetHooksDir);
 	const eventMapped = mapHookEventsForProvider(rewritten, targetProvider);
 
@@ -599,6 +698,7 @@ export async function migrateHooksSettings(
 			success: true,
 			backupPath: null,
 			hooksRegistered: 0,
+			warnings: dedupeWarnings(warnings),
 			message: `Hook files were copied, but none of the installed hooks matched registrations from ${resolvedSourcePath}; ${resolvedTargetPath} was not updated.`,
 			sourceSettingsPath: resolvedSourcePath,
 			targetSettingsPath: resolvedTargetPath,
@@ -606,12 +706,21 @@ export async function migrateHooksSettings(
 	}
 
 	try {
-		const { backupPath } = await mergeHooksIntoSettings(resolvedTargetPath, eventMapped);
+		const { backupPath, hooksPruned } = await mergeHooksIntoSettings(
+			resolvedTargetPath,
+			eventMapped,
+			{
+				targetProvider,
+				targetHooksDir,
+			},
+		);
 		return {
 			status: "registered",
 			success: true,
 			backupPath,
 			hooksRegistered,
+			hooksPruned,
+			warnings: dedupeWarnings(warnings),
 			sourceSettingsPath: resolvedSourcePath,
 			targetSettingsPath: resolvedTargetPath,
 		};
@@ -755,7 +864,11 @@ async function migrateHooksSettingsForCodex(
 	const sourceHooks = sourceHooksResult.hooks;
 
 	// Step 4: Filter to installed hook files
-	const filtered = filterToInstalledHooks(sourceHooks, installedHookFiles);
+	const warnings: MigrationWarning[] = [];
+	const filtered = filterToInstalledHooks(sourceHooks, installedHookFiles, {
+		targetProvider: "codex",
+		warnings,
+	});
 
 	// Step 5: Generate wrapper scripts
 	// Wrapper dir mirrors the target hooks dir (e.g. ~/.codex/hooks/)
@@ -775,8 +888,9 @@ async function migrateHooksSettingsForCodex(
 	const wrapperPaths: string[] = [];
 	const commandSubstitutions = new Map<string, string>();
 	if (installedHookAbsolutePaths && installedHookAbsolutePaths.length > 0 && targetHooksDir) {
+		const wrappableHookAbsolutePaths = installedHookAbsolutePaths.filter(isCodexWrappableHookPath);
 		const wrapperResults = generateCodexHookWrappers(
-			installedHookAbsolutePaths,
+			wrappableHookAbsolutePaths,
 			targetHooksDir,
 			capabilities,
 		);
@@ -792,9 +906,15 @@ async function migrateHooksSettingsForCodex(
 				const addKey = (p: string) => commandSubstitutions.set(p, wr.wrapperPath);
 				const base = basename(wr.originalPath);
 				addKey(wr.originalPath); // target form (as returned by installer)
+				if (targetHooksDir) {
+					addKey(join(targetHooksDir, base));
+					addKey(`./${join(targetHooksDir, base)}`);
+				}
 				if (sourceHooksDir) {
 					const sourceAbs = join(resolve(sourceHooksDir), base);
 					addKey(sourceAbs);
+					addKey(join(sourceHooksDir, base));
+					addKey(`./${join(sourceHooksDir, base)}`);
 					// macOS: `/var` is a symlink to `/private/var`. Tmp paths and user
 					// paths can appear in either form. Add both so includes() matches.
 					if (sourceAbs.startsWith("/private/")) {
@@ -832,15 +952,21 @@ async function migrateHooksSettingsForCodex(
 				message: `Hook files were copied, but no hooks survived Codex compatibility filtering. ${resolvedTargetPath} was not updated.`,
 				sourceSettingsPath: resolvedSourcePath,
 				targetSettingsPath: resolvedTargetPath,
+				warnings: dedupeWarnings(warnings),
 				codexCapabilitiesVersion: capabilities.version,
 			};
 		}
-		const mergeResult = await mergeHooksIntoSettings(resolvedTargetPath, convertedNoRewrite);
+		const mergeResult = await mergeHooksIntoSettings(resolvedTargetPath, convertedNoRewrite, {
+			targetProvider: "codex",
+			targetHooksDir,
+		});
 		return {
 			status: "registered",
 			success: true,
 			backupPath: mergeResult.backupPath,
 			hooksRegistered: hooksRegisteredNoRewrite,
+			hooksPruned: mergeResult.hooksPruned,
+			warnings: dedupeWarnings(warnings),
 			sourceSettingsPath: resolvedSourcePath,
 			targetSettingsPath: resolvedTargetPath,
 			codexCapabilitiesVersion: capabilities.version,
@@ -875,15 +1001,21 @@ async function migrateHooksSettingsForCodex(
 			message: `Hook files were copied, but no hooks survived Codex compatibility filtering (unsupported events/matchers dropped). ${resolvedTargetPath} was not updated.`,
 			sourceSettingsPath: resolvedSourcePath,
 			targetSettingsPath: resolvedTargetPath,
+			warnings: dedupeWarnings(warnings),
 			codexCapabilitiesVersion: capabilities.version,
 		};
 	}
 
 	// Step 7: Merge into hooks.json
 	let backupPath: string | null = null;
+	let hooksPruned = 0;
 	try {
-		const mergeResult = await mergeHooksIntoSettings(resolvedTargetPath, converted);
+		const mergeResult = await mergeHooksIntoSettings(resolvedTargetPath, converted, {
+			targetProvider: "codex",
+			targetHooksDir,
+		});
 		backupPath = mergeResult.backupPath;
+		hooksPruned = mergeResult.hooksPruned;
 	} catch (err) {
 		return {
 			status: "merge-failed",
@@ -915,6 +1047,8 @@ async function migrateHooksSettingsForCodex(
 		success: true,
 		backupPath,
 		hooksRegistered,
+		hooksPruned,
+		warnings: dedupeWarnings(warnings),
 		sourceSettingsPath: resolvedSourcePath,
 		targetSettingsPath: resolvedTargetPath,
 		codexWrapperPaths: wrapperPaths.length > 0 ? wrapperPaths : undefined,

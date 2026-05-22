@@ -7,7 +7,7 @@
  *   - Unsupported matchers filtered (SessionStart only allows startup|resume)
  *   - additionalContext NOT emitted here — that's the wrapper's job at runtime
  *   - command paths optionally rewritten from source dir → wrapper dir
- *   - permissionDecision values scrubbed to only "deny" (Codex only supports deny)
+ *   - permissionDecision values scrubbed to the selected Codex capability entry
  *
  * This function is pure (no I/O). All side-effects live in the caller.
  */
@@ -129,8 +129,7 @@ function filterGroupsByMatcher(
 			// No matcher — allow through (wildcard semantics)
 			return true;
 		}
-		// For SessionStart: only startup|resume matchers are valid
-		// For Pre/PostToolUse: only Bash is valid
+		// For SessionStart and tool events, allowed matcher values are capability-driven.
 		// Matcher may be pipe-separated (e.g. "startup|resume") — keep if ANY part matches
 		const parts = group.matcher.split("|").map((p) => p.trim());
 		return parts.some((part) => allowedSet.has(part));
@@ -181,9 +180,8 @@ function scrubHookEntry(
  * Phase 1 — Per-file substitution (GH-730 N1 fix):
  *   If `pathRewrite.commandSubstitutions` is provided, scan the command string for any
  *   path substring that matches a key in the map (after normalising `$HOME` / `~` to
- *   the real home directory).  When a match is found, replace that specific path with
- *   the corresponding hash-prefixed wrapper path and return immediately — the per-file
- *   mapping is authoritative and takes precedence over the directory-level rewrite.
+ *   the real home directory).  Each matching hook script path is replaced with its
+ *   corresponding hash-prefixed wrapper path before the directory fallback runs.
  *
  * Phase 2 — Directory-level fallback:
  *   If no per-file match was found (hook not covered by substitution map, or no map
@@ -192,6 +190,9 @@ function scrubHookEntry(
  *   (e.g. `.claude/hooks-extra` vs `.claude/hooks`).
  */
 export function rewriteCommandPath(command: string, pathRewrite: PathRewriteMap): string {
+	const normalizeSlashes = (s: string) => s.replace(/\\/g, "/");
+	let rewritten = command;
+
 	// Phase 1: per-file substitution — wrapper paths take precedence over dir rewrite
 	if (pathRewrite.commandSubstitutions && pathRewrite.commandSubstitutions.size > 0) {
 		const home = homedir();
@@ -199,12 +200,11 @@ export function rewriteCommandPath(command: string, pathRewrite: PathRewriteMap)
 		// `node "$HOME/.claude/hooks/X.cjs"` on ALL platforms including Windows.
 		// So the command always uses forward slashes and literal `$HOME`, never
 		// the platform abs path or `%USERPROFILE%`. We must match that form.
-		const homeForward = home.replace(/\\/g, "/");
-		const normalizeSlashesStr = (s: string) => s.replace(/\\/g, "/");
+		const homeForward = normalizeSlashes(home);
 
 		for (const [originalAbsPath, wrapperAbsPath] of pathRewrite.commandSubstitutions) {
 			// Forward-slash form of the original absolute path key.
-			const originalAbsForward = normalizeSlashesStr(originalAbsPath);
+			const originalAbsForward = normalizeSlashes(originalAbsPath);
 
 			// Compute the path relative to home (if originalAbsPath is under home).
 			// e.g. home=C:\Users\test, abs=C:\Users\test\.claude\hooks\X.cjs
@@ -237,25 +237,23 @@ export function rewriteCommandPath(command: string, pathRewrite: PathRewriteMap)
 			// includes() so that backslash/forward-slash variants never cause a miss.
 			// The wrapper output uses the wrapperAbsPath as-is; callers (hooks-settings-merger)
 			// supply absolute platform-appropriate wrapper paths.
-			const commandNorm = normalizeSlashesStr(command);
+			const wrapperForward = normalizeSlashes(wrapperAbsPath);
 			for (const candidate of candidates) {
-				const candidateNorm = normalizeSlashesStr(candidate);
-				if (commandNorm.includes(candidateNorm)) {
-					// Replace the matched form in the (forward-slash-normalized) command with
-					// the wrapper absolute path. Use forward-slash form of wrapper for
-					// consistency (the rest of the converter normalizes to forward slashes).
-					const wrapperForward = normalizeSlashesStr(wrapperAbsPath);
-					return commandNorm.replaceAll(candidateNorm, wrapperForward);
+				const candidateNorm = normalizeSlashes(candidate);
+				const rewrittenNorm = normalizeSlashes(rewritten);
+				if (rewrittenNorm.includes(candidateNorm)) {
+					// Replace every matched hook script path with its wrapper. Do not
+					// return early: runner commands can contain both a shell runner and
+					// the actual Node hook path, and all matching hook paths must be
+					// processed before the directory-level fallback rewrites leftovers.
+					rewritten = replaceCommandCandidate(rewrittenNorm, candidateNorm, wrapperForward);
 				}
 			}
 		}
-		// No per-file match — fall through to directory-level rewrite below so that
-		// hooks not covered by the substitution map are still relocated to targetDir.
 	}
 
 	// Phase 2: directory-level fallback
 	// Normalize separators to forward-slash for matching (handles Windows backslash paths).
-	const normalizeSlashes = (s: string) => s.replace(/\\/g, "/");
 	const src = normalizeSlashes(
 		pathRewrite.sourceDir.endsWith("/") || pathRewrite.sourceDir.endsWith("\\")
 			? pathRewrite.sourceDir
@@ -267,9 +265,27 @@ export function rewriteCommandPath(command: string, pathRewrite: PathRewriteMap)
 			: `${pathRewrite.targetDir}/`,
 	);
 	// Short-circuit when source and target are identical (no-op rewrite)
-	if (src === tgt) return command;
-	// Normalize the command string for matching, then apply replacement
-	const normalizedCommand = normalizeSlashes(command);
-	if (!normalizedCommand.includes(src)) return command;
-	return normalizedCommand.replaceAll(src, tgt);
+	if (src === tgt) return rewritten;
+	const normalizedRewritten = normalizeSlashes(rewritten);
+	if (!normalizedRewritten.includes(src)) return rewritten;
+	return normalizedRewritten.replaceAll(src, tgt);
+}
+
+function replaceCommandCandidate(command: string, candidate: string, replacement: string): string {
+	if (!isRelativeCommandCandidate(candidate)) {
+		return command.replaceAll(candidate, replacement);
+	}
+
+	const pattern = new RegExp(`(^|[\\s"'])${escapeRegExp(candidate)}`, "g");
+	return command.replace(pattern, (_match, prefix: string) => `${prefix}${replacement}`);
+}
+
+function isRelativeCommandCandidate(candidate: string): boolean {
+	return (
+		!candidate.startsWith("/") && !candidate.startsWith("$HOME/") && !candidate.startsWith("~/")
+	);
+}
+
+function escapeRegExp(value: string): string {
+	return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }

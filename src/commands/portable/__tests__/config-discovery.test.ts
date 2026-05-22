@@ -362,6 +362,79 @@ describe("config-discovery", () => {
 			expect(items[0].name).toBe("top-level.cjs");
 		});
 
+		it("discovers settings-referenced wrappers and hook dependency files", async () => {
+			const projectDir = join(testDir, "hooks-settings-aware");
+			const hooksDir = join(projectDir, ".claude", "hooks");
+			mkdirSync(join(hooksDir, "lib"), { recursive: true });
+			mkdirSync(join(hooksDir, "scout-block"), { recursive: true });
+			mkdirSync(join(hooksDir, "tests"), { recursive: true });
+			mkdirSync(join(hooksDir, "docs"), { recursive: true });
+			writeFileSync(
+				join(projectDir, ".claude", "settings.json"),
+				JSON.stringify({
+					hooks: {
+						PreToolUse: [
+							{
+								hooks: [
+									{
+										type: "command",
+										command: "bash .claude/hooks/node-hook-runner.sh .claude/hooks/scout-block.cjs",
+									},
+								],
+							},
+						],
+						UserPromptSubmit: [
+							{
+								hooks: [
+									{
+										type: "command",
+										command: "node .claude/hooks/usage-context-awareness.cjs",
+									},
+								],
+							},
+						],
+					},
+				}),
+			);
+			writeFileSync(join(hooksDir, "node-hook-runner.sh"), 'node "$1"');
+			writeFileSync(
+				join(hooksDir, "scout-block.cjs"),
+				[
+					'const checker = require("./lib/scout-checker.cjs");',
+					'const ignore = ".ckignore";',
+					'const config = ".ck.json";',
+					"module.exports = { checker, ignore, config };",
+				].join("\n"),
+			);
+			writeFileSync(
+				join(hooksDir, "lib", "scout-checker.cjs"),
+				'module.exports = require("../scout-block/error-formatter.cjs");',
+			);
+			writeFileSync(join(hooksDir, "scout-block", "error-formatter.cjs"), "module.exports = {};");
+			writeFileSync(join(hooksDir, ".ckignore"), "node_modules\n");
+			writeFileSync(join(hooksDir, ".ck.json"), '{"enabled":true}\n');
+			writeFileSync(join(hooksDir, "usage-context-awareness.cjs"), "module.exports = {};");
+			writeFileSync(join(hooksDir, "notify.sh"), "echo ignored");
+			writeFileSync(join(hooksDir, "tests", "noise.cjs"), "module.exports = {};");
+			writeFileSync(join(hooksDir, "docs", "noise.cjs"), "module.exports = {};");
+
+			const { items, skippedShellHooks, warnings } = await discoverHooks(hooksDir);
+			const names = items.map((item) => item.name).sort();
+
+			expect(names).toEqual([
+				".ck.json",
+				".ckignore",
+				"lib/scout-checker.cjs",
+				"node-hook-runner.sh",
+				"scout-block.cjs",
+				"scout-block/error-formatter.cjs",
+			]);
+			expect(skippedShellHooks).toContain("notify.sh");
+			expect(warnings?.some((warning) => warning.hookFile === "usage-context-awareness.cjs")).toBe(
+				true,
+			);
+		});
+
 		it("returns empty result for nonexistent hooks directory", async () => {
 			const missingDir = join(testDir, "hooks-missing");
 			const result = await discoverHooks(missingDir);

@@ -14,6 +14,8 @@ import {
 } from "@/domains/web-server/routes/plan-routes.js";
 import express, { type Express } from "express";
 
+const testFetch = globalThis.fetch.bind(globalThis);
+
 // ─── Test setup ───────────────────────────────────────────────────────────────
 
 // Use a temp dir inside CWD so isWithinCwd() security check passes.
@@ -170,7 +172,7 @@ afterAll(() => {
 describe("GET /api/plan/parse", () => {
 	test("returns phases for valid plan.md", async () => {
 		const planFile = join(TMP, "plan.md");
-		const res = await fetch(`${baseUrl}/api/plan/parse?file=${encodeURIComponent(planFile)}`);
+		const res = await testFetch(`${baseUrl}/api/plan/parse?file=${encodeURIComponent(planFile)}`);
 		expect(res.status).toBe(200);
 		const body = (await res.json()) as { phases: Array<{ status: string }> };
 		expect(Array.isArray(body.phases)).toBe(true);
@@ -179,18 +181,20 @@ describe("GET /api/plan/parse", () => {
 	});
 
 	test("returns 400 when file param is missing", async () => {
-		const res = await fetch(`${baseUrl}/api/plan/parse`);
+		const res = await testFetch(`${baseUrl}/api/plan/parse`);
 		expect(res.status).toBe(400);
 	});
 
 	test("returns 404 for non-existent file within CWD", async () => {
 		const nonExistent = join(process.cwd(), "nonexistent-plan-file.md");
-		const res = await fetch(`${baseUrl}/api/plan/parse?file=${encodeURIComponent(nonExistent)}`);
+		const res = await testFetch(
+			`${baseUrl}/api/plan/parse?file=${encodeURIComponent(nonExistent)}`,
+		);
 		expect(res.status).toBe(404);
 	});
 
 	test("returns 403 for file outside CWD", async () => {
-		const res = await fetch(
+		const res = await testFetch(
 			`${baseUrl}/api/plan/parse?file=${encodeURIComponent("/nonexistent/plan.md")}`,
 		);
 		expect(res.status).toBe(403);
@@ -202,7 +206,9 @@ describe("GET /api/plan/parse", () => {
 describe("GET /api/plan/validate", () => {
 	test("returns validation result for valid plan", async () => {
 		const planFile = join(TMP, "plan.md");
-		const res = await fetch(`${baseUrl}/api/plan/validate?file=${encodeURIComponent(planFile)}`);
+		const res = await testFetch(
+			`${baseUrl}/api/plan/validate?file=${encodeURIComponent(planFile)}`,
+		);
 		expect(res.status).toBe(200);
 		const body = (await res.json()) as { valid: boolean; issues: unknown[] };
 		expect(typeof body.valid).toBe("boolean");
@@ -211,25 +217,27 @@ describe("GET /api/plan/validate", () => {
 
 	test("accepts strict=true parameter", async () => {
 		const planFile = join(TMP, "plan.md");
-		const res = await fetch(
+		const res = await testFetch(
 			`${baseUrl}/api/plan/validate?file=${encodeURIComponent(planFile)}&strict=true`,
 		);
 		expect(res.status).toBe(200);
 	});
 
 	test("returns 400 when file param is missing", async () => {
-		const res = await fetch(`${baseUrl}/api/plan/validate`);
+		const res = await testFetch(`${baseUrl}/api/plan/validate`);
 		expect(res.status).toBe(400);
 	});
 
 	test("returns 404 for non-existent file within CWD", async () => {
 		const nonExistent = join(process.cwd(), "nonexistent-plan-file.md");
-		const res = await fetch(`${baseUrl}/api/plan/validate?file=${encodeURIComponent(nonExistent)}`);
+		const res = await testFetch(
+			`${baseUrl}/api/plan/validate?file=${encodeURIComponent(nonExistent)}`,
+		);
 		expect(res.status).toBe(404);
 	});
 
 	test("returns 403 for file outside CWD", async () => {
-		const res = await fetch(
+		const res = await testFetch(
 			`${baseUrl}/api/plan/validate?file=${encodeURIComponent("/nonexistent/plan.md")}`,
 		);
 		expect(res.status).toBe(403);
@@ -240,7 +248,7 @@ describe("GET /api/plan/validate", () => {
 
 describe("GET /api/plan/list", () => {
 	test("lists plan.md files in subdirectories", async () => {
-		const res = await fetch(`${baseUrl}/api/plan/list?dir=${encodeURIComponent(TMP)}`);
+		const res = await testFetch(`${baseUrl}/api/plan/list?dir=${encodeURIComponent(TMP)}`);
 		expect(res.status).toBe(200);
 		const body = (await res.json()) as {
 			plans: Array<{ file: string; name: string; summary: { progressPct: number } }>;
@@ -253,30 +261,30 @@ describe("GET /api/plan/list", () => {
 	});
 
 	test("returns 400 when dir param is missing", async () => {
-		const res = await fetch(`${baseUrl}/api/plan/list`);
+		const res = await testFetch(`${baseUrl}/api/plan/list`);
 		expect(res.status).toBe(400);
 	});
 
 	test("returns 404 for non-existent directory within CWD", async () => {
 		const nonExistent = join(process.cwd(), "nonexistent-plans-dir");
-		const res = await fetch(`${baseUrl}/api/plan/list?dir=${encodeURIComponent(nonExistent)}`);
+		const res = await testFetch(`${baseUrl}/api/plan/list?dir=${encodeURIComponent(nonExistent)}`);
 		expect(res.status).toBe(404);
 	});
 
 	test("returns 403 for directory outside CWD", async () => {
-		const res = await fetch(
+		const res = await testFetch(
 			`${baseUrl}/api/plan/list?dir=${encodeURIComponent("/nonexistent/dir")}`,
 		);
 		expect(res.status).toBe(403);
 	});
 
 	test("allows project-specific plan roots when projectId is supplied", async () => {
-		const withoutProject = await fetch(
+		const withoutProject = await testFetch(
 			`${baseUrl}/api/plan/list?dir=${encodeURIComponent(EXTERNAL_PLANS)}`,
 		);
 		expect(withoutProject.status).toBe(403);
 
-		const withProject = await fetch(
+		const withProject = await testFetch(
 			`${baseUrl}/api/plan/list?dir=${encodeURIComponent(EXTERNAL_PLANS)}&projectId=${encodeURIComponent(EXTERNAL_REGISTERED_PROJECT_ID)}`,
 		);
 		expect(withProject.status).toBe(200);
@@ -286,7 +294,7 @@ describe("GET /api/plan/list", () => {
 
 	test("rejects forged discovered project ids", async () => {
 		const forgedProjectId = `discovered-${Buffer.from(join(tmpdir(), "forged-project")).toString("base64url")}`;
-		const res = await fetch(
+		const res = await testFetch(
 			`${baseUrl}/api/plan/list?dir=${encodeURIComponent(EXTERNAL_PLANS)}&projectId=${encodeURIComponent(forgedProjectId)}`,
 		);
 		expect(res.status).toBe(403);
@@ -298,7 +306,7 @@ describe("GET /api/plan/list", () => {
 describe("GET /api/plan/summary", () => {
 	test("returns summary with progress stats", async () => {
 		const planFile = join(TMP, "plan.md");
-		const res = await fetch(`${baseUrl}/api/plan/summary?file=${encodeURIComponent(planFile)}`);
+		const res = await testFetch(`${baseUrl}/api/plan/summary?file=${encodeURIComponent(planFile)}`);
 		expect(res.status).toBe(200);
 		const body = (await res.json()) as {
 			totalPhases: number;
@@ -315,14 +323,14 @@ describe("GET /api/plan/summary", () => {
 	});
 
 	test("returns 400 when file param is missing", async () => {
-		const res = await fetch(`${baseUrl}/api/plan/summary`);
+		const res = await testFetch(`${baseUrl}/api/plan/summary`);
 		expect(res.status).toBe(400);
 	});
 });
 
 describe("GET /api/plan/timeline", () => {
 	test("returns plan summary and timeline data for a plan directory", async () => {
-		const res = await fetch(`${baseUrl}/api/plan/timeline?dir=${encodeURIComponent(TMP)}`);
+		const res = await testFetch(`${baseUrl}/api/plan/timeline?dir=${encodeURIComponent(TMP)}`);
 		expect(res.status).toBe(200);
 		const body = (await res.json()) as {
 			plan: { title?: string };
@@ -343,7 +351,7 @@ describe("GET /api/plan/timeline", () => {
 describe("GET /api/plan/file", () => {
 	test("returns raw markdown content for a plan file", async () => {
 		const planFile = join(TMP, "phase-01-setup.md");
-		const res = await fetch(`${baseUrl}/api/plan/file?file=${encodeURIComponent(planFile)}`);
+		const res = await testFetch(`${baseUrl}/api/plan/file?file=${encodeURIComponent(planFile)}`);
 		expect(res.status).toBe(200);
 		const body = (await res.json()) as { raw: string; content: string };
 		expect(body.raw).toContain("title: Setup");
@@ -352,14 +360,14 @@ describe("GET /api/plan/file", () => {
 
 	test("rejects files outside the selected plan directory", async () => {
 		const outsideFile = join(process.cwd(), "package.json");
-		const res = await fetch(
+		const res = await testFetch(
 			`${baseUrl}/api/plan/file?file=${encodeURIComponent(outsideFile)}&dir=${encodeURIComponent(TMP)}`,
 		);
 		expect(res.status).toBe(403);
 	});
 
 	test("allows project-specific files when projectId is supplied", async () => {
-		const res = await fetch(
+		const res = await testFetch(
 			`${baseUrl}/api/plan/file?file=${encodeURIComponent(EXTERNAL_PLAN_FILE)}&dir=${encodeURIComponent(EXTERNAL_PLAN_DIR)}&projectId=${encodeURIComponent(EXTERNAL_REGISTERED_PROJECT_ID)}`,
 		);
 		expect(res.status).toBe(200);
@@ -370,7 +378,7 @@ describe("GET /api/plan/file", () => {
 
 describe("POST /api/plan/action", () => {
 	test("updates phase status and exposes status polling", async () => {
-		const firstRes = await fetch(`${baseUrl}/api/plan/action`, {
+		const firstRes = await testFetch(`${baseUrl}/api/plan/action`, {
 			method: "POST",
 			headers: { "Content-Type": "application/json" },
 			body: JSON.stringify({ action: "complete", planDir: TMP, phaseId: "2" }),
@@ -379,14 +387,14 @@ describe("POST /api/plan/action", () => {
 		const firstAction = (await firstRes.json()) as { id: string; status: string };
 		expect(firstAction.status).toBe("completed");
 
-		const statusRes = await fetch(
+		const statusRes = await testFetch(
 			`${baseUrl}/api/plan/action/status?id=${encodeURIComponent(firstAction.id)}`,
 		);
 		expect(statusRes.status).toBe(200);
 		const status = (await statusRes.json()) as { status: string };
 		expect(status.status).toBe("completed");
 
-		const secondRes = await fetch(`${baseUrl}/api/plan/action`, {
+		const secondRes = await testFetch(`${baseUrl}/api/plan/action`, {
 			method: "POST",
 			headers: { "Content-Type": "application/json" },
 			body: JSON.stringify({ action: "validate", planDir: TMP }),
@@ -395,12 +403,12 @@ describe("POST /api/plan/action", () => {
 		const secondAction = (await secondRes.json()) as { id: string; status: string };
 		expect(secondAction.status).toBe("completed");
 
-		const firstStatusRes = await fetch(
+		const firstStatusRes = await testFetch(
 			`${baseUrl}/api/plan/action/status?id=${encodeURIComponent(firstAction.id)}`,
 		);
 		expect(firstStatusRes.status).toBe(200);
 
-		const summaryRes = await fetch(
+		const summaryRes = await testFetch(
 			`${baseUrl}/api/plan/summary?file=${encodeURIComponent(join(TMP, "plan.md"))}`,
 		);
 		const summary = (await summaryRes.json()) as { completed: number };
@@ -408,7 +416,7 @@ describe("POST /api/plan/action", () => {
 	});
 
 	test("allows actions against project-specific plan roots when projectId is supplied", async () => {
-		const res = await fetch(`${baseUrl}/api/plan/action`, {
+		const res = await testFetch(`${baseUrl}/api/plan/action`, {
 			method: "POST",
 			headers: { "Content-Type": "application/json" },
 			body: JSON.stringify({
@@ -429,69 +437,73 @@ describe("POST /api/plan/action", () => {
 describe("Path traversal security", () => {
 	// /api/plan/parse traversal
 	test("parse: ?file=../../../etc/passwd → 403", async () => {
-		const res = await fetch(
+		const res = await testFetch(
 			`${baseUrl}/api/plan/parse?file=${encodeURIComponent("../../../etc/passwd")}`,
 		);
 		expect(res.status).toBe(403);
 	});
 
 	test("parse: ?file=/etc/passwd (absolute outside CWD) → 403", async () => {
-		const res = await fetch(`${baseUrl}/api/plan/parse?file=${encodeURIComponent("/etc/passwd")}`);
+		const res = await testFetch(
+			`${baseUrl}/api/plan/parse?file=${encodeURIComponent("/etc/passwd")}`,
+		);
 		expect(res.status).toBe(403);
 	});
 
 	test("parse: ?file= (empty string) → 400", async () => {
-		const res = await fetch(`${baseUrl}/api/plan/parse?file=`);
+		const res = await testFetch(`${baseUrl}/api/plan/parse?file=`);
 		expect(res.status).toBe(400);
 	});
 
 	test("parse: ?file=nonexistent.md (within CWD, missing) → 404", async () => {
 		const nonExistent = join(process.cwd(), "definitely-nonexistent-plan-file.md");
-		const res = await fetch(`${baseUrl}/api/plan/parse?file=${encodeURIComponent(nonExistent)}`);
+		const res = await testFetch(
+			`${baseUrl}/api/plan/parse?file=${encodeURIComponent(nonExistent)}`,
+		);
 		expect(res.status).toBe(404);
 	});
 
 	// /api/plan/list traversal
 	test("list: ?dir=../../../ → 403", async () => {
-		const res = await fetch(`${baseUrl}/api/plan/list?dir=${encodeURIComponent("../../../")}`);
+		const res = await testFetch(`${baseUrl}/api/plan/list?dir=${encodeURIComponent("../../../")}`);
 		expect(res.status).toBe(403);
 	});
 
 	test("list: ?dir=/tmp → 403", async () => {
-		const res = await fetch(`${baseUrl}/api/plan/list?dir=${encodeURIComponent("/tmp")}`);
+		const res = await testFetch(`${baseUrl}/api/plan/list?dir=${encodeURIComponent("/tmp")}`);
 		expect(res.status).toBe(403);
 	});
 
 	// /api/plan/validate traversal
 	test("validate: ?file=../../../etc/passwd → 403", async () => {
-		const res = await fetch(
+		const res = await testFetch(
 			`${baseUrl}/api/plan/validate?file=${encodeURIComponent("../../../etc/passwd")}`,
 		);
 		expect(res.status).toBe(403);
 	});
 
 	test("validate: ?file=/etc/passwd (absolute outside CWD) → 403", async () => {
-		const res = await fetch(
+		const res = await testFetch(
 			`${baseUrl}/api/plan/validate?file=${encodeURIComponent("/etc/passwd")}`,
 		);
 		expect(res.status).toBe(403);
 	});
 
 	test("validate: ?file= (empty string) → 400", async () => {
-		const res = await fetch(`${baseUrl}/api/plan/validate?file=`);
+		const res = await testFetch(`${baseUrl}/api/plan/validate?file=`);
 		expect(res.status).toBe(400);
 	});
 
 	// /api/plan/summary traversal
 	test("summary: ?file=../../../etc/passwd → 403", async () => {
-		const res = await fetch(
+		const res = await testFetch(
 			`${baseUrl}/api/plan/summary?file=${encodeURIComponent("../../../etc/passwd")}`,
 		);
 		expect(res.status).toBe(403);
 	});
 
 	test("summary: ?file=/etc/passwd (absolute outside CWD) → 403", async () => {
-		const res = await fetch(
+		const res = await testFetch(
 			`${baseUrl}/api/plan/summary?file=${encodeURIComponent("/etc/passwd")}`,
 		);
 		expect(res.status).toBe(403);

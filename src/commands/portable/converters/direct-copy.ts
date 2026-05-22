@@ -5,6 +5,7 @@
 import { readFileSync } from "node:fs";
 import { extname } from "node:path";
 import matter from "gray-matter";
+import { normalizeCodexHookContent } from "../hook-migration-compatibility.js";
 import type { ConversionResult, PortableItem, ProviderType } from "../types.js";
 
 /**
@@ -53,6 +54,9 @@ export function convertDirectCopy(item: PortableItem, provider?: ProviderType): 
 		if (targetDir) {
 			content = content.replace(/\.claude\//g, targetDir);
 		}
+	}
+	if (provider === "codex" && item.type === "hooks") {
+		content = normalizeCodexHookContent(content);
 	}
 
 	// Preserve nested path namespace (docs/init.md) to avoid filename collisions.

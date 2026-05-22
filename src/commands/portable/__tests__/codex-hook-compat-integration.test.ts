@@ -4,10 +4,10 @@
  * Covers all 8 failure modes identified in the issue:
  *   1. SubagentStart event not supported by Codex — must be dropped
  *   2. SubagentStop / Notification / PreCompact events — must be dropped
- *   3. additionalContext on PreToolUse — hard-errors in v0.124.0-alpha.3, must be stripped
- *   4. SessionStart matcher: only startup|resume allowed (no clear|compact)
- *   5. PreToolUse/PostToolUse matcher: only Bash supported
- *   6. permissionDecision: only "deny" accepted (allow|ask must be scrubbed)
+ *   3. runtime additionalContext is capability-driven
+ *   4. SessionStart matcher filtering is capability-driven
+ *   5. PreToolUse/PostToolUse matcher filtering is capability-driven
+ *   6. permissionDecision values are capability-driven
  *   7. command paths pointing at $HOME/.claude/hooks — must be rewritten to wrapper paths
  *   8. hooks feature flag not set — hooks.json is inert without it
  *
@@ -27,6 +27,7 @@ import { migrateHooksSettings } from "../hooks-settings-merger.js";
 
 const testRoot = join(tmpdir(), "ck-codex-compat-integration");
 const originalCwd = process.cwd();
+const originalCompatMode = process.env.CK_CODEX_COMPAT;
 
 function makeSourceSettings(hooks: Record<string, unknown>): string {
 	return JSON.stringify({ hooks }, null, 2);
@@ -150,11 +151,18 @@ const FULL_CLAUDE_HOOKS = {
 
 beforeAll(() => {
 	mkdirSync(testRoot, { recursive: true });
+	process.env.CK_CODEX_COMPAT = "optimistic";
 });
 
 afterAll(() => {
 	process.chdir(originalCwd);
 	rmSync(testRoot, { recursive: true, force: true });
+	if (originalCompatMode === undefined) {
+		// biome-ignore lint/performance/noDelete: restore absent env var exactly
+		delete process.env.CK_CODEX_COMPAT;
+	} else {
+		process.env.CK_CODEX_COMPAT = originalCompatMode;
+	}
 });
 
 afterEach(() => {
@@ -206,7 +214,7 @@ describe("codex hook compat integration — fresh install", () => {
 		expect(written.hooks.PostToolUse).toBeDefined();
 	}, 10000);
 
-	it("fresh install: SessionStart only has startup matcher (clear dropped — failure mode 4)", async () => {
+	it("fresh install: SessionStart keeps current startup and clear matchers", async () => {
 		const dir = setupTestDir("fresh-session");
 		writeFileSync(join(dir, ".claude", "settings.json"), makeSourceSettings(FULL_CLAUDE_HOOKS));
 
@@ -231,10 +239,10 @@ describe("codex hook compat integration — fresh install", () => {
 
 		const sessionMatchers = (written.hooks.SessionStart ?? []).map((g) => g.matcher);
 		expect(sessionMatchers).toContain("startup");
-		expect(sessionMatchers).not.toContain("clear");
+		expect(sessionMatchers).toContain("clear");
 	}, 10000);
 
-	it("fresh install: PreToolUse additionalContext stripped (failure mode 3)", async () => {
+	it("fresh install: hook registration omits runtime-only additionalContext fields", async () => {
 		const dir = setupTestDir("fresh-additional-context");
 		writeFileSync(join(dir, ".claude", "settings.json"), makeSourceSettings(FULL_CLAUDE_HOOKS));
 
@@ -255,7 +263,7 @@ describe("codex hook compat integration — fresh install", () => {
 		}
 	}, 10000);
 
-	it("fresh install: permissionDecision:allow scrubbed from PreToolUse (failure mode 6)", async () => {
+	it("fresh install: permissionDecision:allow preserved for current PreToolUse", async () => {
 		const dir = setupTestDir("fresh-perm");
 		writeFileSync(join(dir, ".claude", "settings.json"), makeSourceSettings(FULL_CLAUDE_HOOKS));
 
@@ -271,15 +279,10 @@ describe("codex hook compat integration — fresh install", () => {
 		};
 
 		const entries = written.hooks.PreToolUse?.flatMap((g) => g.hooks) ?? [];
-		for (const entry of entries) {
-			// "allow" must be stripped; only "deny" is valid for Codex
-			if (entry.permissionDecision !== undefined) {
-				expect(entry.permissionDecision).toBe("deny");
-			}
-		}
+		expect(entries.some((entry) => entry.permissionDecision === "allow")).toBe(true);
 	}, 10000);
 
-	it("fresh install: Edit matcher dropped from PreToolUse (failure mode 5)", async () => {
+	it("fresh install: Edit matcher preserved for current PreToolUse", async () => {
 		const dir = setupTestDir("fresh-matcher");
 		writeFileSync(join(dir, ".claude", "settings.json"), makeSourceSettings(FULL_CLAUDE_HOOKS));
 
@@ -295,7 +298,7 @@ describe("codex hook compat integration — fresh install", () => {
 		};
 
 		const matchers = (written.hooks.PreToolUse ?? []).map((g) => g.matcher);
-		expect(matchers).not.toContain("Edit");
+		expect(matchers).toContain("Edit");
 		expect(matchers).toContain("Bash");
 	}, 10000);
 });
@@ -492,12 +495,11 @@ describe("codex hook compat integration — no installed files", () => {
 
 // ---- New tests required by review fix round 1 --------------------------------
 
-describe("codex hook compat — wrapper spawn strips additionalContext at runtime (H1/M1)", () => {
+describe("codex hook compat — wrapper spawn sanitizes output by capability table (H1/M1)", () => {
 	/**
 	 * End-to-end test: create a fake .cjs hook that emits JSON with additionalContext,
 	 * generate a wrapper with buildWrapperScript, spawn the wrapper, assert that
-	 * additionalContext is absent from wrapper stdout for PreToolUse (unsupported)
-	 * and present for PostToolUse (supported).
+	 * additionalContext behavior follows the selected capability entry.
 	 */
 	const wrapperTestDir = join(testRoot, "wrapper-spawn-test");
 
@@ -505,14 +507,14 @@ describe("codex hook compat — wrapper spawn strips additionalContext at runtim
 		mkdirSync(wrapperTestDir, { recursive: true });
 	});
 
-	it("wrapper strips additionalContext from PreToolUse output at runtime", () => {
+	it("wrapper preserves additionalContext from PreToolUse output for current Codex", () => {
 		// Write a fake hook that emits additionalContext for PreToolUse
 		const fakeHookPath = join(wrapperTestDir, "fake-pretooluse.cjs");
 		writeFileSync(
 			fakeHookPath,
 			`#!/usr/bin/env node
 "use strict";
-const output = { additionalContext: "should-be-stripped", result: "ok" };
+const output = { additionalContext: "should-be-preserved", result: "ok" };
 process.stdout.write(JSON.stringify(output));
 process.exit(0);
 `,
@@ -536,8 +538,7 @@ process.exit(0);
 		expect(result.status).toBe(0);
 
 		const parsed = JSON.parse(result.stdout);
-		// additionalContext MUST be absent — PreToolUse hard-errors on it in v0.124.0-alpha.3
-		expect(parsed.additionalContext).toBeUndefined();
+		expect(parsed.additionalContext).toBe("should-be-preserved");
 		// other fields preserved
 		expect(parsed.result).toBe("ok");
 	}, 15000);
@@ -576,8 +577,7 @@ process.exit(0);
 		expect(parsed.additionalContext).toBe("should-be-kept");
 	}, 15000);
 
-	it("wrapper strips disallowed permissionDecision values at runtime (H4)", () => {
-		// PreToolUse only allows "deny" — wrapper must strip "allow" at runtime
+	it("wrapper preserves current allow decision and strips unsupported ask decision", () => {
 		const fakeHookPath = join(wrapperTestDir, "fake-permdecision.cjs");
 		writeFileSync(
 			fakeHookPath,
@@ -606,11 +606,9 @@ process.exit(0);
 		expect(result.status).toBe(0);
 
 		const parsed = JSON.parse(result.stdout);
-		// "allow" is not in allowedPermissionValues ["deny"] — must be stripped
-		expect(parsed.permissionDecision).toBeUndefined();
+		expect(parsed.permissionDecision).toBe("allow");
 		expect(parsed.decision).toBeUndefined();
-		// additionalContext also stripped for PreToolUse
-		expect(parsed.additionalContext).toBeUndefined();
+		expect(parsed.additionalContext).toBe("x");
 	}, 15000);
 });
 

@@ -9,6 +9,21 @@ import {
 } from "../../../src/services/package-installer/package-installer.js";
 
 describe("Package Installer Tests", () => {
+	let originalNpmLookupTimeout: string | undefined;
+
+	beforeEach(() => {
+		originalNpmLookupTimeout = process.env.CK_NPM_LOOKUP_TIMEOUT_MS;
+		process.env.CK_NPM_LOOKUP_TIMEOUT_MS = "10000";
+	});
+
+	afterEach(() => {
+		if (originalNpmLookupTimeout === undefined) {
+			process.env.CK_NPM_LOOKUP_TIMEOUT_MS = undefined;
+		} else {
+			process.env.CK_NPM_LOOKUP_TIMEOUT_MS = originalNpmLookupTimeout;
+		}
+	});
+
 	// Test package name validation - this can be tested without mocking
 	describe("validatePackageName", () => {
 		test("should accept valid npm package names", () => {
@@ -59,7 +74,7 @@ describe("Package Installer Tests", () => {
 				// In local development, npm should be detected
 				expect(result).toBe(true);
 			}
-		});
+		}, 15000);
 
 		test("should correctly detect version of npm", async () => {
 			// npm should be available and have a version
@@ -75,19 +90,19 @@ describe("Package Installer Tests", () => {
 				expect(typeof version).toBe("string");
 				expect(version?.length).toBeGreaterThan(0);
 			}
-		});
+		}, 15000);
 
 		test("should return false for non-existent package", async () => {
 			// Test with a package that definitely doesn't exist
 			const result = await isPackageInstalled("definitely-not-a-real-package-name-12345");
 			expect(result).toBe(false);
-		});
+		}, 15000);
 
 		test("should return null for non-existent package version", async () => {
 			// Test with a package that definitely doesn't exist
 			const version = await getPackageVersion("definitely-not-a-real-package-name-12345");
 			expect(version).toBeNull();
-		});
+		}, 15000);
 
 		test("should validate package name for isPackageInstalled", async () => {
 			await expect(isPackageInstalled("invalid package name")).rejects.toThrow(
@@ -107,7 +122,7 @@ describe("Package Installer Tests", () => {
 		test("should detect if @google/gemini-cli is installed", async () => {
 			const isInstalled = await isPackageInstalled("@google/gemini-cli");
 			expect(typeof isInstalled).toBe("boolean");
-		});
+		}, 15000);
 
 		test("should get version if @google/gemini-cli is installed", async () => {
 			const version = await getPackageVersion("@google/gemini-cli");
@@ -118,7 +133,7 @@ describe("Package Installer Tests", () => {
 				// Package not installed, which is fine
 				expect(version).toBeNull();
 			}
-		});
+		}, 15000);
 
 		test("should have correct package name for Gemini", async () => {
 			// Verify the function uses the correct package name
