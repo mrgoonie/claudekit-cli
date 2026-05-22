@@ -9,6 +9,8 @@ import type {
 } from "@/commands/portable/portable-registry.js";
 import express, { type Express } from "express";
 
+const testFetch = globalThis.fetch.bind(globalThis);
+
 const actualAgentDiscovery = await import("@/commands/agents/agents-discovery.js");
 const actualCommandDiscovery = await import("@/commands/commands/commands-discovery.js");
 const actualConfigDiscovery = await import("@/commands/portable/config-discovery.js");
@@ -243,7 +245,7 @@ describe.serial("migration reconcile route", () => {
 	});
 
 	test("returns provider list including Droid as recommended", async () => {
-		const res = await fetch(`${ctx.baseUrl}/api/migrate/providers`);
+		const res = await testFetch(`${ctx.baseUrl}/api/migrate/providers`);
 		expect(res.status).toBe(200);
 
 		const body = (await res.json()) as {
@@ -281,7 +283,7 @@ describe.serial("migration reconcile route", () => {
 			makeRegistryWithInstallation(makeInstallation(skillDir, "skill")),
 		);
 
-		const res = await fetch(`${ctx.baseUrl}/api/migrate/reconcile?providers=codex&global=true`);
+		const res = await testFetch(`${ctx.baseUrl}/api/migrate/reconcile?providers=codex&global=true`);
 
 		expect(res.status).toBe(200);
 		const body = (await res.json()) as { plan: { actions: unknown[] } };
@@ -296,7 +298,7 @@ describe.serial("migration reconcile route", () => {
 			makeRegistryWithInstallation(makeInstallation(commandDir, "command")),
 		);
 
-		const res = await fetch(`${ctx.baseUrl}/api/migrate/reconcile?providers=codex&global=true`);
+		const res = await testFetch(`${ctx.baseUrl}/api/migrate/reconcile?providers=codex&global=true`);
 
 		expect(res.status).toBe(200);
 		const body = (await res.json()) as { plan: { actions: unknown[] } };
@@ -332,7 +334,7 @@ describe.serial("migration reconcile route", () => {
 		};
 
 		const key = JSON.stringify(["codex", "config", "my:item", true]);
-		const res = await fetch(`${ctx.baseUrl}/api/migrate/execute`, {
+		const res = await testFetch(`${ctx.baseUrl}/api/migrate/execute`, {
 			method: "POST",
 			headers: { "Content-Type": "application/json" },
 			body: JSON.stringify({
@@ -399,7 +401,7 @@ describe.serial("migration reconcile route", () => {
 				},
 			};
 
-			const res = await fetch(`${ctx.baseUrl}/api/migrate/execute`, {
+			const res = await testFetch(`${ctx.baseUrl}/api/migrate/execute`, {
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
 				body: JSON.stringify({ plan, resolutions: {} }),
@@ -475,7 +477,7 @@ describe.serial("migration reconcile route", () => {
 			},
 		};
 
-		const res = await fetch(`${ctx.baseUrl}/api/migrate/execute`, {
+		const res = await testFetch(`${ctx.baseUrl}/api/migrate/execute`, {
 			method: "POST",
 			headers: { "Content-Type": "application/json" },
 			body: JSON.stringify({
@@ -551,7 +553,7 @@ describe.serial("migration reconcile route", () => {
 			},
 		};
 
-		const res = await fetch(`${ctx.baseUrl}/api/migrate/execute`, {
+		const res = await testFetch(`${ctx.baseUrl}/api/migrate/execute`, {
 			method: "POST",
 			headers: { "Content-Type": "application/json" },
 			body: JSON.stringify({ plan, resolutions: {} }),
@@ -609,7 +611,7 @@ describe.serial("migration reconcile route", () => {
 			},
 		};
 
-		const res = await fetch(`${ctx.baseUrl}/api/migrate/execute`, {
+		const res = await testFetch(`${ctx.baseUrl}/api/migrate/execute`, {
 			method: "POST",
 			headers: { "Content-Type": "application/json" },
 			body: JSON.stringify({ plan, resolutions: {} }),
@@ -662,7 +664,7 @@ describe.serial("migration reconcile route", () => {
 			},
 		};
 
-		const res = await fetch(`${ctx.baseUrl}/api/migrate/execute`, {
+		const res = await testFetch(`${ctx.baseUrl}/api/migrate/execute`, {
 			method: "POST",
 			headers: { "Content-Type": "application/json" },
 			body: JSON.stringify({ plan, resolutions: {}, mode: "install" }),
@@ -708,7 +710,7 @@ describe.serial("migration reconcile route", () => {
 			},
 		};
 
-		const res = await fetch(`${ctx.baseUrl}/api/migrate/execute`, {
+		const res = await testFetch(`${ctx.baseUrl}/api/migrate/execute`, {
 			method: "POST",
 			headers: { "Content-Type": "application/json" },
 			body: JSON.stringify({ plan, resolutions: {}, mode: "install" }),
@@ -719,13 +721,19 @@ describe.serial("migration reconcile route", () => {
 	});
 
 	test('accepts global query values "1", "0", and empty string', async () => {
-		const trueLike = await fetch(`${ctx.baseUrl}/api/migrate/reconcile?providers=codex&global=1`);
+		const trueLike = await testFetch(
+			`${ctx.baseUrl}/api/migrate/reconcile?providers=codex&global=1`,
+		);
 		expect(trueLike.status).toBe(200);
 
-		const falseLike = await fetch(`${ctx.baseUrl}/api/migrate/reconcile?providers=codex&global=0`);
+		const falseLike = await testFetch(
+			`${ctx.baseUrl}/api/migrate/reconcile?providers=codex&global=0`,
+		);
 		expect(falseLike.status).toBe(200);
 
-		const emptyLike = await fetch(`${ctx.baseUrl}/api/migrate/reconcile?providers=codex&global=`);
+		const emptyLike = await testFetch(
+			`${ctx.baseUrl}/api/migrate/reconcile?providers=codex&global=`,
+		);
 		expect(emptyLike.status).toBe(200);
 	});
 
@@ -743,7 +751,7 @@ describe.serial("migration reconcile route", () => {
 			},
 		]);
 
-		const res = await fetch(
+		const res = await testFetch(
 			`${ctx.baseUrl}/api/migrate/reconcile?providers=codex&agents=false&commands=true&skills=false&config=false&rules=false&hooks=false&global=false`,
 		);
 
@@ -804,7 +812,7 @@ describe.serial("migration reconcile route", () => {
 			],
 		});
 
-		const res = await fetch(
+		const res = await testFetch(
 			`${ctx.baseUrl}/api/migrate/reconcile?providers=codex&agents=false&commands=true&skills=false&config=false&rules=false&hooks=false&global=false`,
 		);
 
@@ -969,7 +977,7 @@ describe.serial("migration reconcile route", () => {
 			},
 		};
 
-		const res = await fetch(`${ctx.baseUrl}/api/migrate/execute`, {
+		const res = await testFetch(`${ctx.baseUrl}/api/migrate/execute`, {
 			method: "POST",
 			headers: { "Content-Type": "application/json" },
 			body: JSON.stringify({ plan, resolutions: {} }),
@@ -1032,7 +1040,7 @@ describe.serial("migration reconcile route", () => {
 			}));
 		});
 
-		const responsePromise = fetch(`${ctx.baseUrl}/api/migrate/execute`, {
+		const responsePromise = testFetch(`${ctx.baseUrl}/api/migrate/execute`, {
 			method: "POST",
 			headers: { "Content-Type": "application/json" },
 			body: JSON.stringify({
@@ -1126,7 +1134,7 @@ describe.serial("migration reconcile route", () => {
 				},
 			};
 
-			const res = await fetch(`${ctx.baseUrl}/api/migrate/execute`, {
+			const res = await testFetch(`${ctx.baseUrl}/api/migrate/execute`, {
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
 				body: JSON.stringify({ plan, resolutions: {} }),
@@ -1197,7 +1205,7 @@ describe.serial("migration reconcile route", () => {
 				})),
 			);
 
-			const res = await fetch(`${ctx.baseUrl}/api/migrate/execute`, {
+			const res = await testFetch(`${ctx.baseUrl}/api/migrate/execute`, {
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
 				body: JSON.stringify({
@@ -1280,7 +1288,7 @@ describe.serial("migration reconcile route", () => {
 				}),
 		);
 
-		const res = await fetch(`${ctx.baseUrl}/api/migrate/execute`, {
+		const res = await testFetch(`${ctx.baseUrl}/api/migrate/execute`, {
 			method: "POST",
 			headers: { "Content-Type": "application/json" },
 			body: JSON.stringify({
@@ -1348,7 +1356,7 @@ describe.serial("migration reconcile route", () => {
 			}));
 		});
 
-		const res = await fetch(`${ctx.baseUrl}/api/migrate/execute`, {
+		const res = await testFetch(`${ctx.baseUrl}/api/migrate/execute`, {
 			method: "POST",
 			headers: { "Content-Type": "application/json" },
 			body: JSON.stringify({
@@ -1376,13 +1384,13 @@ describe.serial("migration reconcile route", () => {
 	});
 
 	test("validates providers query and sanitizes unknown provider tokens", async () => {
-		const missingProviders = await fetch(`${ctx.baseUrl}/api/migrate/reconcile`);
+		const missingProviders = await testFetch(`${ctx.baseUrl}/api/migrate/reconcile`);
 		expect(missingProviders.status).toBe(400);
 		const missingBody = (await missingProviders.json()) as { error: string };
 		expect(missingBody.error).toBe("providers parameter is required");
 
 		const rawUnknownProvider = "  bad\tprovider\u0007\nname  ";
-		const invalidProviders = await fetch(
+		const invalidProviders = await testFetch(
 			`${ctx.baseUrl}/api/migrate/reconcile?providers=${encodeURIComponent(rawUnknownProvider)}`,
 		);
 		expect(invalidProviders.status).toBe(400);
@@ -1395,7 +1403,7 @@ describe.serial("migration reconcile route", () => {
 
 	test("deduplicates query providers before boundary checks", async () => {
 		const duplicatedProviders = ["codex", "cursor", "codex", "cursor", "codex"].join(",");
-		const dedupedRes = await fetch(
+		const dedupedRes = await testFetch(
 			`${ctx.baseUrl}/api/migrate/reconcile?providers=${duplicatedProviders}`,
 		);
 		expect(dedupedRes.status).toBe(200);
@@ -1405,7 +1413,7 @@ describe.serial("migration reconcile route", () => {
 		expect(dedupedBody.plan.meta?.providers).toEqual(["codex", "cursor"]);
 
 		const manyDuplicates = Array.from({ length: 21 }, () => "codex").join(",");
-		const manyDuplicatesRes = await fetch(
+		const manyDuplicatesRes = await testFetch(
 			`${ctx.baseUrl}/api/migrate/reconcile?providers=${manyDuplicates}`,
 		);
 		expect(manyDuplicatesRes.status).toBe(200);
@@ -1416,7 +1424,7 @@ describe.serial("migration reconcile route", () => {
 	});
 
 	test("validates providers body shape and value, then deduplicates duplicates", async () => {
-		const missingProviders = await fetch(`${ctx.baseUrl}/api/migrate/execute`, {
+		const missingProviders = await testFetch(`${ctx.baseUrl}/api/migrate/execute`, {
 			method: "POST",
 			headers: { "Content-Type": "application/json" },
 			body: JSON.stringify({ include: { agents: true } }),
@@ -1425,7 +1433,7 @@ describe.serial("migration reconcile route", () => {
 		const missingBody = (await missingProviders.json()) as { error: string };
 		expect(missingBody.error).toContain("providers is required and must be a non-empty array");
 
-		const invalidShape = await fetch(`${ctx.baseUrl}/api/migrate/execute`, {
+		const invalidShape = await testFetch(`${ctx.baseUrl}/api/migrate/execute`, {
 			method: "POST",
 			headers: { "Content-Type": "application/json" },
 			body: JSON.stringify({
@@ -1437,7 +1445,7 @@ describe.serial("migration reconcile route", () => {
 		const invalidShapeBody = (await invalidShape.json()) as { error: string };
 		expect(invalidShapeBody.error).toContain("providers is required and must be a non-empty array");
 
-		const unknownProvider = await fetch(`${ctx.baseUrl}/api/migrate/execute`, {
+		const unknownProvider = await testFetch(`${ctx.baseUrl}/api/migrate/execute`, {
 			method: "POST",
 			headers: { "Content-Type": "application/json" },
 			body: JSON.stringify({
@@ -1471,7 +1479,7 @@ describe.serial("migration reconcile route", () => {
 			}));
 		});
 
-		const deduped = await fetch(`${ctx.baseUrl}/api/migrate/execute`, {
+		const deduped = await testFetch(`${ctx.baseUrl}/api/migrate/execute`, {
 			method: "POST",
 			headers: { "Content-Type": "application/json" },
 			body: JSON.stringify({
@@ -1492,7 +1500,7 @@ describe.serial("migration reconcile route", () => {
 	});
 
 	test("validates include shape, values, and all-false behavior", async () => {
-		const invalidIncludeShape = await fetch(`${ctx.baseUrl}/api/migrate/execute`, {
+		const invalidIncludeShape = await testFetch(`${ctx.baseUrl}/api/migrate/execute`, {
 			method: "POST",
 			headers: { "Content-Type": "application/json" },
 			body: JSON.stringify({
@@ -1504,7 +1512,7 @@ describe.serial("migration reconcile route", () => {
 		const invalidIncludeShapeBody = (await invalidIncludeShape.json()) as { error: string };
 		expect(invalidIncludeShapeBody.error).toBe("include must be an object");
 
-		const invalidIncludeValue = await fetch(`${ctx.baseUrl}/api/migrate/execute`, {
+		const invalidIncludeValue = await testFetch(`${ctx.baseUrl}/api/migrate/execute`, {
 			method: "POST",
 			headers: { "Content-Type": "application/json" },
 			body: JSON.stringify({
@@ -1516,7 +1524,7 @@ describe.serial("migration reconcile route", () => {
 		const invalidIncludeValueBody = (await invalidIncludeValue.json()) as { error: string };
 		expect(invalidIncludeValueBody.error).toBe("agents must be a boolean");
 
-		const allFalseBody = await fetch(`${ctx.baseUrl}/api/migrate/execute`, {
+		const allFalseBody = await testFetch(`${ctx.baseUrl}/api/migrate/execute`, {
 			method: "POST",
 			headers: { "Content-Type": "application/json" },
 			body: JSON.stringify({
@@ -1535,7 +1543,7 @@ describe.serial("migration reconcile route", () => {
 		const allFalseBodyJson = (await allFalseBody.json()) as { error: string };
 		expect(allFalseBodyJson.error).toBe("At least one migration type must be enabled");
 
-		const allFalseBodyLegacy = await fetch(`${ctx.baseUrl}/api/migrate/execute`, {
+		const allFalseBodyLegacy = await testFetch(`${ctx.baseUrl}/api/migrate/execute`, {
 			method: "POST",
 			headers: { "Content-Type": "application/json" },
 			body: JSON.stringify({
@@ -1553,21 +1561,21 @@ describe.serial("migration reconcile route", () => {
 		const allFalseBodyLegacyJson = (await allFalseBodyLegacy.json()) as { error: string };
 		expect(allFalseBodyLegacyJson.error).toBe("At least one migration type must be enabled");
 
-		const invalidIncludeQuery = await fetch(
+		const invalidIncludeQuery = await testFetch(
 			`${ctx.baseUrl}/api/migrate/reconcile?providers=codex&agents=maybe`,
 		);
 		expect(invalidIncludeQuery.status).toBe(400);
 		const invalidIncludeQueryBody = (await invalidIncludeQuery.json()) as { error: string };
 		expect(invalidIncludeQueryBody.error).toBe("agents must be a boolean");
 
-		const allFalseQuery = await fetch(
+		const allFalseQuery = await testFetch(
 			`${ctx.baseUrl}/api/migrate/reconcile?providers=codex&agents=false&commands=false&skills=false&config=false&rules=false&hooks=false`,
 		);
 		expect(allFalseQuery.status).toBe(400);
 		const allFalseQueryBody = (await allFalseQuery.json()) as { error: string };
 		expect(allFalseQueryBody.error).toBe("At least one migration type must be enabled");
 
-		const allFalseLegacyQuery = await fetch(
+		const allFalseLegacyQuery = await testFetch(
 			`${ctx.baseUrl}/api/migrate/reconcile?providers=codex&agents=false&commands=false&skills=false&config=false&rules=false`,
 		);
 		expect(allFalseLegacyQuery.status).toBe(400);
@@ -1576,24 +1584,24 @@ describe.serial("migration reconcile route", () => {
 	});
 
 	test("parses global query/body values and rejects invalid values", async () => {
-		const trueQuery = await fetch(
+		const trueQuery = await testFetch(
 			`${ctx.baseUrl}/api/migrate/reconcile?providers=codex&global=true`,
 		);
 		expect(trueQuery.status).toBe(200);
 
-		const falseQuery = await fetch(
+		const falseQuery = await testFetch(
 			`${ctx.baseUrl}/api/migrate/reconcile?providers=codex&global=false`,
 		);
 		expect(falseQuery.status).toBe(200);
 
-		const invalidQuery = await fetch(
+		const invalidQuery = await testFetch(
 			`${ctx.baseUrl}/api/migrate/reconcile?providers=codex&global=not-boolean`,
 		);
 		expect(invalidQuery.status).toBe(400);
 		const invalidQueryBody = (await invalidQuery.json()) as { error: string };
 		expect(invalidQueryBody.error).toBe("global must be a boolean");
 
-		const trueBody = await fetch(`${ctx.baseUrl}/api/migrate/execute`, {
+		const trueBody = await testFetch(`${ctx.baseUrl}/api/migrate/execute`, {
 			method: "POST",
 			headers: { "Content-Type": "application/json" },
 			body: JSON.stringify({
@@ -1613,7 +1621,7 @@ describe.serial("migration reconcile route", () => {
 		const trueBodyJson = (await trueBody.json()) as { effectiveGlobal: boolean };
 		expect(trueBodyJson.effectiveGlobal).toBe(true);
 
-		const falseBody = await fetch(`${ctx.baseUrl}/api/migrate/execute`, {
+		const falseBody = await testFetch(`${ctx.baseUrl}/api/migrate/execute`, {
 			method: "POST",
 			headers: { "Content-Type": "application/json" },
 			body: JSON.stringify({
@@ -1633,7 +1641,7 @@ describe.serial("migration reconcile route", () => {
 		const falseBodyJson = (await falseBody.json()) as { effectiveGlobal: boolean };
 		expect(falseBodyJson.effectiveGlobal).toBe(false);
 
-		const invalidBody = await fetch(`${ctx.baseUrl}/api/migrate/execute`, {
+		const invalidBody = await testFetch(`${ctx.baseUrl}/api/migrate/execute`, {
 			method: "POST",
 			headers: { "Content-Type": "application/json" },
 			body: JSON.stringify({
@@ -1648,29 +1656,29 @@ describe.serial("migration reconcile route", () => {
 	});
 
 	test("accepts valid source values and rejects invalid source values", async () => {
-		const projectSource = await fetch(
+		const projectSource = await testFetch(
 			`${ctx.baseUrl}/api/migrate/reconcile?providers=codex&source=project`,
 		);
 		expect(projectSource.status).toBe(200);
 
-		const localSource = await fetch(
+		const localSource = await testFetch(
 			`${ctx.baseUrl}/api/migrate/reconcile?providers=codex&source=local`,
 		);
 		expect(localSource.status).toBe(200);
 
-		const defaultSource = await fetch(
+		const defaultSource = await testFetch(
 			`${ctx.baseUrl}/api/migrate/reconcile?providers=codex&source=default`,
 		);
 		expect(defaultSource.status).toBe(200);
 
-		const invalidQuerySource = await fetch(
+		const invalidQuerySource = await testFetch(
 			`${ctx.baseUrl}/api/migrate/reconcile?providers=codex&source=unknown-source`,
 		);
 		expect(invalidQuerySource.status).toBe(400);
 		const invalidQuerySourceBody = (await invalidQuerySource.json()) as { error: string };
 		expect(invalidQuerySourceBody.error).toContain("Invalid source.");
 
-		const invalidBodySourceType = await fetch(`${ctx.baseUrl}/api/migrate/execute`, {
+		const invalidBodySourceType = await testFetch(`${ctx.baseUrl}/api/migrate/execute`, {
 			method: "POST",
 			headers: { "Content-Type": "application/json" },
 			body: JSON.stringify({
@@ -1683,7 +1691,7 @@ describe.serial("migration reconcile route", () => {
 		const invalidBodySourceTypeJson = (await invalidBodySourceType.json()) as { error: string };
 		expect(invalidBodySourceTypeJson.error).toBe("source must be a string");
 
-		const invalidBodySourceValue = await fetch(`${ctx.baseUrl}/api/migrate/execute`, {
+		const invalidBodySourceValue = await testFetch(`${ctx.baseUrl}/api/migrate/execute`, {
 			method: "POST",
 			headers: { "Content-Type": "application/json" },
 			body: JSON.stringify({
@@ -1724,7 +1732,7 @@ describe.serial("migration reconcile route", () => {
 				providers: ["codex"],
 			},
 		};
-		const summaryMismatchRes = await fetch(`${ctx.baseUrl}/api/migrate/execute`, {
+		const summaryMismatchRes = await testFetch(`${ctx.baseUrl}/api/migrate/execute`, {
 			method: "POST",
 			headers: { "Content-Type": "application/json" },
 			body: JSON.stringify({ plan: summaryMismatchPlan, resolutions: {} }),
@@ -1759,7 +1767,7 @@ describe.serial("migration reconcile route", () => {
 				providers: ["codex"],
 			},
 		};
-		const hasConflictsMismatchRes = await fetch(`${ctx.baseUrl}/api/migrate/execute`, {
+		const hasConflictsMismatchRes = await testFetch(`${ctx.baseUrl}/api/migrate/execute`, {
 			method: "POST",
 			headers: { "Content-Type": "application/json" },
 			body: JSON.stringify({ plan: hasConflictsMismatchPlan, resolutions: {} }),
@@ -1800,7 +1808,7 @@ describe.serial("migration reconcile route", () => {
 		};
 
 		const legacyKey = "codex:config:cfg:true";
-		const resolvedRes = await fetch(`${ctx.baseUrl}/api/migrate/execute`, {
+		const resolvedRes = await testFetch(`${ctx.baseUrl}/api/migrate/execute`, {
 			method: "POST",
 			headers: { "Content-Type": "application/json" },
 			body: JSON.stringify({
@@ -1812,7 +1820,7 @@ describe.serial("migration reconcile route", () => {
 		});
 		expect(resolvedRes.status).toBe(200);
 
-		const unresolvedRes = await fetch(`${ctx.baseUrl}/api/migrate/execute`, {
+		const unresolvedRes = await testFetch(`${ctx.baseUrl}/api/migrate/execute`, {
 			method: "POST",
 			headers: { "Content-Type": "application/json" },
 			body: JSON.stringify({
@@ -1853,7 +1861,7 @@ describe.serial("migration reconcile route", () => {
 			},
 		};
 		const keepKey = JSON.stringify(["codex", "agent", "agent-a", true]);
-		const keepRes = await fetch(`${ctx.baseUrl}/api/migrate/execute`, {
+		const keepRes = await testFetch(`${ctx.baseUrl}/api/migrate/execute`, {
 			method: "POST",
 			headers: { "Content-Type": "application/json" },
 			body: JSON.stringify({
@@ -1919,7 +1927,7 @@ describe.serial("migration reconcile route", () => {
 			},
 		};
 		const smartMergeKey = JSON.stringify(["codex", "agent", "agent-a", true]);
-		const smartMergeRes = await fetch(`${ctx.baseUrl}/api/migrate/execute`, {
+		const smartMergeRes = await testFetch(`${ctx.baseUrl}/api/migrate/execute`, {
 			method: "POST",
 			headers: { "Content-Type": "application/json" },
 			body: JSON.stringify({
@@ -1966,7 +1974,7 @@ describe.serial("migration reconcile route", () => {
 			},
 		};
 
-		const res = await fetch(`${ctx.baseUrl}/api/migrate/execute`, {
+		const res = await testFetch(`${ctx.baseUrl}/api/migrate/execute`, {
 			method: "POST",
 			headers: { "Content-Type": "application/json" },
 			body: JSON.stringify({ plan, resolutions: {} }),
@@ -2041,7 +2049,7 @@ describe.serial("migration reconcile route", () => {
 			},
 		};
 
-		const res = await fetch(`${ctx.baseUrl}/api/migrate/execute`, {
+		const res = await testFetch(`${ctx.baseUrl}/api/migrate/execute`, {
 			method: "POST",
 			headers: { "Content-Type": "application/json" },
 			body: JSON.stringify({ plan, resolutions: {} }),
@@ -2129,7 +2137,7 @@ describe.serial("migration reconcile route", () => {
 			},
 		};
 
-		const res = await fetch(`${ctx.baseUrl}/api/migrate/execute`, {
+		const res = await testFetch(`${ctx.baseUrl}/api/migrate/execute`, {
 			method: "POST",
 			headers: { "Content-Type": "application/json" },
 			body: JSON.stringify({ plan, resolutions: {} }),
@@ -2171,7 +2179,7 @@ describe.serial("migration reconcile route", () => {
 			}));
 		});
 
-		const res = await fetch(`${ctx.baseUrl}/api/migrate/execute`, {
+		const res = await testFetch(`${ctx.baseUrl}/api/migrate/execute`, {
 			method: "POST",
 			headers: { "Content-Type": "application/json" },
 			body: JSON.stringify({
@@ -2195,7 +2203,7 @@ describe.serial("migration reconcile route", () => {
 	test("sanitizes reconcile failure message in 500 response", async () => {
 		readPortableRegistryMock.mockRejectedValueOnce(new Error("reconcile\tboom\nbad\u0007"));
 
-		const res = await fetch(`${ctx.baseUrl}/api/migrate/reconcile?providers=codex`);
+		const res = await testFetch(`${ctx.baseUrl}/api/migrate/reconcile?providers=codex`);
 		expect(res.status).toBe(500);
 		const body = (await res.json()) as { error: string; message: string };
 		expect(body.error).toBe("Failed to compute reconcile plan");
@@ -2209,7 +2217,7 @@ describe.serial("migration reconcile route", () => {
 		getAgentSourcePathMock.mockReturnValueOnce("/tmp/agents");
 		discoverAgentsMock.mockRejectedValueOnce(new Error("execute\tboom\nbad\u0007"));
 
-		const res = await fetch(`${ctx.baseUrl}/api/migrate/execute`, {
+		const res = await testFetch(`${ctx.baseUrl}/api/migrate/execute`, {
 			method: "POST",
 			headers: { "Content-Type": "application/json" },
 			body: JSON.stringify({

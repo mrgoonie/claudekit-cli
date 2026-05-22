@@ -74,7 +74,12 @@ import type {
 	TargetFileState,
 } from "../portable/reconcile-types.js";
 import { reconcile } from "../portable/reconciler.js";
-import type { PortableInstallResult, PortableItem, ProviderType } from "../portable/types.js";
+import type {
+	MigrationWarning,
+	PortableInstallResult,
+	PortableItem,
+	ProviderType,
+} from "../portable/types.js";
 import { discoverSkills, getSkillSourcePath } from "../skills/skills-discovery.js";
 import type { SkillInfo } from "../skills/types.js";
 import { createMigrateProgressSink } from "./migrate-progress.js";
@@ -196,6 +201,18 @@ function logHookCleanupResults(
 	for (const result of results) {
 		for (const warning of result.warnings) {
 			p.log.warn(warning);
+		}
+	}
+}
+
+export function appendMigrationWarningMessages(
+	target: string[],
+	warnings: MigrationWarning[] | undefined,
+): void {
+	if (!warnings) return;
+	for (const warning of warnings) {
+		if (!target.includes(warning.message)) {
+			target.push(warning.message);
 		}
 	}
 }
@@ -1223,6 +1240,7 @@ export async function migrateCommand(options: MigrateOptions): Promise<void> {
 				installedHookAbsolutePaths: successfulHookAbsPaths.get(hooksProvider),
 				global: entry.global,
 			});
+			appendMigrationWarningMessages(postProgressWarnings, mergeResult.warnings);
 			if (mergeResult.success && mergeResult.hooksRegistered > 0) {
 				logger.verbose(
 					`Registered ${mergeResult.hooksRegistered} hook(s) in ${hooksProvider} settings.json`,

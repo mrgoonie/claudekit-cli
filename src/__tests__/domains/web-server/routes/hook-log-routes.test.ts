@@ -10,6 +10,8 @@ import { registerHookLogRoutes } from "@/domains/web-server/routes/hook-log-rout
 import { PathResolver } from "@/shared/path-resolver.js";
 import express, { type Express } from "express";
 
+const testFetch = globalThis.fetch.bind(globalThis);
+
 const TEST_HOME = join(tmpdir(), `ck-hook-route-test-${Date.now()}-${process.pid}`);
 process.env.CK_TEST_HOME = TEST_HOME;
 
@@ -60,7 +62,9 @@ describe("GET /api/system/hook-diagnostics", () => {
 			}),
 		]);
 
-		const response = await fetch(`${baseUrl}/api/system/hook-diagnostics?scope=global&limit=10`);
+		const response = await testFetch(
+			`${baseUrl}/api/system/hook-diagnostics?scope=global&limit=10`,
+		);
 		expect(response.status).toBe(200);
 
 		const body = (await response.json()) as {
@@ -86,7 +90,7 @@ describe("GET /api/system/hook-diagnostics", () => {
 			}),
 		]);
 
-		const response = await fetch(`${baseUrl}/api/system/hook-diagnostics`);
+		const response = await testFetch(`${baseUrl}/api/system/hook-diagnostics`);
 		expect(response.status).toBe(200);
 
 		const body = (await response.json()) as { scope: string; path: string };
@@ -95,31 +99,31 @@ describe("GET /api/system/hook-diagnostics", () => {
 	});
 
 	test("returns 400 when project scope omits projectId", async () => {
-		const response = await fetch(`${baseUrl}/api/system/hook-diagnostics?scope=project`);
+		const response = await testFetch(`${baseUrl}/api/system/hook-diagnostics?scope=project`);
 		expect(response.status).toBe(400);
 	});
 
 	test("returns 400 for invalid scopes", async () => {
-		const response = await fetch(`${baseUrl}/api/system/hook-diagnostics?scope=invalid`);
+		const response = await testFetch(`${baseUrl}/api/system/hook-diagnostics?scope=invalid`);
 		expect(response.status).toBe(400);
 	});
 
 	test("returns 404 for unknown project ids", async () => {
-		const response = await fetch(
+		const response = await testFetch(
 			`${baseUrl}/api/system/hook-diagnostics?scope=project&projectId=missing-project`,
 		);
 		expect(response.status).toBe(404);
 	});
 
 	test("returns 404 for undocumented projectId=current requests", async () => {
-		const response = await fetch(
+		const response = await testFetch(
 			`${baseUrl}/api/system/hook-diagnostics?scope=project&projectId=current`,
 		);
 		expect(response.status).toBe(404);
 	});
 
 	test("returns 400 when projectId exceeds the accepted length", async () => {
-		const response = await fetch(
+		const response = await testFetch(
 			`${baseUrl}/api/system/hook-diagnostics?scope=project&projectId=${"a".repeat(513)}`,
 		);
 		expect(response.status).toBe(400);
@@ -139,7 +143,7 @@ describe("GET /api/system/hook-diagnostics", () => {
 			}),
 		]);
 
-		const response = await fetch(
+		const response = await testFetch(
 			`${baseUrl}/api/system/hook-diagnostics?scope=project&projectId=${encodeURIComponent(forgedId)}`,
 		);
 		expect(response.status).toBe(404);
@@ -155,7 +159,7 @@ describe("GET /api/system/hook-diagnostics", () => {
 			}),
 		]);
 
-		const response = await fetch(
+		const response = await testFetch(
 			`${baseUrl}/api/system/hook-diagnostics?scope=project&projectId=global`,
 		);
 		expect(response.status).toBe(200);
