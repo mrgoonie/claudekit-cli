@@ -7,6 +7,15 @@ import { join } from "node:path";
 import { logger } from "@/shared/logger.js";
 import { ExtractionError } from "@/types";
 
+async function pathExists(path: string): Promise<boolean> {
+	try {
+		await access(path, constants.F_OK);
+		return true;
+	} catch {
+		return false;
+	}
+}
+
 /**
  * Validate extraction results
  * @param extractDir - Directory to validate
@@ -23,17 +32,31 @@ export async function validateExtraction(extractDir: string): Promise<void> {
 		}
 
 		// Verify critical paths exist
-		const criticalPaths = [".claude", "CLAUDE.md"];
+		const criticalPaths = [".claude"];
 		const missingPaths: string[] = [];
 
 		for (const path of criticalPaths) {
-			try {
-				await access(join(extractDir, path), constants.F_OK);
+			if (await pathExists(join(extractDir, path))) {
 				logger.debug(`Found: ${path}`);
-			} catch {
-				logger.warning(`Expected path not found: ${path}`);
-				missingPaths.push(path);
+				continue;
 			}
+
+			logger.warning(`Expected path not found: ${path}`);
+			missingPaths.push(path);
+		}
+
+		const guidancePaths = ["CLAUDE.md", ".claude/CLAUDE.md", ".claude/rules/CLAUDE.md"];
+		let guidancePath: string | null = null;
+		for (const path of guidancePaths) {
+			if (await pathExists(join(extractDir, path))) {
+				guidancePath = path;
+				break;
+			}
+		}
+		if (guidancePath) {
+			logger.debug(`Found: ${guidancePath}`);
+		} else {
+			logger.debug("No CLAUDE.md guidance file found in extracted kit");
 		}
 
 		// Warn if critical paths are missing but don't fail validation

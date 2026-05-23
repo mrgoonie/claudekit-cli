@@ -86,6 +86,15 @@ describe("DownloadManager", () => {
 			await manager.validateExtraction(validDir);
 		});
 
+		test("should pass validation when CLAUDE.md is bundled as a rule", async () => {
+			const validDir = join(testDir, "valid-rules-guidance");
+			await mkdir(join(validDir, ".claude", "rules"), { recursive: true });
+			await writeFile(join(validDir, ".claude", "rules", "CLAUDE.md"), "# Test");
+
+			// Should not throw
+			await manager.validateExtraction(validDir);
+		});
+
 		test("should warn but not fail for directory with files but missing critical paths", async () => {
 			const partialDir = join(testDir, "partial");
 			await mkdir(partialDir, { recursive: true });
