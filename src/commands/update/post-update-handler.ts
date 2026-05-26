@@ -9,10 +9,11 @@ import { exec, spawn } from "node:child_process";
 import { existsSync } from "node:fs";
 import { readdir } from "node:fs/promises";
 import { builtinModules } from "node:module";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { promisify } from "node:util";
 import { CkConfigManager } from "@/domains/config/ck-config-manager.js";
 import {
+	countMissingHookFileReferences,
 	repairLegacyHookPrompts,
 	repairMissingHookFileReferences,
 } from "@/domains/health-checks/checkers/hook-health-checker.js";
@@ -216,6 +217,7 @@ export interface PromptKitUpdateDeps {
 	confirmFn?: PromptKitUpdateConfirmFn;
 	isCancelFn?: PromptKitUpdateCancelFn;
 	findMissingHookDependenciesFn?: (claudeDir: string) => Promise<string[]>;
+	countMissingHookFileReferencesFn?: (projectDir: string) => Promise<number>;
 }
 
 async function findMissingHookDependencies(claudeDir: string): Promise<string[]> {
@@ -279,14 +281,14 @@ export async function promptKitUpdate(
 		const localKits = localMetadata ? getInstalledKits(localMetadata) : [];
 		const globalKits = globalMetadata ? getInstalledKits(globalMetadata) : [];
 
-		const selection = selectKitForUpdate({ hasLocal, hasGlobal, localKits, globalKits });
+		let selection = selectKitForUpdate({ hasLocal, hasGlobal, localKits, globalKits });
 
 		if (!selection) {
 			logger.verbose("No ClaudeKit installations detected, skipping kit update prompt");
 			return;
 		}
 
-		const kitVersion = selection.kit
+		let kitVersion = selection.kit
 			? selection.isGlobal
 				? globalMetadata?.kits?.[selection.kit]?.version
 				: localMetadata?.kits?.[selection.kit]?.version
@@ -324,6 +326,40 @@ export async function promptKitUpdate(
 			} catch (error) {
 				logger.verbose(
 					`Hook dependency self-heal check skipped: ${
+						error instanceof Error ? error.message : "unknown"
+					}`,
+				);
+			}
+		}
+
+		if (alreadyAtLatest) {
+			try {
+				const countMissingHookRefsFn =
+					deps?.countMissingHookFileReferencesFn ?? countMissingHookFileReferences;
+				const projectDir = setup.project.path ? dirname(setup.project.path) : process.cwd();
+				const missingHookRefs = await countMissingHookRefsFn(projectDir);
+				if (missingHookRefs > 0) {
+					logger.warning(
+						`Detected ${missingHookRefs} broken hook registration(s); reinstalling kit content`,
+					);
+					alreadyAtLatest = false;
+
+					// A project-local settings.json that points at missing project hooks must be
+					// repaired by a local ck init, even when a global kit also exists.
+					if (setup.project.path && selection.isGlobal) {
+						selection = {
+							isGlobal: false,
+							kit: localKits[0] || selection.kit,
+							promptMessage: `Update local project ClaudeKit content${
+								localKits[0] || selection.kit ? ` (${localKits[0] || selection.kit})` : ""
+							}?`,
+						};
+						kitVersion = selection.kit ? localMetadata?.kits?.[selection.kit]?.version : undefined;
+					}
+				}
+			} catch (error) {
+				logger.verbose(
+					`Hook registration self-heal check skipped: ${
 						error instanceof Error ? error.message : "unknown"
 					}`,
 				);
