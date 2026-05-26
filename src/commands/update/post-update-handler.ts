@@ -288,6 +288,52 @@ export async function promptKitUpdate(
 			return;
 		}
 
+		let forceKitReinstall = false;
+		if (hasLocal && setup.project.path) {
+			try {
+				const missingHookDeps = await findMissingHookDepsFn(setup.project.path);
+				if (missingHookDeps.length > 0) {
+					logger.warning(
+						`Detected ${missingHookDeps.length} local missing hook dependency(ies); reinstalling local kit content`,
+					);
+					forceKitReinstall = true;
+				}
+			} catch (error) {
+				logger.verbose(
+					`Local hook dependency self-heal check skipped: ${
+						error instanceof Error ? error.message : "unknown"
+					}`,
+				);
+			}
+
+			try {
+				const countMissingHookRefsFn =
+					deps?.countMissingHookFileReferencesFn ?? countMissingHookFileReferences;
+				const missingHookRefs = await countMissingHookRefsFn(dirname(setup.project.path));
+				if (missingHookRefs > 0) {
+					logger.warning(
+						`Detected ${missingHookRefs} local broken hook registration(s); reinstalling local kit content`,
+					);
+					forceKitReinstall = true;
+				}
+			} catch (error) {
+				logger.verbose(
+					`Local hook registration self-heal check skipped: ${
+						error instanceof Error ? error.message : "unknown"
+					}`,
+				);
+			}
+
+			if (forceKitReinstall && selection.isGlobal) {
+				const kit = localKits[0] || selection.kit;
+				selection = {
+					isGlobal: false,
+					kit,
+					promptMessage: `Update local project ClaudeKit content${kit ? ` (${kit})` : ""}?`,
+				};
+			}
+		}
+
 		let kitVersion = selection.kit
 			? selection.isGlobal
 				? globalMetadata?.kits?.[selection.kit]?.version
@@ -303,7 +349,7 @@ export async function promptKitUpdate(
 
 		// Version check in --yes mode: skip reinstall when already at latest
 		let alreadyAtLatest = false;
-		if (yes && selection.kit && kitVersion) {
+		if (yes && selection.kit && kitVersion && !forceKitReinstall) {
 			const getTagFn = deps?.getLatestReleaseTagFn ?? fetchLatestReleaseTag;
 			const latestTag = await getTagFn(selection.kit, beta || isBetaInstalled);
 			if (latestTag && versionsMatch(kitVersion, latestTag)) {

@@ -279,6 +279,52 @@ describe("promptKitUpdate auto-init behavior", () => {
 		expect(capturedExecCmd()).toContain("--kit engineer");
 	});
 
+	test("prefers local hook self-heal over global kit update when both are installed (--yes mode)", async () => {
+		const projectDir = join(tempDir, "project");
+		const localClaudeDir = join(projectDir, ".claude");
+		await mkdir(localClaudeDir, { recursive: true });
+		await writeMetadata(localClaudeDir);
+
+		const { deps, execCount, spawnCount, capturedExecCmd } = makeDeps();
+		deps.getLatestReleaseTagFn = async () => "v2.0.0";
+		deps.getSetupFn = async () => ({
+			global: {
+				path: tempDir,
+				metadata: {
+					version: "1.0.0",
+					name: "ClaudeKit",
+					description: "test install",
+					kits: { engineer: { version: "1.0.0" } },
+				},
+				components: { commands: 0, hooks: 0, skills: 0, workflows: 0, settings: 0 },
+			},
+			project: {
+				path: localClaudeDir,
+				metadata: {
+					version: "1.0.0",
+					name: "ClaudeKit",
+					description: "test project install",
+					kits: { engineer: { version: "1.0.0" } },
+				},
+				components: { commands: 0, hooks: 0, skills: 0, workflows: 0, settings: 0 },
+			},
+		});
+		deps.countMissingHookFileReferencesFn = async (checkedProjectDir) => {
+			expect(checkedProjectDir).toBe(projectDir);
+			return 1;
+		};
+
+		await promptKitUpdate(true, true, deps);
+
+		expect(execCount()).toBe(1);
+		expect(spawnCount()).toBe(0);
+		expect(capturedExecCmd()).toContain("ck init");
+		expect(capturedExecCmd()).not.toContain("-g");
+		expect(capturedExecCmd()).toContain("--yes");
+		expect(capturedExecCmd()).toContain("--kit engineer");
+		expect(capturedExecCmd()).toContain("--beta");
+	});
+
 	test("interactive mode passes --beta when installed version is prerelease", async () => {
 		await writeMetadata(tempDir, "2.15.1-beta.3");
 		const { deps, capturedSpawnArgs } = makeDeps();
