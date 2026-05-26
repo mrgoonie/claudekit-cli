@@ -1231,6 +1231,17 @@ export async function checkHookFileReferences(projectDir: string): Promise<Check
 	};
 }
 
+export async function countMissingHookFileReferences(projectDir = process.cwd()): Promise<number> {
+	const settingsFiles = getClaudeSettingsFiles(projectDir);
+	let count = 0;
+	for (const settingsFile of settingsFiles) {
+		const settings = await SettingsMerger.readSettingsFile(settingsFile.path);
+		if (!settings) continue;
+		count += collectMissingHookReferences(settings, settingsFile, projectDir).length;
+	}
+	return count;
+}
+
 export async function repairMissingHookFileReferences(projectDir = process.cwd()): Promise<number> {
 	const result = await checkHookFileReferences(projectDir);
 	if (result.status !== "fail" || !result.fix) {

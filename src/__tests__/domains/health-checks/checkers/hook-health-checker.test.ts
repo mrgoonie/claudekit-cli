@@ -13,6 +13,7 @@ import {
 	checkHookSyntax,
 	checkLegacyHookPrompts,
 	checkPythonVenv,
+	countMissingHookFileReferences,
 	parseDoctorCliVersionOutput,
 	repairMissingHookFileReferences,
 	resolveDoctorCkExecutable,
@@ -1158,6 +1159,31 @@ describe("checkHookFileReferences", () => {
 		const updated = JSON.parse(await readFile(settingsPath, "utf-8"));
 		expect(updated.statusLine).toBeUndefined();
 		expect(updated.hooks).toBeUndefined();
+	});
+
+	test("shared count helper detects stale hook references without mutating settings", async () => {
+		await mkdir(join(projectDir, ".claude"), { recursive: true });
+		const settingsPath = join(projectDir, ".claude", "settings.json");
+		const settings = {
+			hooks: {
+				Stop: [
+					{
+						hooks: [
+							{
+								type: "command",
+								command: 'node "$CLAUDE_PROJECT_DIR"/.claude/hooks/session-state.cjs',
+							},
+						],
+					},
+				],
+			},
+		};
+		await writeFile(settingsPath, JSON.stringify(settings));
+
+		const missingReferences = await countMissingHookFileReferences(projectDir);
+
+		expect(missingReferences).toBe(1);
+		expect(JSON.parse(await readFile(settingsPath, "utf-8"))).toEqual(settings);
 	});
 
 	test("returns fail when settings reference a missing hook file", async () => {
