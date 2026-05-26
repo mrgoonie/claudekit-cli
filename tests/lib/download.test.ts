@@ -324,8 +324,12 @@ describe("Installation utilities", () => {
 			expect(commands[0]?.args).toEqual(["-o", "-q", "/tmp/kit.zip", "-d", "/tmp/out"]);
 		});
 
-		test("does not use platform native commands on Linux", () => {
-			expect(getNativeZipCommands("/tmp/kit.zip", "/tmp/out", "linux")).toEqual([]);
+		test("uses native unzip on Linux", () => {
+			const commands = getNativeZipCommands("/tmp/kit.zip", "/tmp/out", "linux");
+
+			expect(commands).toHaveLength(1);
+			expect(commands[0]?.command).toBe("unzip");
+			expect(commands[0]?.args).toEqual(["-o", "-q", "/tmp/kit.zip", "-d", "/tmp/out"]);
 		});
 	});
 });
