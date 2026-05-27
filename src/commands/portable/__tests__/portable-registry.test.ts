@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 /**
  * Tests for portable registry v3.0 migration (Phase 1)
  * Note: These tests isolate ~/.claudekit/ through CK_TEST_HOME.
@@ -10,8 +10,9 @@ import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import type { PortableRegistryV3 } from "../portable-registry.js";
 
-// Other portable tests mock this module; clear global Bun mocks before importing it.
-mock.restore();
+// Load an isolated module instance so Bun's global module mocks in sibling tests cannot
+// replace addPortableInstallation with a no-op during full-suite CI runs.
+const portableRegistryTestModule = "../portable-registry.js?portable-registry-test";
 const {
 	addPortableInstallation,
 	readPortableRegistry,
@@ -19,7 +20,7 @@ const {
 	removePortableInstallation,
 	updateAppliedManifestVersion,
 	writePortableRegistry,
-} = await import("../portable-registry.js");
+} = (await import(portableRegistryTestModule)) as typeof import("../portable-registry.js");
 
 const originalCkTestHome = process.env.CK_TEST_HOME;
 let testHome: string | null = null;
