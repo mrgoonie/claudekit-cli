@@ -1475,6 +1475,79 @@ describe("SettingsProcessor", () => {
 			expect(result.statusLine.command).not.toMatch(/"[^"]*"\/\.claude/);
 		});
 
+		it("should migrate legacy statusLine runner when node-hook-runner is deleted", async () => {
+			const destSettings = {
+				statusLine: {
+					type: "command",
+					command: 'bash "$HOME/.claude/hooks/node-hook-runner.sh" "$HOME/.claude/statusline.cjs"',
+				},
+			};
+			const destFile = join(destDir, "settings.json");
+			await writeFile(destFile, JSON.stringify(destSettings), "utf-8");
+
+			const sourceSettings = {
+				statusLine: {
+					type: "command",
+					command: 'node ".claude/statusline.cjs"',
+				},
+			};
+			const sourceFile = join(sourceDir, "settings.json");
+			await writeFile(sourceFile, JSON.stringify(sourceSettings), "utf-8");
+
+			const processor = new SettingsProcessor();
+			processor.setGlobalFlag(true);
+			processor.setProjectDir(destDir);
+			processor.setDeletions(["hooks/node-hook-runner.sh"]);
+			await processor.processSettingsJson(sourceFile, destFile);
+
+			const result = JSON.parse(await readFile(destFile, "utf-8"));
+
+			expect(result.statusLine.command).toBe('node "$HOME/.claude/statusline.cjs"');
+			expect(result.statusLine.command).not.toContain("node-hook-runner.sh");
+		});
+
+		it("should preserve customized statusLine runner commands", async () => {
+			const customCommands = [
+				'CK_THEME=dark bash "$HOME/.claude/hooks/node-hook-runner.sh" "$HOME/.claude/statusline.cjs"',
+				'echo "$HOME/.claude/hooks/node-hook-runner.sh" && node "$HOME/.claude/statusline.cjs"',
+			];
+
+			for (const [index, customCommand] of customCommands.entries()) {
+				const caseSourceDir = join(sourceDir, `custom-statusline-${index}`);
+				const caseDestDir = join(destDir, `custom-statusline-${index}`);
+				await mkdir(caseSourceDir, { recursive: true });
+				await mkdir(caseDestDir, { recursive: true });
+
+				const destSettings = {
+					statusLine: {
+						type: "command",
+						command: customCommand,
+					},
+				};
+				const destFile = join(caseDestDir, "settings.json");
+				await writeFile(destFile, JSON.stringify(destSettings), "utf-8");
+
+				const sourceSettings = {
+					statusLine: {
+						type: "command",
+						command: 'node ".claude/statusline.cjs"',
+					},
+				};
+				const sourceFile = join(caseSourceDir, "settings.json");
+				await writeFile(sourceFile, JSON.stringify(sourceSettings), "utf-8");
+
+				const processor = new SettingsProcessor();
+				processor.setGlobalFlag(true);
+				processor.setProjectDir(caseDestDir);
+				processor.setDeletions(["hooks/node-hook-runner.sh"]);
+				await processor.processSettingsJson(sourceFile, destFile);
+
+				const result = JSON.parse(await readFile(destFile, "utf-8"));
+
+				expect(result.statusLine.command).toBe(customCommand);
+			}
+		});
+
 		it("should preserve variable-only quoting for local-install hooks", async () => {
 			const destSettings = {
 				hooks: {

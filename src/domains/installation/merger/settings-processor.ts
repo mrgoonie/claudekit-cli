@@ -280,6 +280,10 @@ export class SettingsProcessor {
 			await this.tracker.saveInstalledSettings(installedSettings);
 		}
 
+		if (this.migrateLegacyStatusLineRunner(mergeResult.merged, sourceSettings)) {
+			logger.info("Migrated legacy statusLine runner command to current ClaudeKit statusline");
+		}
+
 		// Fix broken hook path formats (tilde, variable-only quoting, unquoted)
 		this.logHookCommandRepair(this.fixHookCommandPaths(mergeResult.merged), "merged settings");
 
@@ -559,6 +563,56 @@ export class SettingsProcessor {
 		}
 
 		return pruned;
+	}
+
+	/**
+	 * Older kits ran statusLine through hooks/node-hook-runner.sh. Once that runner was
+	 * deleted, a selective merge could preserve a statusLine command pointing at a
+	 * missing file because statusLine is not part of hook-array pruning. Only replace
+	 * this known CK-owned legacy form; arbitrary user statusLine commands stay intact.
+	 */
+	private migrateLegacyStatusLineRunner(
+		settings: SettingsJson,
+		sourceSettings: SettingsJson,
+	): boolean {
+		const statusLine = settings.statusLine as { command?: unknown } | undefined;
+		const sourceStatusLine = sourceSettings.statusLine as { command?: unknown } | undefined;
+
+		if (
+			!statusLine ||
+			typeof statusLine.command !== "string" ||
+			!sourceStatusLine ||
+			typeof sourceStatusLine.command !== "string"
+		) {
+			return false;
+		}
+		if (!this.deletionPatterns.includes("hooks/node-hook-runner.sh")) {
+			return false;
+		}
+		if (!this.isLegacyStatusLineRunnerCommand(statusLine.command)) {
+			return false;
+		}
+		if (this.isLegacyStatusLineRunnerCommand(sourceStatusLine.command)) {
+			return false;
+		}
+
+		settings.statusLine = structuredClone(sourceSettings.statusLine);
+		return true;
+	}
+
+	private isLegacyStatusLineRunnerCommand(command: string): boolean {
+		const match = command.match(
+			/^\s*bash\s+(?:"([^"]+)"|'([^']+)'|([^\s"']+))\s+(?:"([^"]+)"|'([^']+)'|([^\s"']+))\s*$/,
+		);
+		if (!match) return false;
+
+		const runnerArg = match[1] ?? match[2] ?? match[3];
+		const targetArg = match[4] ?? match[5] ?? match[6];
+
+		return (
+			this.extractHookRelativePath(runnerArg) === "hooks/node-hook-runner.sh" &&
+			this.extractHookRelativePath(targetArg) === "statusline.cjs"
+		);
 	}
 
 	/**
