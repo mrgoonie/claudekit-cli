@@ -37,6 +37,10 @@ function getMigrationLockPath(): string {
 	return join(getRegistryDir(), ".migration.lock");
 }
 
+async function readTestPortableRegistry(): Promise<PortableRegistryV3> {
+	return JSON.parse(await readFile(getRegistryPath(), "utf-8")) as PortableRegistryV3;
+}
+
 function pinTestHome(): void {
 	if (!testHome) {
 		throw new Error("testHome is not initialized");
@@ -686,7 +690,7 @@ describe("addPortableInstallation (path alignment for cursor/windsurf)", () => {
 		);
 
 		pinTestHome();
-		const loaded = await readPortableRegistry();
+		const loaded = await readTestPortableRegistry();
 		const entry = loaded.installations.find((i) => i.item === "scout");
 		expect(entry).toBeDefined();
 		expect(entry?.path).toBe(".cursor/skills/scout");
@@ -709,7 +713,7 @@ describe("addPortableInstallation (path alignment for cursor/windsurf)", () => {
 		);
 
 		pinTestHome();
-		const loaded = await readPortableRegistry();
+		const loaded = await readTestPortableRegistry();
 		const entry = loaded.installations.find((i) => i.item === "debug");
 		expect(entry).toBeDefined();
 		expect(entry?.path).toBe(".windsurf/skills/debug");
@@ -733,7 +737,7 @@ describe("addPortableInstallation (path alignment for cursor/windsurf)", () => {
 		);
 
 		pinTestHome();
-		const loaded = await readPortableRegistry();
+		const loaded = await readTestPortableRegistry();
 		const entry = loaded.installations.find((i) => i.item === "debug" && i.global === true);
 		expect(entry).toBeDefined();
 		expect(entry?.path).toBe(globalPath);

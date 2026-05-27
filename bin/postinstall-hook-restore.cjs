@@ -8,6 +8,13 @@ const { spawnSync } = require("node:child_process");
 
 const MAX_SETTINGS_BYTES = 5 * 1024 * 1024;
 const SAFE_KIT_NAMES = new Set(["engineer", "marketing"]);
+const COMPLETE_HOOK_SENTINELS = new Set(["session-init", "session-state", "subagent-init"]);
+const LEGACY_SPARSE_HOOK_SENTINELS = new Set([
+	"descriptive-name",
+	"privacy-block",
+	"scout-block",
+	"simplify-gate",
+]);
 
 function getHomeDir() {
 	return process.env.CK_TEST_HOME || os.homedir();
@@ -65,6 +72,35 @@ function installedHookCommands(config) {
 	);
 }
 
+function hasInstalledKit(config) {
+	return Object.keys(config?.kits || {}).some((kitName) => normalizeKitName(kitName));
+}
+
+function hasLegacySparseCkHooks(settings, config) {
+	if (!hasInstalledKit(config)) return false;
+
+	const hookNames = new Set();
+	for (const command of collectHookCommands(settings)) {
+		const hookName = extractCkHookName(command);
+		if (hookName) hookNames.add(hookName);
+	}
+
+	const hasKnownSparseHook = [...LEGACY_SPARSE_HOOK_SENTINELS].some((hookName) =>
+		hookNames.has(hookName),
+	);
+	if (!hasKnownSparseHook) return false;
+
+	const disabledHooks = new Set(
+		Object.entries(config?.hooks || {})
+			.filter(([, enabled]) => enabled === false)
+			.map(([name]) => name),
+	);
+
+	return [...COMPLETE_HOOK_SENTINELS].some(
+		(hookName) => !disabledHooks.has(hookName) && !hookNames.has(hookName),
+	);
+}
+
 function countMissingCkHookRegistrations(claudeDir) {
 	const settings = readJsonFile(path.join(claudeDir, "settings.json"));
 	const config = readJsonFile(path.join(claudeDir, ".ck.json"));
@@ -83,6 +119,11 @@ function countMissingCkHookRegistrations(claudeDir) {
 		if (hookName && disabledHooks.has(hookName)) continue;
 		if (!existingCommands.has(normalizeCommand(command))) missing++;
 	}
+
+	if (missing === 0 && installedHookCommands(config).length === 0) {
+		return hasLegacySparseCkHooks(settings, config) ? 1 : 0;
+	}
+
 	return missing;
 }
 
