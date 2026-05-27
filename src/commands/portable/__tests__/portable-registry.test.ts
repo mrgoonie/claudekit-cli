@@ -37,9 +37,16 @@ function getMigrationLockPath(): string {
 	return join(getRegistryDir(), ".migration.lock");
 }
 
+function pinTestHome(): void {
+	if (!testHome) {
+		throw new Error("testHome is not initialized");
+	}
+	process.env.CK_TEST_HOME = testHome;
+}
+
 beforeEach(async () => {
 	testHome = await mkdtemp(join(tmpdir(), "ck-portable-registry-"));
-	process.env.CK_TEST_HOME = testHome;
+	pinTestHome();
 	await mkdir(getRegistryDir(), { recursive: true });
 });
 
@@ -665,8 +672,10 @@ describe("removeInstallationsByFilter (stale entry cleanup)", () => {
 
 describe("addPortableInstallation (path alignment for cursor/windsurf)", () => {
 	test("records cursor skill at .cursor/skills/<name> path", async () => {
+		pinTestHome();
 		await writePortableRegistry({ version: "3.0", installations: [] });
 
+		pinTestHome();
 		await addPortableInstallation(
 			"scout",
 			"skill",
@@ -676,6 +685,7 @@ describe("addPortableInstallation (path alignment for cursor/windsurf)", () => {
 			".claude/skills/scout",
 		);
 
+		pinTestHome();
 		const loaded = await readPortableRegistry();
 		const entry = loaded.installations.find((i) => i.item === "scout");
 		expect(entry).toBeDefined();
@@ -685,8 +695,10 @@ describe("addPortableInstallation (path alignment for cursor/windsurf)", () => {
 	});
 
 	test("records windsurf skill at .windsurf/skills/<name> path (project scope)", async () => {
+		pinTestHome();
 		await writePortableRegistry({ version: "3.0", installations: [] });
 
+		pinTestHome();
 		await addPortableInstallation(
 			"debug",
 			"skill",
@@ -696,6 +708,7 @@ describe("addPortableInstallation (path alignment for cursor/windsurf)", () => {
 			".claude/skills/debug",
 		);
 
+		pinTestHome();
 		const loaded = await readPortableRegistry();
 		const entry = loaded.installations.find((i) => i.item === "debug");
 		expect(entry).toBeDefined();
@@ -705,9 +718,11 @@ describe("addPortableInstallation (path alignment for cursor/windsurf)", () => {
 	});
 
 	test("records windsurf skill at ~/.codeium/windsurf/skills/<name> path (global scope)", async () => {
+		pinTestHome();
 		await writePortableRegistry({ version: "3.0", installations: [] });
 
 		const globalPath = join(homedir(), ".codeium", "windsurf", "skills", "debug");
+		pinTestHome();
 		await addPortableInstallation(
 			"debug",
 			"skill",
@@ -717,6 +732,7 @@ describe("addPortableInstallation (path alignment for cursor/windsurf)", () => {
 			".claude/skills/debug",
 		);
 
+		pinTestHome();
 		const loaded = await readPortableRegistry();
 		const entry = loaded.installations.find((i) => i.item === "debug" && i.global === true);
 		expect(entry).toBeDefined();

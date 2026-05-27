@@ -4,6 +4,10 @@
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
+const {
+	countMissingCkHookRegistrations,
+	restoreMissingHookRegistrations,
+} = require("./postinstall-hook-restore.cjs");
 
 const MAX_SETTINGS_BYTES = 5 * 1024 * 1024;
 
@@ -124,12 +128,18 @@ function collectCandidateSettingsFiles() {
 
 function main() {
 	let pruned = 0;
-	for (const filePath of collectCandidateSettingsFiles()) {
+	const settingsFiles = collectCandidateSettingsFiles();
+	for (const filePath of settingsFiles) {
 		pruned += pruneSettingsFile(filePath);
 	}
 
+	const restored = restoreMissingHookRegistrations(settingsFiles);
+
 	if (pruned > 0 && process.env.CK_POSTINSTALL_DEBUG === "1") {
 		console.warn(`[claudekit-cli] Pruned ${pruned} legacy hook prompt(s)`);
+	}
+	if (restored > 0 && process.env.CK_POSTINSTALL_DEBUG === "1") {
+		console.warn(`[claudekit-cli] Restored ${restored} missing hook registration(s)`);
 	}
 }
 
@@ -137,7 +147,9 @@ main();
 
 module.exports = {
 	collectCandidateSettingsFiles,
+	countMissingCkHookRegistrations,
 	isLegacyDescriptiveNamePrompt,
 	pruneHooks,
 	pruneSettingsFile,
+	restoreMissingHookRegistrations,
 };
