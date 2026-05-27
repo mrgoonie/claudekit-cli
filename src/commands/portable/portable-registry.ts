@@ -15,7 +15,7 @@ import { UNKNOWN_CHECKSUM, normalizeChecksum } from "./reconcile-types.js";
 import type { PortableType, ProviderType } from "./types.js";
 
 function getPortableRegistryPaths() {
-	const home = process.env.CK_TEST_HOME || homedir();
+	const home = homedir();
 	const claudekitDir = join(home, ".claudekit");
 	return {
 		registryPath: join(claudekitDir, "portable-registry.json"),
