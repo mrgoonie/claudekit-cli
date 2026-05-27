@@ -16,6 +16,7 @@
 	},
 	"files": [
 		"bin/ck.js",
+		"bin/postinstall-hook-restore.cjs",
 		"bin/postinstall-self-heal.cjs",
 		"dist/index.js",
 		"dist/ui/",
