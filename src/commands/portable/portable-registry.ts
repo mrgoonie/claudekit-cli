@@ -23,6 +23,7 @@ function getPortableRegistryPaths() {
 		migrationLockPath: join(claudekitDir, ".migration.lock"),
 	};
 }
+type PortableRegistryPaths = ReturnType<typeof getPortableRegistryPaths>;
 
 // Schema for v2.0 registry entries (with .passthrough() for forward compat)
 const PortableInstallationSchema = z
@@ -154,8 +155,10 @@ function getCliVersion(): string {
  * Migrate legacy skill-registry.json to portable-registry.json v2.0
  * Uses readFile directly to avoid TOCTOU race condition
  */
-async function migrateLegacyRegistry(): Promise<PortableRegistry | null> {
-	const { legacyRegistryPath } = getPortableRegistryPaths();
+async function migrateLegacyRegistry(
+	paths: PortableRegistryPaths = getPortableRegistryPaths(),
+): Promise<PortableRegistry | null> {
+	const { legacyRegistryPath } = paths;
 	try {
 		const content = await readFile(legacyRegistryPath, "utf-8");
 		const data = JSON.parse(content);
@@ -297,15 +300,16 @@ async function repairStaleRegistryV3(
 
 async function persistCurrentStaleRegistryV3Repair(
 	preparedRepair?: PreparedStaleRegistryV3Repair,
+	paths: PortableRegistryPaths = getPortableRegistryPaths(),
 ): Promise<PortableRegistryV3> {
-	return withRegistryLock(async () => {
-		const { registryPath } = getPortableRegistryPaths();
+	return withRegistryLock(async (lockedPaths) => {
+		const { registryPath } = lockedPaths;
 		let content: string;
 		try {
 			content = await readFile(registryPath, "utf-8");
 		} catch (error) {
 			if (isErrnoCode(error, "ENOENT")) {
-				return readPortableRegistryInternal({ persistStaleV3Repair: false });
+				return readPortableRegistryInternal({ persistStaleV3Repair: false }, lockedPaths);
 			}
 			throw error;
 		}
@@ -326,30 +330,32 @@ async function persistCurrentStaleRegistryV3Repair(
 
 		const repairableV3Result = RepairablePortableRegistrySchemaV3.safeParse(data);
 		if (!repairableV3Result.success) {
-			return readPortableRegistryInternal({ persistStaleV3Repair: false });
+			return readPortableRegistryInternal({ persistStaleV3Repair: false }, lockedPaths);
 		}
 
 		const repairedRegistry =
 			preparedRepair && preparedRepair.sourceContent === content
 				? preparedRepair.repairedRegistry
 				: await repairStaleRegistryV3(repairableV3Result.data);
-		if (await isMigrationLocked()) {
+		if (await isMigrationLocked(lockedPaths)) {
 			logger.verbose("Migration in progress by another process, using repaired v3 view");
 			return repairedRegistry;
 		}
 
 		logger.verbose("Repairing stale portable registry v3.0 fields");
-		await writePortableRegistry(repairedRegistry);
+		await writePortableRegistry(repairedRegistry, lockedPaths);
 		return repairedRegistry;
-	});
+	}, paths);
 }
 
 /**
  * Check if migration lock exists and is recent (< 30 seconds)
  * Returns true if we should skip migration (another process is migrating)
  */
-async function isMigrationLocked(): Promise<boolean> {
-	const { migrationLockPath } = getPortableRegistryPaths();
+async function isMigrationLocked(
+	paths: PortableRegistryPaths = getPortableRegistryPaths(),
+): Promise<boolean> {
+	const { migrationLockPath } = paths;
 	try {
 		// Single atomic read avoids existsSync/readFile TOCTOU gap.
 		const lockContent = await readFile(migrationLockPath, "utf-8");
@@ -384,8 +390,10 @@ async function isMigrationLocked(): Promise<boolean> {
 /**
  * Create migration lock file with current timestamp
  */
-async function createMigrationLock(): Promise<void> {
-	const { migrationLockPath } = getPortableRegistryPaths();
+async function createMigrationLock(
+	paths: PortableRegistryPaths = getPortableRegistryPaths(),
+): Promise<void> {
+	const { migrationLockPath } = paths;
 	const lockDir = dirname(migrationLockPath);
 	if (!existsSync(lockDir)) {
 		await mkdir(lockDir, { recursive: true });
@@ -396,8 +404,10 @@ async function createMigrationLock(): Promise<void> {
 /**
  * Remove migration lock file
  */
-async function removeMigrationLock(): Promise<void> {
-	const { migrationLockPath } = getPortableRegistryPaths();
+async function removeMigrationLock(
+	paths: PortableRegistryPaths = getPortableRegistryPaths(),
+): Promise<void> {
+	const { migrationLockPath } = paths;
 	try {
 		await unlink(migrationLockPath);
 	} catch {
@@ -412,10 +422,13 @@ export async function readPortableRegistry(): Promise<PortableRegistryV3> {
 	return readPortableRegistryInternal({ persistStaleV3Repair: true });
 }
 
-async function readPortableRegistryInternal(options: {
-	persistStaleV3Repair: boolean;
-}): Promise<PortableRegistryV3> {
-	const { registryPath } = getPortableRegistryPaths();
+async function readPortableRegistryInternal(
+	options: {
+		persistStaleV3Repair: boolean;
+	},
+	paths: PortableRegistryPaths = getPortableRegistryPaths(),
+): Promise<PortableRegistryV3> {
+	const { registryPath } = paths;
 	try {
 		const content = await readFile(registryPath, "utf-8");
 		let data: unknown;
@@ -438,15 +451,18 @@ async function readPortableRegistryInternal(options: {
 			if (!options.persistStaleV3Repair) {
 				return repairedRegistry;
 			}
-			if (await isMigrationLocked()) {
+			if (await isMigrationLocked(paths)) {
 				logger.verbose("Migration in progress by another process, using repaired v3 view");
 				return repairedRegistry;
 			}
 
-			return persistCurrentStaleRegistryV3Repair({
-				sourceContent: content,
-				repairedRegistry,
-			});
+			return persistCurrentStaleRegistryV3Repair(
+				{
+					sourceContent: content,
+					repairedRegistry,
+				},
+				paths,
+			);
 		}
 
 		const v2Result = PortableRegistrySchema.safeParse(data);
@@ -454,21 +470,21 @@ async function readPortableRegistryInternal(options: {
 			throw new Error("portable-registry.json has unsupported schema/version");
 		}
 
-		if (await isMigrationLocked()) {
+		if (await isMigrationLocked(paths)) {
 			logger.verbose("Migration in progress by another process, using in-memory v2→v3 view");
 			return normalizePortableRegistryChecksums(await migrateRegistryV2ToV3(v2Result.data));
 		}
 
 		logger.verbose("Auto-migrating registry from v2.0 to v3.0");
-		await createMigrationLock();
+		await createMigrationLock(paths);
 		try {
 			const v3Registry = normalizePortableRegistryChecksums(
 				await migrateRegistryV2ToV3(v2Result.data),
 			);
-			await writePortableRegistry(v3Registry);
+			await writePortableRegistry(v3Registry, paths);
 			return v3Registry;
 		} finally {
-			await removeMigrationLock();
+			await removeMigrationLock(paths);
 		}
 	} catch (error) {
 		if (!isErrnoCode(error, "ENOENT")) {
@@ -477,37 +493,42 @@ async function readPortableRegistryInternal(options: {
 	}
 
 	// Try migrating legacy registry (v1.0 → v2.0 → v3.0)
-	const migratedV2 = await migrateLegacyRegistry();
+	const migratedV2 = await migrateLegacyRegistry(paths);
 	if (migratedV2) {
-		if (await isMigrationLocked()) {
+		if (await isMigrationLocked(paths)) {
 			logger.verbose("Migration in progress by another process, using in-memory v2→v3 view");
 			return normalizePortableRegistryChecksums(await migrateRegistryV2ToV3(migratedV2));
 		}
 
-		await createMigrationLock();
+		await createMigrationLock(paths);
 		try {
 			const v3Registry = normalizePortableRegistryChecksums(
 				await migrateRegistryV2ToV3(migratedV2),
 			);
-			await writePortableRegistry(v3Registry);
+			await writePortableRegistry(v3Registry, paths);
 			return v3Registry;
 		} finally {
-			await removeMigrationLock();
+			await removeMigrationLock(paths);
 		}
 	}
 
 	return { version: "3.0", installations: [] };
 }
 
-async function readPortableRegistryWithinRegistryLock(): Promise<PortableRegistryV3> {
-	return readPortableRegistryInternal({ persistStaleV3Repair: false });
+async function readPortableRegistryWithinRegistryLock(
+	paths: PortableRegistryPaths,
+): Promise<PortableRegistryV3> {
+	return readPortableRegistryInternal({ persistStaleV3Repair: false }, paths);
 }
 
 /**
  * Write the portable registry (v3.0)
  */
-export async function writePortableRegistry(registry: PortableRegistryV3): Promise<void> {
-	const { registryPath } = getPortableRegistryPaths();
+export async function writePortableRegistry(
+	registry: PortableRegistryV3,
+	paths: PortableRegistryPaths = getPortableRegistryPaths(),
+): Promise<void> {
+	const { registryPath } = paths;
 	const dir = dirname(registryPath);
 	if (!existsSync(dir)) {
 		await mkdir(dir, { recursive: true });
@@ -527,8 +548,11 @@ export async function writePortableRegistry(registry: PortableRegistryV3): Promi
 	}
 }
 
-async function withRegistryLock<T>(operation: () => Promise<T>): Promise<T> {
-	const { registryLockPath } = getPortableRegistryPaths();
+async function withRegistryLock<T>(
+	operation: (paths: PortableRegistryPaths) => Promise<T>,
+	paths: PortableRegistryPaths = getPortableRegistryPaths(),
+): Promise<T> {
+	const { registryLockPath } = paths;
 	const lockDir = dirname(registryLockPath);
 	if (!existsSync(lockDir)) {
 		await mkdir(lockDir, { recursive: true });
@@ -548,7 +572,7 @@ async function withRegistryLock<T>(operation: () => Promise<T>): Promise<T> {
 	});
 
 	try {
-		return await operation();
+		return await operation(paths);
 	} finally {
 		await release();
 	}
@@ -571,8 +595,8 @@ export async function addPortableInstallation(
 		installSource?: "kit" | "manual";
 	},
 ): Promise<void> {
-	await withRegistryLock(async () => {
-		const registry = await readPortableRegistryWithinRegistryLock();
+	await withRegistryLock(async (lockedPaths) => {
+		const registry = await readPortableRegistryWithinRegistryLock(lockedPaths);
 
 		// Remove existing entry for same combo (update case)
 		registry.installations = registry.installations.filter(
@@ -595,7 +619,7 @@ export async function addPortableInstallation(
 			ownedSections: options?.ownedSections,
 		});
 
-		await writePortableRegistry(registry);
+		await writePortableRegistry(registry, lockedPaths);
 	});
 }
 
@@ -609,8 +633,8 @@ export async function removePortableInstallation(
 	global: boolean,
 	options?: { path?: string },
 ): Promise<PortableInstallationV3 | null> {
-	return withRegistryLock(async () => {
-		const registry = await readPortableRegistryWithinRegistryLock();
+	return withRegistryLock(async (lockedPaths) => {
+		const registry = await readPortableRegistryWithinRegistryLock(lockedPaths);
 
 		const index = registry.installations.findIndex(
 			(i) =>
@@ -624,7 +648,7 @@ export async function removePortableInstallation(
 		if (index === -1) return null;
 
 		const [removed] = registry.installations.splice(index, 1);
-		await writePortableRegistry(registry);
+		await writePortableRegistry(registry, lockedPaths);
 		return removed;
 	});
 }
@@ -663,10 +687,10 @@ export function getInstallationsByType(
  * Prevents a read-modify-write race when multiple processes update the registry.
  */
 export async function updateAppliedManifestVersion(version: string): Promise<void> {
-	await withRegistryLock(async () => {
-		const registry = await readPortableRegistryWithinRegistryLock();
+	await withRegistryLock(async (lockedPaths) => {
+		const registry = await readPortableRegistryWithinRegistryLock(lockedPaths);
 		registry.appliedManifestVersion = version;
-		await writePortableRegistry(registry);
+		await writePortableRegistry(registry, lockedPaths);
 	});
 }
 
@@ -677,8 +701,8 @@ export async function updateAppliedManifestVersion(version: string): Promise<voi
 export async function removeInstallationsByFilter(
 	predicate: (entry: PortableInstallationV3) => boolean,
 ): Promise<PortableInstallationV3[]> {
-	return withRegistryLock(async () => {
-		const registry = await readPortableRegistryWithinRegistryLock();
+	return withRegistryLock(async (lockedPaths) => {
+		const registry = await readPortableRegistryWithinRegistryLock(lockedPaths);
 		const removed: PortableInstallationV3[] = [];
 
 		registry.installations = registry.installations.filter((entry) => {
@@ -690,7 +714,7 @@ export async function removeInstallationsByFilter(
 		});
 
 		if (removed.length > 0) {
-			await writePortableRegistry(registry);
+			await writePortableRegistry(registry, lockedPaths);
 		}
 
 		return removed;
@@ -703,8 +727,8 @@ export async function removeInstallationsByFilter(
 export async function syncPortableRegistry(): Promise<{
 	removed: PortableInstallationV3[];
 }> {
-	return withRegistryLock(async () => {
-		const registry = await readPortableRegistryWithinRegistryLock();
+	return withRegistryLock(async (lockedPaths) => {
+		const registry = await readPortableRegistryWithinRegistryLock(lockedPaths);
 		const removed: PortableInstallationV3[] = [];
 
 		registry.installations = registry.installations.filter((i) => {
@@ -716,7 +740,7 @@ export async function syncPortableRegistry(): Promise<{
 		});
 
 		if (removed.length > 0) {
-			await writePortableRegistry(registry);
+			await writePortableRegistry(registry, lockedPaths);
 		}
 
 		return { removed };
