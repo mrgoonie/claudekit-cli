@@ -85,6 +85,49 @@ describe("Hook Origin Tracking", () => {
 		expect(result.conflictsDetected.length).toBeGreaterThan(0);
 	});
 
+	it("filters partial duplicates from no-matcher hook groups", () => {
+		const source: SettingsJson = {
+			hooks: {
+				UserPromptSubmit: [
+					{
+						hooks: [
+							{ type: "command", command: 'node "$HOME/.claude/hooks/simplify-gate.cjs"' },
+							{
+								type: "command",
+								command: 'node "$HOME/.claude/hooks/dev-rules-reminder.cjs"',
+							},
+							{
+								type: "command",
+								command: 'node "$HOME/.claude/hooks/usage-quota-cache-refresh.cjs"',
+							},
+						],
+					},
+				],
+			},
+		};
+		const dest: SettingsJson = {
+			hooks: {
+				UserPromptSubmit: [
+					{
+						hooks: [{ type: "command", command: 'node "$HOME/.claude/hooks/simplify-gate.cjs"' }],
+					},
+				],
+			},
+		};
+
+		const result = mergeSettings(source, dest, { sourceKit: "engineer" });
+		const commands =
+			result.merged.hooks?.UserPromptSubmit?.flatMap((entry) =>
+				"hooks" in entry ? (entry.hooks?.map((hook) => hook.command) ?? []) : [],
+			) ?? [];
+
+		expect(commands.filter((command) => command?.includes("simplify-gate.cjs"))).toHaveLength(1);
+		expect(commands.some((command) => command?.includes("dev-rules-reminder.cjs"))).toBe(true);
+		expect(commands.some((command) => command?.includes("usage-quota-cache-refresh.cjs"))).toBe(
+			true,
+		);
+	});
+
 	it("tags hooks with origin when source kit provided", () => {
 		const source: SettingsJson = {
 			hooks: {

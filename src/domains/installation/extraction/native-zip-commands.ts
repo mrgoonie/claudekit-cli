@@ -11,7 +11,7 @@ export function getNativeZipCommands(
 	destDir: string,
 	platformName: NodeJS.Platform = process.platform,
 ): NativeZipCommand[] {
-	if (platformName === "darwin") {
+	if (platformName === "darwin" || platformName === "linux") {
 		return [
 			{
 				label: "native unzip",

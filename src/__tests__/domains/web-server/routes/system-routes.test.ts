@@ -6,6 +6,8 @@ import { ConfigVersionChecker } from "@/domains/sync/config-version-checker.js";
 import { registerSystemRoutes } from "@/domains/web-server/routes/system-routes.js";
 import express, { type Express } from "express";
 
+const testFetch = globalThis.fetch.bind(globalThis);
+
 interface TestServer {
 	server: ReturnType<Express["listen"]>;
 	baseUrl: string;
@@ -75,7 +77,7 @@ describe("system routes", () => {
 			}),
 		);
 
-		const response = await fetch(
+		const response = await testFetch(
 			`${ctx.baseUrl}/api/system/check-updates?target=kit&kit=engineer&channel=beta`,
 		);
 
@@ -108,7 +110,9 @@ describe("system routes", () => {
 			}),
 		);
 
-		const response = await fetch(`${ctx.baseUrl}/api/system/check-updates?target=kit&kit=engineer`);
+		const response = await testFetch(
+			`${ctx.baseUrl}/api/system/check-updates?target=kit&kit=engineer`,
+		);
 
 		expect(response.status).toBe(200);
 		expect(checkForUpdatesSpy).toHaveBeenCalledWith("engineer", "2.16.0-beta.9", true, "beta");

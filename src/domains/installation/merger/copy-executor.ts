@@ -97,6 +97,13 @@ export class CopyExecutor {
 	}
 
 	/**
+	 * Restore CK-owned hook registrations during update self-heal.
+	 */
+	setRestoreCkHooks(restore: boolean): void {
+		this.settingsProcessor.setRestoreCkHooks(restore);
+	}
+
+	/**
 	 * Set deletion patterns from metadata.json for pruning stale hooks from settings.json
 	 */
 	setDeletions(deletions: string[]): void {
@@ -115,6 +122,18 @@ export class CopyExecutor {
 	 */
 	setKitName(kit: string): void {
 		this.settingsProcessor.setKitName(kit);
+	}
+
+	/**
+	 * Set the hooks directory for zombie engineer-wiring pruning.
+	 * When set, pruneZombieEngineerWirings() runs after every settings.json merge to remove
+	 * engineer-tagged hook entries whose referenced files no longer exist on disk.
+	 *
+	 * Global install:   ~/.claude/hooks
+	 * Project install:  <projectDir>/.claude/hooks
+	 */
+	setZombiePrunerHookDir(hookDir: string): void {
+		this.settingsProcessor.setZombiePrunerHookDir(hookDir);
 	}
 
 	/**

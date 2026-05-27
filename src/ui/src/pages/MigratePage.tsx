@@ -18,6 +18,12 @@ import AgentIcon from "../components/skills/agent-icon";
 import { useMigrationPlan } from "../hooks/useMigrationPlan";
 import { type TranslationKey, useI18n } from "../i18n";
 import { fetchMigrationDiscovery, fetchMigrationProviders } from "../services/api";
+import type {
+	ReconcileAction,
+	ReconcileActionType,
+	ReconcilePlan,
+	ReconcileReason,
+} from "../types/reconcile-types";
 
 const DEFAULT_INCLUDE: MigrationIncludeOptions = {
 	agents: true,
@@ -47,6 +53,12 @@ const TYPE_LABEL_KEYS: Record<keyof MigrationIncludeOptions, TranslationKey> = {
 };
 
 type ProviderFilterMode = "all" | "selected" | "detected" | "recommended" | "not-detected";
+
+const SKIP_TO_EXECUTE_CODES: Set<ReconcileReason> = new Set([
+	"user-deleted-respected",
+	"user-edits-preserved",
+	"target-state-unknown",
+]);
 
 const SECTION_COLORS: Record<"detected" | "not-detected", string> = {
 	detected: "#D4A574",
@@ -132,6 +144,67 @@ function sanitizeDisplayString(value: string): string {
 		}
 	}
 	return output;
+}
+
+function buildSummary(actions: ReconcileAction[]): ReconcilePlan["summary"] {
+	const summary: ReconcilePlan["summary"] = {
+		install: 0,
+		update: 0,
+		skip: 0,
+		conflict: 0,
+		delete: 0,
+	};
+
+	for (const action of actions) {
+		summary[action.action] += 1;
+	}
+
+	return summary;
+}
+
+function applyDecisionToAction(
+	action: ReconcileAction,
+	decision: "execute" | "skip" | undefined,
+): ReconcileAction {
+	if (!decision) return action;
+	if (decision === "skip") {
+		return { ...action, action: "skip" };
+	}
+	if (action.action !== "skip") {
+		return action;
+	}
+	if (action.reasonCode === undefined || !SKIP_TO_EXECUTE_CODES.has(action.reasonCode)) {
+		return action;
+	}
+
+	const executableAction: ReconcileActionType =
+		action.reasonCode === "source-removed-orphan" ||
+		action.reasonCode === "renamed-cleanup" ||
+		action.reasonCode === "path-migrated-cleanup"
+			? "delete"
+			: "install";
+
+	return { ...action, action: executableAction };
+}
+
+function applyFlipsToPlan(
+	plan: ReconcilePlan,
+	flips: Map<string, "execute" | "skip">,
+	actionKey: (action: ReconcileAction) => string,
+): ReconcilePlan {
+	if (flips.size === 0) return plan;
+
+	const actions = plan.actions.map((action) =>
+		applyDecisionToAction(action, flips.get(actionKey(action))),
+	);
+	const summary = buildSummary(actions);
+
+	return {
+		...plan,
+		actions,
+		summary,
+		hasConflicts: summary.conflict > 0,
+	};
 }
 
 interface ProviderRowProps {
@@ -547,15 +620,23 @@ const MigratePageContent: React.FC = () => {
 		setSelectedCandidates(buildDefaultSelectedSet(migration.installCandidates));
 	}, [migration.installCandidates]);
 
-	const pendingCount = flips.size;
+	const pendingCount = flips.size + migration.resolutions.size;
 
 	/** Update a single flip decision (called by ReconcilePlanView row checkboxes) */
 	const handleFlip = useCallback(
 		(action: Parameters<typeof migration.actionKey>[0], decision: "execute" | "skip") => {
 			const key = migration.actionKey(action);
+			const originalDecision = action.action === "skip" ? "skip" : "execute";
+			const canExecuteOriginalSkip =
+				action.action !== "skip" ||
+				(action.reasonCode !== undefined && SKIP_TO_EXECUTE_CODES.has(action.reasonCode));
 			setFlips((prev) => {
 				const next = new Map(prev);
-				next.set(key, decision);
+				if (decision === originalDecision || (decision === "execute" && !canExecuteOriginalSkip)) {
+					next.delete(key);
+				} else {
+					next.set(key, decision);
+				}
 				return next;
 			});
 		},
@@ -571,6 +652,11 @@ const MigratePageContent: React.FC = () => {
 		},
 		[migration],
 	);
+
+	const resetMigration = useCallback(() => {
+		setFlips(new Map());
+		migration.reset();
+	}, [migration]);
 	// ──────────────────────────────────────────────────────────────────────────
 
 	const loadData = useCallback(
@@ -846,10 +932,14 @@ const MigratePageContent: React.FC = () => {
 	const executePlan = useCallback(async () => {
 		setError(null);
 
-		const executed = await migration.execute();
+		const planToExecute = migration.plan
+			? applyFlipsToPlan(migration.plan, flips, migration.actionKey)
+			: undefined;
+		const executed = await migration.execute(planToExecute);
 		if (!executed) {
 			return;
 		}
+		setFlips(new Map());
 
 		// Refresh discovery after execution
 		try {
@@ -858,7 +948,7 @@ const MigratePageContent: React.FC = () => {
 		} catch (err) {
 			console.error("Failed to refresh discovery:", err);
 		}
-	}, [migration]);
+	}, [flips, migration]);
 
 	/** Execute Install mode: build a synthetic plan from selected candidates and POST */
 	const executeInstallPlan = useCallback(
@@ -872,6 +962,7 @@ const MigratePageContent: React.FC = () => {
 				"install",
 			);
 			if (!executed) return;
+			setFlips(new Map());
 			try {
 				const refreshedDiscovery = await fetchMigrationDiscovery();
 				setDiscovery(refreshedDiscovery);
@@ -910,6 +1001,21 @@ const MigratePageContent: React.FC = () => {
 		document.addEventListener("keydown", handleKeyDown);
 		return () => document.removeEventListener("keydown", handleKeyDown);
 	}, []);
+
+	const unresolvedExecutableConflictCount = useMemo(() => {
+		if (!migration.plan) return 0;
+		return migration.plan.actions.filter((action) => {
+			if (action.action !== "conflict") return false;
+			if (flips.get(migration.actionKey(action)) === "skip") return false;
+			return !migration.resolutions.has(migration.actionKey(action));
+		}).length;
+	}, [flips, migration]);
+
+	const canExecuteReviewPlan =
+		migration.phase === "reviewing" &&
+		mode === "reconcile" &&
+		Boolean(migration.plan) &&
+		unresolvedExecutableConflictCount === 0;
 
 	const canRun = migration.phase === "idle" && selectedProviders.length > 0 && enabledTypeCount > 0;
 
@@ -1008,7 +1114,7 @@ const MigratePageContent: React.FC = () => {
 									<h2 className="text-lg font-semibold text-dash-text">{t("migrateReviewPlan")}</h2>
 									<button
 										type="button"
-										onClick={() => migration.reset()}
+										onClick={resetMigration}
 										className="dash-focus-ring px-3 py-1.5 text-xs font-medium rounded-md border border-dash-border text-dash-text-secondary hover:bg-dash-surface-hover"
 									>
 										{t("cancel")}
@@ -1048,13 +1154,13 @@ const MigratePageContent: React.FC = () => {
 
 								{/* Action bar — pinned at bottom as last flex child */}
 								<div className="flex items-center justify-end gap-3 px-5 py-4 border-t border-dash-border bg-dash-surface rounded-b-xl">
-									{migration.plan.hasConflicts && !migration.allConflictsResolved && (
+									{unresolvedExecutableConflictCount > 0 && (
 										<p className="text-xs text-yellow-400">{t("migrateResolveConflicts")}</p>
 									)}
 									<button
 										type="button"
 										onClick={executePlan}
-										disabled={migration.plan.hasConflicts && !migration.allConflictsResolved}
+										disabled={!canExecuteReviewPlan}
 										className="dash-focus-ring px-4 py-2 bg-dash-accent text-white rounded-md text-sm font-semibold hover:bg-dash-accent/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
 									>
 										{t("migrateExecutePlan")}
@@ -1074,7 +1180,7 @@ const MigratePageContent: React.FC = () => {
 										</h2>
 										<button
 											type="button"
-											onClick={() => migration.reset()}
+											onClick={resetMigration}
 											disabled={migration.phase === "executing"}
 											className="dash-focus-ring px-3 py-1.5 text-xs font-medium rounded-md border border-dash-border text-dash-text-secondary hover:bg-dash-surface-hover disabled:opacity-50"
 										>
@@ -1098,7 +1204,7 @@ const MigratePageContent: React.FC = () => {
 
 						{/* Show summary when complete */}
 						{migration.phase === "complete" && migration.results && (
-							<MigrationSummary results={migration.results} onReset={migration.reset} />
+							<MigrationSummary results={migration.results} onReset={resetMigration} />
 						)}
 
 						{/* Show error state */}
@@ -1109,7 +1215,7 @@ const MigratePageContent: React.FC = () => {
 								</div>
 								<button
 									type="button"
-									onClick={migration.reset}
+									onClick={resetMigration}
 									className="mt-4 dash-focus-ring px-4 py-2 bg-dash-bg border border-dash-border rounded-md text-sm text-dash-text-secondary hover:bg-dash-surface-hover"
 								>
 									{t("tryAgain")}
@@ -1398,7 +1504,7 @@ const MigratePageContent: React.FC = () => {
 
 								<button
 									type="button"
-									onClick={migration.reset}
+									onClick={resetMigration}
 									className="dash-focus-ring w-full px-4 py-2.5 bg-dash-accent text-white rounded-md text-sm font-semibold hover:bg-dash-accent/90 transition-colors"
 								>
 									{t("migrateSummaryNewMigration")}
@@ -1462,12 +1568,24 @@ const MigratePageContent: React.FC = () => {
 
 									<button
 										type="button"
-										onClick={runMigration}
-										disabled={!canRun}
+										onClick={canExecuteReviewPlan ? executePlan : runMigration}
+										disabled={canExecuteReviewPlan ? false : !canRun}
 										className="dash-focus-ring w-full px-4 py-2.5 bg-dash-accent text-white rounded-md text-sm font-semibold hover:bg-dash-accent/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
 									>
-										{migration.phase === "reconciling" ? t("migrateRunning") : t("migrateRun")}
+										{migration.phase === "reviewing" && mode === "reconcile"
+											? t("migrateExecutePlan")
+											: migration.phase === "reconciling"
+												? t("migrateRunning")
+												: t("migrateRun")}
 									</button>
+
+									{migration.phase === "reviewing" &&
+										mode === "reconcile" &&
+										unresolvedExecutableConflictCount > 0 && (
+											<p className="text-xs px-3 py-2 border border-yellow-500/30 bg-yellow-500/10 rounded text-yellow-400">
+												{t("migrateResolveConflicts")}
+											</p>
+										)}
 
 									{preflightWarnings.length > 0 && (
 										<div className="space-y-2">

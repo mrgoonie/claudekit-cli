@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { PromptKitUpdateDeps } from "@/commands/update-cli.js";
@@ -27,6 +27,50 @@ async function writeMetadata(dir: string, version = "1.0.0") {
 			version: "1.0.0",
 			kits: { engineer: { version, installedAt: "2025-01-01T00:00:00Z" } },
 		}),
+	);
+}
+
+async function writeGlobalHookState(
+	dir: string,
+	options: { disabled?: Record<string, boolean>; includeSessionState?: boolean } = {},
+) {
+	const hooks = [{ type: "command", command: 'node "$HOME/.claude/hooks/simplify-gate.cjs"' }];
+	if (options.includeSessionState) {
+		hooks.push({ type: "command", command: 'node "$HOME/.claude/hooks/session-state.cjs"' });
+	}
+
+	await writeFile(
+		join(dir, "settings.json"),
+		JSON.stringify(
+			{
+				hooks: {
+					UserPromptSubmit: [{ hooks }],
+				},
+			},
+			null,
+			2,
+		),
+	);
+	await writeFile(
+		join(dir, ".ck.json"),
+		JSON.stringify(
+			{
+				hooks: options.disabled ?? {},
+				kits: {
+					"ClaudeKit Engineer": {
+						installedSettings: {
+							hooks: [
+								"node $HOME/.claude/hooks/simplify-gate.cjs",
+								"node $HOME/.claude/hooks/session-state.cjs",
+							],
+							mcpServers: [],
+						},
+					},
+				},
+			},
+			null,
+			2,
+		),
 	);
 }
 
@@ -215,6 +259,143 @@ describe("promptKitUpdate auto-init behavior", () => {
 		await promptKitUpdate(false, true, deps);
 		expect(execCount()).toBe(0);
 		expect(spawnCount()).toBe(0);
+	});
+
+	test("reinstalls latest kit when installed hooks have missing dependencies (--yes mode)", async () => {
+		const hooksDir = join(tempDir, "hooks");
+		await mkdir(hooksDir, { recursive: true });
+		await writeFile(
+			join(hooksDir, "usage-context-awareness.cjs"),
+			"const quota = require('./usage-quota-cache-refresh.cjs');\nconsole.log(quota);\n",
+		);
+
+		const { deps, execCount, spawnCount, capturedExecCmd } = makeDeps();
+		deps.getLatestReleaseTagFn = async () => "v1.0.0";
+		await promptKitUpdate(false, true, deps);
+		expect(execCount()).toBe(1);
+		expect(spawnCount()).toBe(0);
+		expect(capturedExecCmd()).toContain("--yes");
+		expect(capturedExecCmd()).toContain("--kit engineer");
+	});
+
+	test("restores missing global hook registrations during a kit update (--yes mode)", async () => {
+		await writeGlobalHookState(tempDir, { includeSessionState: false });
+
+		const { deps, execCount, spawnCount, capturedExecCmd } = makeDeps();
+		deps.getLatestReleaseTagFn = async () => "v2.0.0";
+		await promptKitUpdate(false, true, deps);
+
+		expect(execCount()).toBe(1);
+		expect(spawnCount()).toBe(0);
+		expect(capturedExecCmd()).toContain("ck init -g");
+		expect(capturedExecCmd()).toContain("--restore-ck-hooks");
+	});
+
+	test("does not force global hook restore for hooks explicitly disabled in .ck.json", async () => {
+		await writeGlobalHookState(tempDir, {
+			disabled: { "session-state": false },
+			includeSessionState: false,
+		});
+
+		const { deps, execCount, capturedExecCmd } = makeDeps();
+		deps.getLatestReleaseTagFn = async () => "v2.0.0";
+		await promptKitUpdate(false, true, deps);
+
+		expect(execCount()).toBe(1);
+		expect(capturedExecCmd()).toContain("ck init -g");
+		expect(capturedExecCmd()).not.toContain("--restore-ck-hooks");
+	});
+
+	test("reinstalls local kit when latest project settings have broken hook registrations (--yes mode)", async () => {
+		const projectDir = join(tempDir, "project");
+		const localClaudeDir = join(projectDir, ".claude");
+		await mkdir(localClaudeDir, { recursive: true });
+		await writeMetadata(localClaudeDir);
+
+		const { deps, execCount, spawnCount, capturedExecCmd } = makeDeps();
+		deps.getLatestReleaseTagFn = async () => "v1.0.0";
+		deps.getSetupFn = async () => ({
+			global: {
+				path: tempDir,
+				metadata: {
+					version: "1.0.0",
+					name: "ClaudeKit",
+					description: "test install",
+					kits: { engineer: { version: "1.0.0" } },
+				},
+				components: { commands: 0, hooks: 0, skills: 0, workflows: 0, settings: 0 },
+			},
+			project: {
+				path: localClaudeDir,
+				metadata: {
+					version: "1.0.0",
+					name: "ClaudeKit",
+					description: "test project install",
+					kits: { engineer: { version: "1.0.0" } },
+				},
+				components: { commands: 0, hooks: 0, skills: 0, workflows: 0, settings: 0 },
+			},
+		});
+		deps.countMissingHookFileReferencesFn = async (checkedProjectDir) => {
+			expect(checkedProjectDir).toBe(projectDir);
+			return 1;
+		};
+
+		await promptKitUpdate(false, true, deps);
+
+		expect(execCount()).toBe(1);
+		expect(spawnCount()).toBe(0);
+		expect(capturedExecCmd()).toContain("ck init");
+		expect(capturedExecCmd()).not.toContain("-g");
+		expect(capturedExecCmd()).toContain("--yes");
+		expect(capturedExecCmd()).toContain("--kit engineer");
+	});
+
+	test("prefers local hook self-heal over global kit update when both are installed (--yes mode)", async () => {
+		const projectDir = join(tempDir, "project");
+		const localClaudeDir = join(projectDir, ".claude");
+		await mkdir(localClaudeDir, { recursive: true });
+		await writeMetadata(localClaudeDir);
+
+		const { deps, execCount, spawnCount, capturedExecCmd } = makeDeps();
+		deps.getLatestReleaseTagFn = async () => "v2.0.0";
+		deps.getSetupFn = async () => ({
+			global: {
+				path: tempDir,
+				metadata: {
+					version: "1.0.0",
+					name: "ClaudeKit",
+					description: "test install",
+					kits: { engineer: { version: "1.0.0" } },
+				},
+				components: { commands: 0, hooks: 0, skills: 0, workflows: 0, settings: 0 },
+			},
+			project: {
+				path: localClaudeDir,
+				metadata: {
+					version: "1.0.0",
+					name: "ClaudeKit",
+					description: "test project install",
+					kits: { engineer: { version: "1.0.0" } },
+				},
+				components: { commands: 0, hooks: 0, skills: 0, workflows: 0, settings: 0 },
+			},
+		});
+		deps.countMissingHookFileReferencesFn = async (checkedProjectDir) => {
+			expect(checkedProjectDir).toBe(projectDir);
+			return 1;
+		};
+
+		await promptKitUpdate(true, true, deps);
+
+		expect(execCount()).toBe(1);
+		expect(spawnCount()).toBe(0);
+		expect(capturedExecCmd()).toContain("ck init");
+		expect(capturedExecCmd()).not.toContain("-g");
+		expect(capturedExecCmd()).toContain("--yes");
+		expect(capturedExecCmd()).toContain("--kit engineer");
+		expect(capturedExecCmd()).toContain("--restore-ck-hooks");
+		expect(capturedExecCmd()).toContain("--beta");
 	});
 
 	test("interactive mode passes --beta when installed version is prerelease", async () => {

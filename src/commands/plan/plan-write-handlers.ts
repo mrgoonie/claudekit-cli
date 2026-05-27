@@ -28,6 +28,24 @@ import type { PlanCommandOptions } from "./plan-command.js";
 import { isJsonOutput, resolvePlanFile } from "./plan-command.js";
 import { getGlobalPlansDirFromCwd, resolveTargetFromBase } from "./plan-scope-context.js";
 
+function quoteReadTarget(filePath: string): string {
+	return `"${filePath.replace(/\\/g, "/").replace(/"/g, '\\"')}"`;
+}
+
+export function buildPlanCreateReadReminder(
+	planFile: string,
+	phaseFiles: string[],
+	cwd = process.cwd(),
+): string[] {
+	const files = [planFile, ...phaseFiles].map((file) => quoteReadTarget(relative(cwd, file)));
+
+	return [
+		"  [i] Claude Code agents: read plan.md and every phase-*.md before editing.",
+		"      These files already exist; Write/Edit without Read may be rejected after wasting tokens.",
+		`      cat ${files.join(" ")}`,
+	];
+}
+
 // ─── Handlers ────────────────────────────────────────────────────────────────
 
 /**
@@ -140,6 +158,9 @@ export async function handleCreate(
 	console.log(`  Phases: ${result.phaseFiles.length}`);
 	for (const f of result.phaseFiles) {
 		console.log(`    [ ] ${basename(f)}`);
+	}
+	for (const line of buildPlanCreateReadReminder(result.planFile, result.phaseFiles)) {
+		console.log(line);
 	}
 	console.log();
 }

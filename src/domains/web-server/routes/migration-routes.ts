@@ -34,10 +34,15 @@ import {
 import { installPortableItems } from "@/commands/portable/portable-installer.js";
 import { loadPortableManifest } from "@/commands/portable/portable-manifest.js";
 import {
+	addPortableInstallation,
 	readPortableRegistry,
 	removeInstallationsByFilter,
 	removePortableInstallation,
 	updateAppliedManifestVersion,
+} from "@/commands/portable/portable-registry.js";
+import type {
+	PortableInstallationV3,
+	PortableRegistryV3,
 } from "@/commands/portable/portable-registry.js";
 import {
 	detectInstalledProviders,
@@ -61,6 +66,7 @@ import type {
 import { isUnknownChecksum } from "@/commands/portable/reconcile-types.js";
 import { reconcile } from "@/commands/portable/reconciler.js";
 import type {
+	MigrationWarning,
 	PortableInstallResult,
 	PortableItem,
 	PortableType,
@@ -77,6 +83,33 @@ import {
 	emptyDiscoveryCounts,
 	toDiscoveryCounts,
 } from "./migration-result-utils.js";
+
+interface MigrationRegistryDeps {
+	addPortableInstallation: typeof addPortableInstallation;
+	readPortableRegistry: typeof readPortableRegistry;
+	removeInstallationsByFilter: typeof removeInstallationsByFilter;
+	removePortableInstallation: typeof removePortableInstallation;
+	updateAppliedManifestVersion: typeof updateAppliedManifestVersion;
+}
+
+interface MigrationRouteDeps {
+	registry?: Partial<MigrationRegistryDeps>;
+}
+
+const defaultRegistryDeps: MigrationRegistryDeps = {
+	addPortableInstallation,
+	readPortableRegistry,
+	removeInstallationsByFilter,
+	removePortableInstallation,
+	updateAppliedManifestVersion,
+};
+
+function resolveRegistryDeps(deps?: MigrationRouteDeps): MigrationRegistryDeps {
+	return {
+		...defaultRegistryDeps,
+		...deps?.registry,
+	};
+}
 
 type MigrationPortableType = "agents" | "commands" | "skills" | "config" | "rules" | "hooks";
 
@@ -517,7 +550,10 @@ function shouldExecuteAction(action: { action: string; resolution?: { type: stri
 /** Execute a delete action from the reconciliation plan */
 async function executePlanDeleteAction(
 	action: { item: string; type: string; provider: string; global: boolean; targetPath: string },
-	options?: { preservePaths?: Set<string> },
+	options?: {
+		preservePaths?: Set<string>;
+		removePortableInstallation?: typeof removePortableInstallation;
+	},
 ): Promise<PortableInstallResult> {
 	const preservePaths = options?.preservePaths ?? new Set<string>();
 	const shouldPreserveTarget =
@@ -527,7 +563,7 @@ async function executePlanDeleteAction(
 		if (!shouldPreserveTarget && action.targetPath && existsSync(action.targetPath)) {
 			await rm(action.targetPath, { recursive: true, force: true });
 		}
-		await removePortableInstallation(
+		await (options?.removePortableInstallation ?? removePortableInstallation)(
 			action.item,
 			action.type as "agent" | "command" | "skill" | "config" | "rules" | "hooks",
 			action.provider as ProviderTypeValue,
@@ -705,6 +741,15 @@ function getPlanItemsByType(
 		.map((entry) => entry.trim())
 		.filter((entry) => entry.length > 0);
 	return Array.from(new Set(normalized));
+}
+
+function hasPlanItemsForType(
+	plan: z.infer<typeof RECONCILE_PLAN_SCHEMA>,
+	type: MigrationPortableType,
+): boolean {
+	const meta = getPlanMeta(plan);
+	if (!meta?.items || typeof meta.items !== "object") return false;
+	return Array.isArray((meta.items as Partial<Record<MigrationPortableType, unknown>>)[type]);
 }
 
 function providerSupportsType(provider: ProviderTypeValue, type: PortableType): boolean {
@@ -914,6 +959,7 @@ function recordHookRegistrationOutcome(
 	warnings: string[],
 	feedbackResults: PortableInstallResult[],
 ): void {
+	recordStructuredHookWarnings(mergeResult.warnings, warnings);
 	if (mergeResult.success && mergeResult.hooksRegistered > 0) {
 		console.info(
 			`[migrate] Registered ${mergeResult.hooksRegistered} hook(s) in ${provider} settings.json`,
@@ -933,6 +979,39 @@ function recordHookRegistrationOutcome(
 	if (feedback) {
 		feedbackResults.push(feedback);
 	}
+}
+
+function recordStructuredHookWarnings(
+	hookWarnings: MigrationWarning[] | undefined,
+	warnings: string[],
+): void {
+	if (!hookWarnings) return;
+	for (const warning of hookWarnings) {
+		if (!warnings.includes(warning.message)) {
+			warnings.push(warning.message);
+		}
+		console.warn(`[migrate] ${warning.message}`);
+	}
+}
+
+function collectAvailableHookAssetNames(
+	provider: ProviderTypeValue,
+	global: boolean,
+	hookItems: PortableItem[],
+	successfullyInstalled: string[] = [],
+): string[] {
+	const names = new Set(successfullyInstalled);
+	const pathConfig = providers[provider].hooks;
+	const basePath = global ? pathConfig?.globalPath : pathConfig?.projectPath;
+	if (!basePath) return [...names];
+
+	for (const item of hookItems) {
+		if (existsSync(join(basePath, item.name))) {
+			names.add(item.name);
+		}
+	}
+
+	return [...names];
 }
 
 /** Track whether shell hook skip warning has been shown this session to avoid repeated noise */
@@ -966,13 +1045,14 @@ async function discoverMigrationItems(
 		configSourcePath ? discoverConfig(configSourcePath) : Promise.resolve(null),
 		rulesSourcePath ? discoverRules(rulesSourcePath) : Promise.resolve([]),
 		hooksSource
-			? discoverHooks(hooksSource).then(({ items, skippedShellHooks }) => {
+			? discoverHooks(hooksSource).then(({ items, skippedShellHooks, warnings }) => {
 					if (skippedShellHooks.length > 0 && !shellHookWarningShown) {
 						shellHookWarningShown = true;
 						console.warn(
 							`[migrate] Skipping ${skippedShellHooks.length} shell hook(s) not supported for migration (node-runnable only): ${skippedShellHooks.join(", ")}`,
 						);
 					}
+					recordStructuredHookWarnings(warnings, []);
 					const disabledItems = items.filter((item) => isGeneratedContextHookName(item.name));
 					if (disabledItems.length > 0) {
 						logger.warning(
@@ -1014,7 +1094,9 @@ function getCapabilities(provider: ProviderTypeValue): Record<MigrationPortableT
 	};
 }
 
-export function registerMigrationRoutes(app: Express): void {
+export function registerMigrationRoutes(app: Express, deps?: MigrationRouteDeps): void {
+	const registryDeps = resolveRegistryDeps(deps);
+
 	// GET /api/migrate/providers - list providers with capabilities + detection status
 	app.get("/api/migrate/providers", async (_req: Request, res: Response) => {
 		try {
@@ -1297,7 +1379,7 @@ export function registerMigrationRoutes(app: Express): void {
 			}
 
 			// 3. Load registry
-			const registry = await readPortableRegistry();
+			const registry = await registryDeps.readPortableRegistry();
 
 			// 4. Build target states for all registry paths
 			const targetStates = await buildTargetStates(registry.installations, {
@@ -1427,7 +1509,7 @@ export function registerMigrationRoutes(app: Express): void {
 			const discovered = await discoverMigrationItems(include, configSource);
 
 			// Cross-reference registry for alreadyInstalled detection
-			const registry = await readPortableRegistry();
+			const registry = await registryDeps.readPortableRegistry();
 
 			// Build flat candidates list grouped by type
 			interface InstallCandidate {
@@ -1766,17 +1848,17 @@ export function registerMigrationRoutes(app: Express): void {
 						tagResults(batch, "hooks", action.item);
 						allResults.push(...batch);
 						// Track successfully installed hook filenames for settings.json merge
-						for (const r of batch.filter((r) => r.success && !r.skipped)) {
+						for (const result of batch.filter((entry) => entry.success && !entry.skipped)) {
 							const entry = successfulHookFiles.get(provider) ?? {
 								files: [],
 								global: action.global,
 							};
-							entry.files.push(basename(r.path));
+							entry.files.push(basename(result.path));
 							successfulHookFiles.set(provider, entry);
 							// Track absolute paths for Codex wrapper generation
-							if (r.path.length > 0) {
+							if (result.path.length > 0) {
 								const absEntry = successfulHookAbsPaths.get(provider) ?? [];
-								absEntry.push(resolve(r.path));
+								absEntry.push(resolve(result.path));
 								successfulHookAbsPaths.set(provider, absEntry);
 							}
 						}
@@ -1784,7 +1866,21 @@ export function registerMigrationRoutes(app: Express): void {
 				}
 
 				// After all actions, merge hooks into target settings.json per provider
-				for (const [hooksProvider, entry] of successfulHookFiles) {
+				const globalFromPlan = plan.actions[0]?.global ?? false;
+				const hookProviders = allPlanProviders.filter((provider) =>
+					getProvidersSupporting("hooks").includes(provider),
+				);
+				for (const hooksProvider of hookProviders) {
+					const existingEntry = successfulHookFiles.get(hooksProvider);
+					const entry = {
+						files: collectAvailableHookAssetNames(
+							hooksProvider,
+							existingEntry?.global ?? globalFromPlan,
+							discovered.hookItems,
+							existingEntry?.files ?? [],
+						),
+						global: existingEntry?.global ?? globalFromPlan,
+					};
 					if (entry.files.length === 0) continue;
 					const mergeResult = await migrateHooksSettings({
 						// Source is claude-code — the merger dynamically checks settingsJsonPath,
@@ -1810,6 +1906,12 @@ export function registerMigrationRoutes(app: Express): void {
 				const plannedSkillActions = execActions.filter((a) => a.type === "skill").length;
 				if (includeFromPlan.skills && discovered.skills.length > 0 && plannedSkillActions === 0) {
 					const allowedSkillNames = getPlanItemsByType(plan, "skills");
+					const hasExplicitSkillItems = hasPlanItemsForType(plan, "skills");
+					const skippedSkillKeys = new Set(
+						plan.actions
+							.filter((action) => action.type === "skill" && action.action === "skip")
+							.map((action) => JSON.stringify([action.provider, action.global, action.item])),
+					);
 					const plannedSkills =
 						allowedSkillNames.length > 0
 							? discovered.skills.filter((skill) => allowedSkillNames.includes(skill.name))
@@ -1820,17 +1922,29 @@ export function registerMigrationRoutes(app: Express): void {
 						providerSupportsType(provider, "skill"),
 					);
 					if (skillProviders.length > 0) {
-						for (const skill of plannedSkills) {
-							for (const provider of skillProviders) {
-								const globalFromPlan =
-									plan.actions.find(
-										(action) => action.provider === provider && action.type === "skill",
-									)?.global ?? false;
-								const batch = await installSkillDirectories([skill], [provider], {
-									global: globalFromPlan,
-								});
-								tagResults(batch, "skills", skill.name);
-								allResults.push(...batch);
+						for (const provider of skillProviders) {
+							const skillScopes = new Set(
+								plan.actions
+									.filter((action) => action.provider === provider && action.type === "skill")
+									.map((action) => action.global),
+							);
+							const scopes = skillScopes.size > 0 ? Array.from(skillScopes) : [false];
+							for (const globalFromPlan of scopes) {
+								const providerSkills = hasExplicitSkillItems
+									? plannedSkills.filter(
+											(skill) =>
+												!skippedSkillKeys.has(
+													JSON.stringify([provider, globalFromPlan, skill.name]),
+												),
+										)
+									: plannedSkills;
+								for (const skill of providerSkills) {
+									const batch = await installSkillDirectories([skill], [provider], {
+										global: globalFromPlan,
+									});
+									tagResults(batch, "skills", skill.name);
+									allResults.push(...batch);
+								}
 							}
 						}
 					}
@@ -1846,6 +1960,7 @@ export function registerMigrationRoutes(app: Express): void {
 				for (const deleteAction of deleteActions) {
 					const deleteResult = await executePlanDeleteAction(deleteAction, {
 						preservePaths: writtenPaths,
+						removePortableInstallation: registryDeps.removePortableInstallation,
 					});
 					deleteResult.portableType = deleteAction.type;
 					deleteResult.itemName = deleteAction.item;
@@ -1853,12 +1968,15 @@ export function registerMigrationRoutes(app: Express): void {
 				}
 
 				try {
-					const registry = await readPortableRegistry();
+					const registry = await registryDeps.readPortableRegistry();
 					// Cast: Zod schema uses z.string() for reasonCode (client data); ReconcileAction
 					// uses the narrower ReconcileReason union. Backfill only reads action/targetPath/checksums.
 					await backfillRegistryChecksums(
 						plan.actions as import("@/commands/portable/reconcile-types.js").ReconcileAction[],
-						registry,
+						registry as PortableRegistryV3,
+						{
+							addPortableInstallation: registryDeps.addPortableInstallation,
+						},
 					);
 				} catch {
 					// Best-effort registry healing only; stale checksums can be retried later.
@@ -1886,8 +2004,8 @@ export function registerMigrationRoutes(app: Express): void {
 						});
 						if (staleSlugs.length > 0) {
 							const staleSlugSet = new Set(staleSlugs.map((s) => `${s}.toml`));
-							await removeInstallationsByFilter(
-								(i) =>
+							await registryDeps.removeInstallationsByFilter(
+								(i: PortableInstallationV3) =>
 									i.type === "agent" &&
 									i.provider === provider &&
 									i.global === scope &&
@@ -1907,7 +2025,7 @@ export function registerMigrationRoutes(app: Express): void {
 						null;
 					const manifest = kitRoot ? await loadPortableManifest(kitRoot) : null;
 					if (manifest?.cliVersion) {
-						await updateAppliedManifestVersion(manifest.cliVersion);
+						await registryDeps.updateAppliedManifestVersion(manifest.cliVersion);
 					}
 				} catch {
 					// Non-critical — migration already succeeded

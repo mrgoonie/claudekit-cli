@@ -37,6 +37,7 @@ mock.module("../../portable/portable-registry.js", () => ({
 
 // Import after mock so skill-directory-installer picks up the mock
 const { installSkillDirectories } = await import("../skill-directory-installer.js");
+mock.restore();
 
 // Pure modules — no mock needed
 const { reconcile } = await import("../../portable/reconciler.js");
@@ -169,7 +170,6 @@ afterAll(() => {
 	} catch {
 		// Best-effort cleanup
 	}
-	mock.restore();
 });
 
 beforeEach(() => {

@@ -67,6 +67,13 @@ export class FileMerger {
 	}
 
 	/**
+	 * Restore CK-owned hook registrations during update self-heal.
+	 */
+	setRestoreCkHooks(restore: boolean): void {
+		this.copyExecutor.setRestoreCkHooks(restore);
+	}
+
+	/**
 	 * Set project directory for settings tracking
 	 */
 	setProjectDir(dir: string): void {
@@ -85,6 +92,15 @@ export class FileMerger {
 	 */
 	setDeletions(deletions: string[]): void {
 		this.copyExecutor.setDeletions(deletions);
+	}
+
+	/**
+	 * Set the hooks directory for zombie engineer-wiring pruning.
+	 * Global install:   ~/.claude/hooks
+	 * Project install:  <projectDir>/.claude/hooks
+	 */
+	setZombiePrunerHookDir(hookDir: string): void {
+		this.copyExecutor.setZombiePrunerHookDir(hookDir);
 	}
 
 	/**

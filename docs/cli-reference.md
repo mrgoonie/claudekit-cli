@@ -631,6 +631,7 @@ Initialize or update ClaudeKit project (with interactive version selection)
 | `--dry-run` | Preview changes without applying them (requires --prefix) | — |
 | `--force-overwrite` | Override ownership protections and delete user-modified files | — |
 | `--force-overwrite-settings` | Fully replace settings.json instead of selective merge | — |
+| `--restore-ck-hooks` | Restore CK-managed hook registrations during update self-heal | — |
 | `--docs-dir <name>` | Custom docs folder name to avoid conflicts with existing folders | `docs` |
 | `--plans-dir <name>` | Custom plans folder name to avoid conflicts with existing folders | `plans` |
 
@@ -814,6 +815,10 @@ Scaffold a new plan directory with phase files
 | `--source <source>` | Creation source: skill \| cli \| dashboard | — |
 | `--session-id <id>` | Claude session ID for tracking | — |
 | `-g, --global` | Create plan in global plans scope | — |
+
+**Agent Editing Reminder:**
+
+After creating a plan, Claude Code agents should read `plan.md` and every generated `phase-*.md` before editing. The files already exist; Write/Edit without Read can be rejected after wasting tokens.
 
 ### check
 
@@ -1067,4 +1072,4 @@ Watch GitHub issues and auto-respond with AI analysis
 - `ck watch --interval 60000` — Poll every 60 seconds instead of default 30s
 
 
-<!-- generated: 2026-05-13T17:02:51.341Z -->
+<!-- generated: 2026-05-27T02:11:15.512Z -->

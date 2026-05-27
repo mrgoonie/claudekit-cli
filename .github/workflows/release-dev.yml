@@ -73,8 +73,11 @@ jobs:
       - name: Run linter
         run: bun run lint
 
+      - name: Build CLI bundle before tests
+        run: bun run build
+
       - name: Run tests
-        run: bun test --verbose
+        run: bun test --max-concurrency=1 --verbose
         env:
           NON_INTERACTIVE: "true"
           CI: "true"

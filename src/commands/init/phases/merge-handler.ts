@@ -95,8 +95,14 @@ export async function handleMerge(ctx: InitContext): Promise<InitContext> {
 
 	merger.setGlobalFlag(ctx.options.global);
 	merger.setForceOverwriteSettings(ctx.options.forceOverwriteSettings);
+	merger.setRestoreCkHooks(ctx.options.restoreCkHooks);
 	merger.setProjectDir(ctx.resolvedDir);
 	merger.setKitName(ctx.kit.name);
+
+	// Wire zombie pruner: auto-removes stale engineer-tagged hook entries after merge.
+	// hookDir = ~/.claude/hooks (global) or <projectDir>/.claude/hooks (project).
+	// ctx.claudeDir is already the resolved .claude directory for both scopes.
+	merger.setZombiePrunerHookDir(join(ctx.claudeDir, "hooks"));
 
 	// Set multi-kit context for cross-kit file awareness
 	if (ctx.kitType) {

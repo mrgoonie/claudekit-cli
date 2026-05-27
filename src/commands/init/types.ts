@@ -34,6 +34,7 @@ export interface ValidatedOptions {
 	skipSetup: boolean;
 	forceOverwrite: boolean;
 	forceOverwriteSettings: boolean;
+	restoreCkHooks: boolean;
 	dryRun: boolean;
 	prefix: boolean;
 	sync: boolean;

@@ -56,8 +56,11 @@ jobs:
       - name: Run linter
         run: bun run lint
 
+      - name: Build CLI bundle before tests
+        run: bun run build
+
       - name: Run tests
-        run: bun test
+        run: bun test --max-concurrency=1
 
       - name: Build dist bundle
         run: bun run build

@@ -3,7 +3,9 @@ import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { InstalledSettingsTracker } from "@/domains/config/installed-settings-tracker.js";
 import { type SettingsJson, SettingsMerger } from "@/domains/config/settings-merger.js";
+import { pruneZombieEngineerWirings } from "@/domains/installation/merger/zombie-wirings-pruner.js";
 import { normalizeCommand, repairClaudeHookCommandPath } from "@/shared/command-normalizer.js";
+import { parseJsonContent } from "@/shared/json-content.js";
 import { logger } from "@/shared/logger.js";
 import { PathResolver } from "@/shared/path-resolver.js";
 import type { InstalledSettings } from "@/types";
@@ -26,6 +28,9 @@ export class SettingsProcessor {
 	private installingKit: string | undefined;
 	private cachedVersion: string | null | undefined = undefined;
 	private deletionPatterns: string[] = [];
+	private restoreCkHooks = false;
+	/** Hook directory for zombie pruner. When set, pruneZombieEngineerWirings runs post-merge. */
+	private zombiePrunerHookDir: string | null = null;
 
 	/**
 	 * Set global flag to enable path variable replacement in settings.json
@@ -39,6 +44,15 @@ export class SettingsProcessor {
 	 */
 	setForceOverwriteSettings(force: boolean): void {
 		this.forceOverwriteSettings = force;
+	}
+
+	/**
+	 * Restore CK-owned hook registrations even when installed-settings history says
+	 * they were previously present. Used only by update self-heal after broken hook
+	 * files/registrations are detected; explicit .ck.json hook disables still win.
+	 */
+	setRestoreCkHooks(restore: boolean): void {
+		this.restoreCkHooks = restore;
 	}
 
 	/**
@@ -71,6 +85,15 @@ export class SettingsProcessor {
 	 */
 	setDeletions(deletions: string[]): void {
 		this.deletionPatterns = deletions;
+	}
+
+	/**
+	 * Set the hook directory for zombie wiring pruning.
+	 * When set, pruneZombieEngineerWirings() runs after every canonical merge to remove
+	 * engineer-tagged hook entries whose referenced files no longer exist on disk.
+	 */
+	setZombiePrunerHookDir(hookDir: string): void {
+		this.zombiePrunerHookDir = hookDir;
 	}
 
 	/**
@@ -129,6 +152,7 @@ export class SettingsProcessor {
 				// Full overwrite (new install or --force-overwrite-settings)
 				try {
 					const parsedSettings = JSON.parse(transformedSource) as SettingsJson;
+					await this.applyDisabledHookConfig(parsedSettings);
 
 					// Fix broken hook path formats before writing
 					this.logHookCommandRepair(this.fixHookCommandPaths(parsedSettings), "fresh install");
@@ -176,6 +200,7 @@ export class SettingsProcessor {
 		let sourceSettings: SettingsJson;
 		try {
 			sourceSettings = JSON.parse(transformedSourceContent) as SettingsJson;
+			await this.applyDisabledHookConfig(sourceSettings);
 		} catch {
 			logger.warning("Failed to parse source settings.json, falling back to overwrite");
 			// Re-format to ensure consistent 2-space indentation
@@ -209,12 +234,19 @@ export class SettingsProcessor {
 		if (this.tracker) {
 			installedSettings = await this.tracker.loadInstalledSettings();
 		}
+		const mergeInstalledSettings = this.restoreCkHooks
+			? { ...installedSettings, hooks: [] }
+			: installedSettings;
 
 		// Perform selective merge (atomic write ensures data integrity without backup files)
 		const mergeResult = SettingsMerger.merge(sourceSettings, destSettings, {
-			installedSettings,
+			installedSettings: mergeInstalledSettings,
 			sourceKit: this.installingKit,
 		});
+		await this.applyDisabledHookConfig(mergeResult.merged);
+		if (this.restoreCkHooks) {
+			logger.info("Restored CK hook registrations while respecting .ck.json hook disables");
+		}
 
 		// Log merge results (verbose shows details, normal just shows summary)
 		logger.verbose("Settings merge details", {
@@ -257,12 +289,151 @@ export class SettingsProcessor {
 			logger.info(`Pruned ${hooksPruned} stale hook(s) referencing deleted files`);
 		}
 
+		// Prune zombie engineer-tagged wirings whose hook files no longer exist on disk.
+		// Runs after canonical merge so every install auto-cleans stale entries from older kits.
+		if (this.zombiePrunerHookDir) {
+			const sourceHookCommands = this.collectHookCommands(sourceSettings);
+			const { pruned: zombiePruned } = pruneZombieEngineerWirings(
+				mergeResult.merged,
+				this.zombiePrunerHookDir,
+				sourceHookCommands,
+			);
+			if (zombiePruned.length > 0) {
+				logger.info(
+					`Pruned ${zombiePruned.length} zombie hook entries: ${zombiePruned.join(", ")}`,
+				);
+			}
+		}
+
 		// Write merged settings
 		await SettingsMerger.writeSettingsFile(destFile, mergeResult.merged);
 		logger.success("Merged settings.json (user customizations preserved)");
 
 		// Inject team hooks if supported
 		await this.injectTeamHooksIfSupported(destFile, mergeResult.merged);
+	}
+
+	private async getDisabledHookNames(): Promise<Set<string>> {
+		if (!this.projectDir) {
+			return new Set();
+		}
+
+		const disabled = new Set<string>();
+		const addFromConfig = async (configPath: string): Promise<void> => {
+			const names = await this.readDisabledHookNamesFromConfig(configPath);
+			for (const name of names) disabled.add(name);
+		};
+
+		try {
+			if (this.isGlobal) {
+				await addFromConfig(join(this.projectDir, ".ck.json"));
+			} else {
+				await addFromConfig(join(PathResolver.getGlobalKitDir(), ".ck.json"));
+				await addFromConfig(join(this.projectDir, ".claude", ".ck.json"));
+			}
+		} catch (error) {
+			logger.debug(
+				`Failed to load .ck.json hook preferences: ${
+					error instanceof Error ? error.message : "unknown"
+				}`,
+			);
+		}
+		return disabled;
+	}
+
+	private async readDisabledHookNamesFromConfig(configPath: string): Promise<Set<string>> {
+		if (!(await pathExists(configPath))) return new Set();
+		const raw = parseJsonContent<{
+			hooks?: Record<string, unknown>;
+		}>(await readFile(configPath, "utf-8"));
+		const hooks = raw.hooks;
+		if (!hooks || typeof hooks !== "object") return new Set();
+		return new Set(
+			Object.entries(hooks)
+				.filter(([, enabled]) => enabled === false)
+				.map(([name]) => name),
+		);
+	}
+
+	private async applyDisabledHookConfig(settings: SettingsJson): Promise<number> {
+		const disabledHooks = await this.getDisabledHookNames();
+		if (disabledHooks.size === 0 || !settings.hooks) return 0;
+
+		let removed = 0;
+		const hooksRecord = settings.hooks as Record<string, Array<Record<string, unknown>>>;
+
+		for (const [eventName, entries] of Object.entries(hooksRecord)) {
+			const filteredEntries: Array<Record<string, unknown>> = [];
+
+			for (const entry of entries) {
+				if (Array.isArray(entry.hooks)) {
+					const keptHooks = entry.hooks.filter((hook) => {
+						const command = typeof hook.command === "string" ? hook.command : "";
+						const hookName = this.extractCkHookName(command);
+						if (hookName && disabledHooks.has(hookName)) {
+							removed++;
+							return false;
+						}
+						return true;
+					});
+					if (keptHooks.length > 0) {
+						filteredEntries.push({ ...entry, hooks: keptHooks });
+					}
+				} else {
+					const command = typeof entry.command === "string" ? entry.command : "";
+					const hookName = this.extractCkHookName(command);
+					if (hookName && disabledHooks.has(hookName)) {
+						removed++;
+						continue;
+					}
+					filteredEntries.push(entry);
+				}
+			}
+
+			if (filteredEntries.length > 0) {
+				hooksRecord[eventName] = filteredEntries;
+			} else {
+				delete hooksRecord[eventName];
+			}
+		}
+
+		if (Object.keys(hooksRecord).length === 0) {
+			(settings as Record<string, unknown>).hooks = undefined;
+		}
+		if (removed > 0) {
+			logger.info(`Skipped ${removed} hook registration(s) disabled in .ck.json`);
+		}
+		return removed;
+	}
+
+	private collectHookCommands(settings: SettingsJson): Set<string> {
+		const commands = new Set<string>();
+		if (!settings.hooks) return commands;
+
+		for (const entries of Object.values(settings.hooks)) {
+			for (const entry of entries) {
+				if ("hooks" in entry && Array.isArray(entry.hooks)) {
+					for (const hook of entry.hooks) {
+						if (typeof hook.command === "string") {
+							commands.add(hook.command);
+						}
+					}
+					continue;
+				}
+				if ("command" in entry && typeof entry.command === "string") {
+					commands.add(entry.command);
+				}
+			}
+		}
+
+		return commands;
+	}
+
+	private extractCkHookName(command: string): string | null {
+		if (!command.trim().startsWith("node ")) return null;
+		const normalized = command.replace(/\\/g, "/");
+		const match = normalized.match(/\/hooks\/([^/"'\s]+)\.(?:cjs|mjs|js)(?:["'\s]|$)/);
+		return match?.[1] ?? null;
 	}
 
 	/**

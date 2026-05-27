@@ -13,6 +13,7 @@ import { describe, expect, it } from "bun:test";
 import type { ReconcileBanner } from "../../portable/reconcile-types.js";
 import type { MigrateOptions } from "../migrate-command.js";
 import {
+	appendMigrationWarningMessages,
 	renderBanners,
 	resolveMigrationMode,
 	validateMutualExclusion,
@@ -105,6 +106,49 @@ describe("resolveMigrationMode", () => {
 	it("--reconcile takes precedence even when registry has unknown checksums", () => {
 		// Explicit reconcile overrides smart default
 		expect(resolveMigrationMode({ reconcile: true }, true)).toBe("reconcile");
+	});
+});
+
+// ---------------------------------------------------------------------------
+// appendMigrationWarningMessages
+// ---------------------------------------------------------------------------
+
+describe("appendMigrationWarningMessages", () => {
+	it("appends structured hook warning messages even when migration succeeds", () => {
+		const messages: string[] = ["existing warning"];
+
+		appendMigrationWarningMessages(messages, [
+			{
+				reason: "unsupported-event",
+				event: "SubagentStart",
+				message: "Skipped unsupported Codex hook event SubagentStart",
+			},
+			{
+				reason: "excluded-hook",
+				hookFile: "usage-context-awareness.cjs",
+				message: "Skipped excluded hook usage-context-awareness.cjs",
+			},
+		]);
+
+		expect(messages).toEqual([
+			"existing warning",
+			"Skipped unsupported Codex hook event SubagentStart",
+			"Skipped excluded hook usage-context-awareness.cjs",
+		]);
+	});
+
+	it("deduplicates repeated warning messages", () => {
+		const messages: string[] = ["Skipped unsupported Codex hook event Notification"];
+
+		appendMigrationWarningMessages(messages, [
+			{
+				reason: "unsupported-event",
+				event: "Notification",
+				message: "Skipped unsupported Codex hook event Notification",
+			},
+		]);
+
+		expect(messages).toEqual(["Skipped unsupported Codex hook event Notification"]);
 	});
 });
 

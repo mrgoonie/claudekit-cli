@@ -471,18 +471,43 @@ export const CONFIG_FIELD_DOCS: Record<string, FieldDoc> = {
 			"Đảm bảo subagent kế thừa ngữ cảnh làm việc, biết nơi lưu báo cáo và tuân theo cùng cấu trúc kế hoạch với agent cha.",
 		example: '{\n  "hooks": {\n    "subagent-init": false\n  }\n}',
 	},
+	"hooks.session-state": {
+		path: "hooks.session-state",
+		type: "boolean",
+		default: "true",
+		description:
+			"Persists session state for stop/subagent-stop handoff context and statusline activity.",
+		descriptionVi: "Lưu trạng thái phiên cho ngữ cảnh bàn giao và hoạt động statusline.",
+		effect:
+			"When enabled, ClaudeKit can recover recent session context and expose activity state to the statusline.",
+		effectVi:
+			"Khi bật, ClaudeKit có thể khôi phục ngữ cảnh phiên gần đây và hiển thị trạng thái hoạt động lên statusline.",
+		example: '{\n  "hooks": {\n    "session-state": false\n  }\n}',
+	},
+	"hooks.cook-after-plan-reminder": {
+		path: "hooks.cook-after-plan-reminder",
+		type: "boolean",
+		default: "true",
+		description: "Reminds agents to continue implementation after a planning subagent finishes.",
+		descriptionVi: "Nhắc agent tiếp tục triển khai sau khi subagent lập kế hoạch hoàn tất.",
+		effect:
+			"When enabled, plan-only subagent output gets a follow-up reminder so implementation does not stop at planning.",
+		effectVi:
+			"Khi bật, đầu ra của subagent lập kế hoạch nhận nhắc nhở tiếp tục để quy trình không dừng ở bước plan.",
+		example: '{\n  "hooks": {\n    "cook-after-plan-reminder": false\n  }\n}',
+	},
 	"hooks.descriptive-name": {
 		path: "hooks.descriptive-name",
 		type: "boolean",
 		default: "true",
 		description:
-			"Injects descriptive naming context so agents generate meaningful, self-documenting file and variable names.",
+			"Injects language-aware naming context so agents generate meaningful, self-documenting file names.",
 		descriptionVi:
-			"Tiêm ngữ cảnh đặt tên mô tả để agent tạo tên tệp và biến có ý nghĩa, tự tài liệu hóa.",
+			"Tiêm ngữ cảnh đặt tên theo ngôn ngữ để agent tạo tên tệp có ý nghĩa, tự tài liệu hóa.",
 		effect:
-			"When enabled, reminds the agent to use long, descriptive kebab-case names for files and clear variable naming conventions.",
+			"When enabled, reminds the agent to prefer descriptive names while respecting language conventions such as snake_case for Python, Go, and Rust.",
 		effectVi:
-			"Khi bật, nhắc nhở agent sử dụng tên kebab-case dài, mô tả cho tệp và quy ước đặt tên biến rõ ràng.",
+			"Khi bật, nhắc agent ưu tiên tên mô tả nhưng vẫn theo quy ước ngôn ngữ như snake_case cho Python, Go và Rust.",
 		example: '{\n  "hooks": {\n    "descriptive-name": false\n  }\n}',
 	},
 	"hooks.dev-rules-reminder": {
@@ -498,6 +523,30 @@ export const CONFIG_FIELD_DOCS: Record<string, FieldDoc> = {
 		effectVi:
 			"Nhắc nhở agent về chuẩn code, quy ước đặt tên tệp và quy tắc riêng của dự án trước thao tác tệp.",
 		example: '{\n  "hooks": {\n    "dev-rules-reminder": false\n  }\n}',
+	},
+	"hooks.plan-format-kanban": {
+		path: "hooks.plan-format-kanban",
+		type: "boolean",
+		default: "true",
+		description: "Keeps plan kanban metadata synchronized after plan files are edited.",
+		descriptionVi: "Giữ metadata kanban của plan đồng bộ sau khi chỉnh sửa tệp kế hoạch.",
+		effect:
+			"When enabled, plan file edits can update kanban state so dashboards stay aligned with on-disk plans.",
+		effectVi:
+			"Khi bật, chỉnh sửa tệp kế hoạch có thể cập nhật trạng thái kanban để dashboard khớp với plan trên đĩa.",
+		example: '{\n  "hooks": {\n    "plan-format-kanban": false\n  }\n}',
+	},
+	"hooks.usage-quota-cache-refresh": {
+		path: "hooks.usage-quota-cache-refresh",
+		type: "boolean",
+		default: "true",
+		description: "Refreshes cached usage quota information during lifecycle events.",
+		descriptionVi: "Làm mới cache thông tin hạn mức sử dụng trong các sự kiện vòng đời.",
+		effect:
+			"When enabled, ClaudeKit keeps quota data current for statusline and context-aware helpers.",
+		effectVi:
+			"Khi bật, ClaudeKit giữ dữ liệu hạn mức cập nhật cho statusline và trợ lý nhận biết ngữ cảnh.",
+		example: '{\n  "hooks": {\n    "usage-quota-cache-refresh": false\n  }\n}',
 	},
 	"hooks.usage-context-awareness": {
 		path: "hooks.usage-context-awareness",

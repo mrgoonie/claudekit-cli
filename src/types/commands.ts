@@ -80,6 +80,7 @@ export const UpdateCommandOptionsSchema = z
 		dryRun: z.boolean().default(false), // Preview changes without applying
 		forceOverwrite: z.boolean().default(false), // Override ownership protections
 		forceOverwriteSettings: z.boolean().default(false), // Skip selective merge, fully replace settings.json
+		restoreCkHooks: z.boolean().default(false), // Internal: restore CK hook registrations during self-heal
 		skipSetup: z.boolean().default(false), // Skip interactive configuration wizard
 		refresh: z.boolean().default(false), // Bypass release cache to fetch latest versions
 		docsDir: z.string().optional(), // Custom docs folder name

@@ -7,6 +7,14 @@ import { z } from "zod";
 /** Type of portable item */
 export type PortableType = "agent" | "command" | "skill" | "config" | "rules" | "hooks";
 
+/** Structured non-fatal migration warning for CLI and UI rendering. */
+export interface MigrationWarning {
+	reason: string;
+	message: string;
+	event?: string;
+	hookFile?: string;
+}
+
 /** Supported coding agent/provider identifiers */
 export const ProviderType = z.enum([
 	"claude-code",
@@ -135,6 +143,8 @@ export interface PortableInstallResult {
 	skipped?: boolean;
 	skipReason?: string;
 	warnings?: string[];
+	/** Structured warnings for migration UIs that need reason/event metadata. */
+	migrationWarnings?: MigrationWarning[];
 	/** Portable type category (agent/command/skill/config/rules) — set by migration routes */
 	portableType?: PortableType;
 	/** Item identifier (e.g., "scout", "add-command") — set by migration routes */

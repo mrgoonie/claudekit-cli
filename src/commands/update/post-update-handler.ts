@@ -6,12 +6,22 @@
  */
 
 import { exec, spawn } from "node:child_process";
-import { join } from "node:path";
+import { existsSync } from "node:fs";
+import { readdir } from "node:fs/promises";
+import { builtinModules } from "node:module";
+import { dirname, join } from "node:path";
 import { promisify } from "node:util";
 import { CkConfigManager } from "@/domains/config/ck-config-manager.js";
+import {
+	countMissingHookFileReferences,
+	repairLegacyHookPrompts,
+	repairMissingHookFileReferences,
+} from "@/domains/health-checks/checkers/hook-health-checker.js";
 import { getInstalledKits } from "@/domains/migration/metadata-migration.js";
 import { versionsMatch } from "@/domains/versioning/checking/version-utils.js";
 import { getClaudeKitSetup } from "@/services/file-operations/claudekit-scanner.js";
+import { normalizeCommand } from "@/shared/command-normalizer.js";
+import { parseJsonContent } from "@/shared/json-content.js";
 import { logger } from "@/shared/logger.js";
 import { confirm, isCancel, log, spinner } from "@/shared/safe-prompts.js";
 import { AVAILABLE_KITS, type KitType, type Metadata, MetadataSchema } from "@/types";
@@ -33,6 +43,16 @@ const execAsync = promisify(exec);
 
 // Only allow alphanumeric chars and hyphens in provider names (defense-in-depth against injection)
 const SAFE_PROVIDER_NAME = /^[a-z0-9-]+$/;
+const HOOK_DEPENDENCY_EXTENSIONS = [".js", ".cjs", ".mjs", ".json"];
+
+interface CkSettingsSnapshot {
+	hooks?: Record<string, Array<{ command?: string; hooks?: Array<{ command?: string }> }>>;
+}
+
+interface CkConfigSnapshot {
+	hooks?: Record<string, unknown>;
+	kits?: Record<string, { installedSettings?: { hooks?: string[] } }>;
+}
 
 // ─── Kit selection ────────────────────────────────────────────────────────────
 
@@ -106,6 +126,78 @@ export async function readMetadataFile(claudeDir: string): Promise<Metadata | nu
 	}
 }
 
+function extractCkHookName(command: string): string | null {
+	if (!command.trim().startsWith("node ")) return null;
+	const normalized = command.replace(/\\/g, "/");
+	const match = normalized.match(/\/hooks\/([^/"'\s]+)\.(?:cjs|mjs|js)(?:["'\s]|$)/);
+	return match?.[1] ?? null;
+}
+
+function collectSettingsHookCommands(settings: CkSettingsSnapshot): Set<string> {
+	const commands = new Set<string>();
+	for (const entries of Object.values(settings.hooks ?? {})) {
+		for (const entry of entries) {
+			if (typeof entry.command === "string") {
+				commands.add(normalizeCommand(entry.command));
+			}
+			for (const hook of entry.hooks ?? []) {
+				if (typeof hook.command === "string") {
+					commands.add(normalizeCommand(hook.command));
+				}
+			}
+		}
+	}
+	return commands;
+}
+
+function getInstalledHookCommands(config: CkConfigSnapshot, kit?: KitType): string[] {
+	const kits = Object.entries(config.kits ?? {});
+	if (kits.length === 0) return [];
+
+	const kitKey = kit?.toLowerCase();
+	const preferred = kitKey
+		? kits.filter(([name]) => {
+				const normalizedName = name.toLowerCase();
+				return normalizedName === kitKey || normalizedName.includes(kitKey);
+			})
+		: [];
+	const candidates = preferred.length > 0 ? preferred : kits;
+
+	return candidates.flatMap(([, entry]) => entry.installedSettings?.hooks ?? []);
+}
+
+/**
+ * Counts CK hook registrations that were previously installed but are absent
+ * from settings.json. Explicit dashboard/.ck.json disables are not counted.
+ */
+export async function countMissingCkHookRegistrations(
+	claudeDir: string,
+	kit?: KitType,
+): Promise<number> {
+	const settingsPath = join(claudeDir, "settings.json");
+	const configPath = join(claudeDir, ".ck.json");
+	if (!existsSync(settingsPath) || !existsSync(configPath)) return 0;
+
+	const settings = parseJsonContent<CkSettingsSnapshot>(await readFile(settingsPath, "utf-8"));
+	const config = parseJsonContent<CkConfigSnapshot>(await readFile(configPath, "utf-8"));
+	const existingCommands = collectSettingsHookCommands(settings);
+	const disabledHooks = new Set(
+		Object.entries(config.hooks ?? {})
+			.filter(([, enabled]) => enabled === false)
+			.map(([name]) => name),
+	);
+
+	let missing = 0;
+	for (const command of getInstalledHookCommands(config, kit)) {
+		const hookName = extractCkHookName(command);
+		if (hookName && disabledHooks.has(hookName)) continue;
+		if (!existingCommands.has(normalizeCommand(command))) {
+			missing++;
+		}
+	}
+	return missing;
+}
+
 // ─── Init command builder ─────────────────────────────────────────────────────
 
 /**
@@ -117,11 +209,13 @@ export function buildInitCommand(
 	kit?: KitType,
 	beta?: boolean,
 	yes?: boolean,
+	restoreCkHooks?: boolean,
 ): string {
 	const parts = ["ck init"];
 	if (isGlobal) parts.push("-g");
 	if (kit) parts.push(`--kit ${kit}`);
 	if (yes) parts.push("--yes");
+	if (restoreCkHooks) parts.push("--restore-ck-hooks");
 	parts.push("--install-skills");
 	if (beta) parts.push("--beta");
 	return parts.join(" ");
@@ -207,6 +301,40 @@ export interface PromptKitUpdateDeps {
 	loadFullConfigFn?: PromptKitUpdateConfigLoader;
 	confirmFn?: PromptKitUpdateConfirmFn;
 	isCancelFn?: PromptKitUpdateCancelFn;
+	findMissingHookDependenciesFn?: (claudeDir: string) => Promise<string[]>;
+	countMissingHookFileReferencesFn?: (projectDir: string) => Promise<number>;
+}
+
+async function findMissingHookDependencies(claudeDir: string): Promise<string[]> {
+	const hooksDir = join(claudeDir, "hooks");
+	if (!existsSync(hooksDir)) return [];
+
+	const files = await readdir(hooksDir);
+	const cjsFiles = files.filter((file) => file.endsWith(".cjs"));
+	const missing: string[] = [];
+	const nodeBuiltins = new Set([
+		...builtinModules,
+		...builtinModules.map((name) => `node:${name}`),
+	]);
+
+	for (const file of cjsFiles) {
+		const content = await readFile(join(hooksDir, file), "utf8");
+		const requireRegex = /require\(['"]([^'"]+)['"]\)/g;
+		for (let match = requireRegex.exec(content); match; match = requireRegex.exec(content)) {
+			const depPath = match[1];
+			if (!depPath || nodeBuiltins.has(depPath) || !depPath.startsWith(".")) continue;
+			const resolvedPath = join(hooksDir, depPath);
+			const exists =
+				existsSync(resolvedPath) ||
+				HOOK_DEPENDENCY_EXTENSIONS.some((ext) => existsSync(resolvedPath + ext)) ||
+				existsSync(join(resolvedPath, "index.js")) ||
+				existsSync(join(resolvedPath, "index.cjs")) ||
+				existsSync(join(resolvedPath, "index.mjs"));
+			if (!exists) missing.push(`${file}: ${depPath}`);
+		}
+	}
+
+	return missing;
 }
 
 /**
@@ -226,6 +354,8 @@ export async function promptKitUpdate(
 		const confirmFn = deps?.confirmFn ?? confirm;
 		const isCancelFn = deps?.isCancelFn ?? isCancel;
 		const getSetupFn = deps?.getSetupFn ?? getClaudeKitSetup;
+		const findMissingHookDepsFn =
+			deps?.findMissingHookDependenciesFn ?? findMissingHookDependencies;
 		const setup = await getSetupFn();
 		const hasLocal = !!setup.project.metadata;
 		const hasGlobal = !!setup.global.metadata;
@@ -236,14 +366,102 @@ export async function promptKitUpdate(
 		const localKits = localMetadata ? getInstalledKits(localMetadata) : [];
 		const globalKits = globalMetadata ? getInstalledKits(globalMetadata) : [];
 
-		const selection = selectKitForUpdate({ hasLocal, hasGlobal, localKits, globalKits });
+		let selection = selectKitForUpdate({ hasLocal, hasGlobal, localKits, globalKits });
 
 		if (!selection) {
 			logger.verbose("No ClaudeKit installations detected, skipping kit update prompt");
 			return;
 		}
 
-		const kitVersion = selection.kit
+		let forceKitReinstall = false;
+		if (hasLocal && setup.project.path) {
+			try {
+				const missingHookDeps = await findMissingHookDepsFn(setup.project.path);
+				if (missingHookDeps.length > 0) {
+					logger.warning(
+						`Detected ${missingHookDeps.length} local missing hook dependency(ies); reinstalling local kit content`,
+					);
+					forceKitReinstall = true;
+				}
+			} catch (error) {
+				logger.verbose(
+					`Local hook dependency self-heal check skipped: ${
+						error instanceof Error ? error.message : "unknown"
+					}`,
+				);
+			}
+
+			try {
+				const countMissingHookRefsFn =
+					deps?.countMissingHookFileReferencesFn ?? countMissingHookFileReferences;
+				const missingHookRefs = await countMissingHookRefsFn(dirname(setup.project.path));
+				if (missingHookRefs > 0) {
+					logger.warning(
+						`Detected ${missingHookRefs} local broken hook registration(s); reinstalling local kit content`,
+					);
+					forceKitReinstall = true;
+				}
+			} catch (error) {
+				logger.verbose(
+					`Local hook registration self-heal check skipped: ${
+						error instanceof Error ? error.message : "unknown"
+					}`,
+				);
+			}
+
+			if (forceKitReinstall && selection.isGlobal) {
+				const kit = localKits[0] || selection.kit;
+				selection = {
+					isGlobal: false,
+					kit,
+					promptMessage: `Update local project ClaudeKit content${kit ? ` (${kit})` : ""}?`,
+				};
+			}
+		}
+
+		const selectedClaudeDir = selection.isGlobal ? setup.global.path : setup.project.path;
+		if (selectedClaudeDir) {
+			try {
+				const missingHookDeps = await findMissingHookDepsFn(selectedClaudeDir);
+				if (missingHookDeps.length > 0) {
+					logger.warning(
+						`Detected ${missingHookDeps.length} ${
+							selection.isGlobal ? "global" : "local"
+						} missing hook dependency(ies); reinstalling kit content`,
+					);
+					forceKitReinstall = true;
+				}
+			} catch (error) {
+				logger.verbose(
+					`Selected hook dependency self-heal check skipped: ${
+						error instanceof Error ? error.message : "unknown"
+					}`,
+				);
+			}
+
+			try {
+				const missingHookRegistrations = await countMissingCkHookRegistrations(
+					selectedClaudeDir,
+					selection.kit,
+				);
+				if (missingHookRegistrations > 0) {
+					logger.warning(
+						`Detected ${missingHookRegistrations} ${
+							selection.isGlobal ? "global" : "local"
+						} missing hook registration(s); reinstalling kit content`,
+					);
+					forceKitReinstall = true;
+				}
+			} catch (error) {
+				logger.verbose(
+					`Selected hook registration self-heal check skipped: ${
+						error instanceof Error ? error.message : "unknown"
+					}`,
+				);
+			}
+		}
+
+		let kitVersion = selection.kit
 			? selection.isGlobal
 				? globalMetadata?.kits?.[selection.kit]?.version
 				: localMetadata?.kits?.[selection.kit]?.version
@@ -258,16 +476,68 @@ export async function promptKitUpdate(
 
 		// Version check in --yes mode: skip reinstall when already at latest
 		let alreadyAtLatest = false;
-		if (yes && selection.kit && kitVersion) {
+		if (yes && selection.kit && kitVersion && !forceKitReinstall) {
 			const getTagFn = deps?.getLatestReleaseTagFn ?? fetchLatestReleaseTag;
 			const latestTag = await getTagFn(selection.kit, beta || isBetaInstalled);
 			if (latestTag && versionsMatch(kitVersion, latestTag)) {
-				logger.success(
-					`Already at latest version (${selection.kit}@${kitVersion}), skipping reinstall`,
-				);
 				alreadyAtLatest = true;
 			} else if (latestTag) {
 				logger.info(`Kit update available: ${kitVersion} -> ${latestTag}`);
+			}
+		}
+
+		if (alreadyAtLatest) {
+			try {
+				const claudeDir = selection.isGlobal ? setup.global.path : setup.project.path;
+				const missingHookDeps = claudeDir ? await findMissingHookDepsFn(claudeDir) : [];
+				if (missingHookDeps.length > 0) {
+					logger.warning(
+						`Detected ${missingHookDeps.length} missing hook dependency(ies); reinstalling kit content`,
+					);
+					alreadyAtLatest = false;
+					forceKitReinstall = true;
+				}
+			} catch (error) {
+				logger.verbose(
+					`Hook dependency self-heal check skipped: ${
+						error instanceof Error ? error.message : "unknown"
+					}`,
+				);
+			}
+		}
+
+		if (alreadyAtLatest) {
+			try {
+				const countMissingHookRefsFn =
+					deps?.countMissingHookFileReferencesFn ?? countMissingHookFileReferences;
+				const projectDir = setup.project.path ? dirname(setup.project.path) : process.cwd();
+				const missingHookRefs = await countMissingHookRefsFn(projectDir);
+				if (missingHookRefs > 0) {
+					logger.warning(
+						`Detected ${missingHookRefs} broken hook registration(s); reinstalling kit content`,
+					);
+					alreadyAtLatest = false;
+					forceKitReinstall = true;
+
+					// A project-local settings.json that points at missing project hooks must be
+					// repaired by a local ck init, even when a global kit also exists.
+					if (setup.project.path && selection.isGlobal) {
+						selection = {
+							isGlobal: false,
+							kit: localKits[0] || selection.kit,
+							promptMessage: `Update local project ClaudeKit content${
+								localKits[0] || selection.kit ? ` (${localKits[0] || selection.kit})` : ""
+							}?`,
+						};
+						kitVersion = selection.kit ? localMetadata?.kits?.[selection.kit]?.version : undefined;
+					}
+				}
+			} catch (error) {
+				logger.verbose(
+					`Hook registration self-heal check skipped: ${
+						error instanceof Error ? error.message : "unknown"
+					}`,
+				);
 			}
 		}
 
@@ -280,7 +550,12 @@ export async function promptKitUpdate(
 			// Non-fatal — fall back to manual prompt
 		}
 
-		if (alreadyAtLatest && !autoInit) return;
+		if (alreadyAtLatest && !autoInit) {
+			logger.success(
+				`Already at latest version (${selection.kit}@${kitVersion}), skipping reinstall`,
+			);
+			return;
+		}
 
 		// Prompt user unless --yes, autoInit, or already at latest
 		if (!yes && !autoInit) {
@@ -300,7 +575,13 @@ export async function promptKitUpdate(
 
 		if (yes) {
 			// Non-interactive: exec with pre-selected kit + spinner
-			const initCmd = buildInitCommand(selection.isGlobal, selection.kit, useBeta, true);
+			const initCmd = buildInitCommand(
+				selection.isGlobal,
+				selection.kit,
+				useBeta,
+				true,
+				forceKitReinstall,
+			);
 			logger.info(`Running: ${initCmd}`);
 			const s = (deps?.spinnerFn ?? spinner)();
 			s.start("Updating ClaudeKit content...");
@@ -340,6 +621,7 @@ export async function promptKitUpdate(
 			// Interactive: spawn ck init with inherited stdio
 			const args = ["init"];
 			if (selection.isGlobal) args.push("-g");
+			if (forceKitReinstall) args.push("--restore-ck-hooks");
 			args.push("--install-skills");
 			if (useBeta) args.push("--beta");
 
@@ -382,6 +664,7 @@ export interface PromptMigrateUpdateDeps {
 	loadFullConfigFn?: PromptKitUpdateConfigLoader;
 	execAsyncFn?: ExecAsyncFn;
 	repairHookFileReferencesFn?: (projectDir: string) => Promise<number>;
+	repairLegacyHookPromptsFn?: (projectDir: string) => Promise<number>;
 	cleanupMigratedHooksFn?: (
 		providers: string[],
 		options: { global: boolean },
@@ -390,23 +673,7 @@ export interface PromptMigrateUpdateDeps {
 	>;
 }
 
-export async function repairMissingHookFileReferences(projectDir = process.cwd()): Promise<number> {
-	const { checkHookFileReferences } = await import(
-		"@/domains/health-checks/checkers/hook-health-checker.js"
-	);
-	const result = await checkHookFileReferences(projectDir);
-	if (result.status !== "fail" || !result.fix) {
-		return 0;
-	}
-
-	const fixResult = await result.fix.execute();
-	if (!fixResult.success) {
-		throw new Error(fixResult.message);
-	}
-
-	const match = fixResult.message.match(/Pruned\s+(\d+)/);
-	return match?.[1] ? Number.parseInt(match[1], 10) : 0;
-}
+export { repairLegacyHookPrompts, repairMissingHookFileReferences };
 
 /**
  * Step 3 of the update pipeline: independently check and run migration.
@@ -415,17 +682,37 @@ export async function repairMissingHookFileReferences(projectDir = process.cwd()
  */
 export async function promptMigrateUpdate(deps?: PromptMigrateUpdateDeps): Promise<void> {
 	try {
-		try {
-			const repairFn = deps?.repairHookFileReferencesFn ?? repairMissingHookFileReferences;
-			const repaired = await repairFn(process.cwd());
-			if (repaired > 0) {
-				logger.info(`Repaired ${repaired} missing hook file reference(s)`);
+		const repairFn = deps?.repairHookFileReferencesFn ?? repairMissingHookFileReferences;
+		const repairLegacyPromptsFn = deps?.repairLegacyHookPromptsFn ?? repairLegacyHookPrompts;
+		const repairLegacyHookPromptsSafely = async () => {
+			try {
+				const repaired = await repairLegacyPromptsFn(process.cwd());
+				if (repaired > 0) {
+					logger.info(`Pruned ${repaired} legacy hook prompt(s)`);
+				}
+			} catch (error) {
+				logger.verbose(
+					`Legacy hook prompt repair skipped: ${
+						error instanceof Error ? error.message : "unknown"
+					}`,
+				);
 			}
-		} catch (error) {
-			logger.verbose(
-				`Hook file reference repair skipped: ${error instanceof Error ? error.message : "unknown"}`,
-			);
-		}
+		};
+		const repairHookFileReferencesSafely = async () => {
+			try {
+				const repaired = await repairFn(process.cwd());
+				if (repaired > 0) {
+					logger.info(`Repaired ${repaired} missing hook file reference(s)`);
+				}
+			} catch (error) {
+				logger.verbose(
+					`Hook file reference repair skipped: ${error instanceof Error ? error.message : "unknown"}`,
+				);
+			}
+		};
+
+		await repairLegacyHookPromptsSafely();
+		await repairHookFileReferencesSafely();
 
 		const providerRegistry =
 			deps?.detectInstalledProvidersFn && deps?.getProviderConfigFn
@@ -443,9 +730,9 @@ export async function promptMigrateUpdate(deps?: PromptMigrateUpdateDeps): Promi
 
 		if (!detectFn || !getConfigFn) return;
 
-		// Detect installed providers. Claude Code is not an auto-migration target,
-		// but it can still contain generated-context hook registrations that need
-		// self-healing after a CLI update.
+		// Detect installed providers. Claude Code is the source install, not a
+		// migration target; cleaning it as a migrated provider would remove current CK
+		// hooks immediately after update self-heal restores them.
 		const allProviders = await detectFn();
 		if (allProviders.length === 0) {
 			logger.verbose("No migration providers detected, skipping migrate step");
@@ -466,15 +753,22 @@ export async function promptMigrateUpdate(deps?: PromptMigrateUpdateDeps): Promi
 				deps?.cleanupMigratedHooksFn ??
 				(await import("@/commands/portable/migrated-hooks-cleanup.js"))
 					.cleanupMigratedHooksForProviders;
-			const cleanupProviders = allProviders.filter((p) => SAFE_PROVIDER_NAME.test(p));
-			const cleanupResults = await cleanupFn(cleanupProviders, { global: isGlobal });
-			const cleanupCount = cleanupResults.reduce(
-				(total, result) =>
-					total + result.hooksPruned + result.filesRemoved + result.registryEntriesRemoved,
-				0,
+			const cleanupProviders = allProviders.filter(
+				(p) => p !== "claude-code" && SAFE_PROVIDER_NAME.test(p),
 			);
-			if (cleanupCount > 0) {
-				logger.info(`Cleaned up ${cleanupCount} generated-context hook artifact(s)`);
+			if (cleanupProviders.length > 0) {
+				const cleanupResults = await cleanupFn(cleanupProviders, { global: isGlobal });
+				const cleanupCount = cleanupResults.reduce(
+					(total, result) =>
+						total + result.hooksPruned + result.filesRemoved + result.registryEntriesRemoved,
+					0,
+				);
+				if (cleanupCount > 0) {
+					logger.info(`Cleaned up ${cleanupCount} generated-context hook artifact(s)`);
+				}
+
+				await repairLegacyHookPromptsSafely();
+				await repairHookFileReferencesSafely();
 			}
 		} catch (error) {
 			logger.verbose(

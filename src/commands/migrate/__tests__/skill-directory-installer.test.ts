@@ -13,6 +13,7 @@ mock.module("../../portable/portable-registry.js", () => ({
 }));
 
 const { installSkillDirectories } = await import("../skill-directory-installer.js");
+mock.restore();
 
 // Mock provider registry to use temp paths
 const originalProviders = await import("../../portable/provider-registry.js").then(
@@ -42,7 +43,6 @@ describe("installSkillDirectories", () => {
 
 	afterAll(() => {
 		rmSync(testDir, { recursive: true, force: true });
-		mock.restore();
 	});
 
 	function makeSkill(name: string, path: string): SkillInfo {

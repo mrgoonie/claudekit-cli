@@ -6,6 +6,7 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
+	CLI_UPDATE_INSTALL_TIMEOUT_MS,
 	type KitSelectionParams,
 	type UpdateCliCommandDeps,
 	buildInitCommand,
@@ -92,6 +93,13 @@ describe("update-cli", () => {
 		it("includes --beta flag with kit and global and yes", () => {
 			const result = buildInitCommand(true, "engineer", true, true);
 			expect(result).toBe("ck init -g --kit engineer --yes --install-skills --beta");
+		});
+
+		it("includes restore hook flag only when self-heal requested", () => {
+			expect(buildInitCommand(false, "engineer", false, true)).not.toContain("--restore-ck-hooks");
+			expect(buildInitCommand(false, "engineer", false, true, true)).toBe(
+				"ck init --kit engineer --yes --restore-ck-hooks --install-skills",
+			);
 		});
 
 		it("does not include --beta flag when beta is false", () => {
@@ -815,10 +823,9 @@ describe("update-cli", () => {
 
 			expect(deps.npmRegistryClient.getDevVersion).toHaveBeenCalledTimes(1);
 			expect(deps.npmRegistryClient.getLatestVersion).not.toHaveBeenCalled();
-			expect(deps.execAsyncFn).toHaveBeenCalledWith(
-				"npm install -g claudekit-cli@3.36.0-dev.37",
-				expect.any(Object),
-			);
+			expect(deps.execAsyncFn).toHaveBeenCalledWith("npm install -g claudekit-cli@3.36.0-dev.37", {
+				timeout: CLI_UPDATE_INSTALL_TIMEOUT_MS,
+			});
 			expect(deps.promptKitUpdateFn).toHaveBeenCalledWith(true, true);
 		});
 

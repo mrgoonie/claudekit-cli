@@ -38,6 +38,7 @@ import { compareCliVersions } from "./update/version-comparator.js";
 // All consumers (tests, system-routes.ts, command-registry.ts) import from here.
 
 export { CliUpdateError } from "./update/error.js";
+export { CLI_UPDATE_INSTALL_TIMEOUT_MS } from "./update/package-manager-runner.js";
 // isBetaVersion and parseCliVersionFromOutput live in version-comparator; post-update-handler
 // imports them from there. Exporting from the canonical source avoids duplicate bindings.
 export { isBetaVersion, parseCliVersionFromOutput } from "./update/version-comparator.js";
@@ -46,6 +47,7 @@ export {
 	fetchLatestReleaseTag,
 	promptKitUpdate,
 	promptMigrateUpdate,
+	repairLegacyHookPrompts,
 	repairMissingHookFileReferences,
 	resolveCkInitSpawnCommand,
 	readMetadataFile,

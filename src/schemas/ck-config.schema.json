@@ -454,15 +454,35 @@
 					"default": true,
 					"description": "SubagentStart hook - injects context to subagents"
 				},
+				"session-state": {
+					"type": "boolean",
+					"default": true,
+					"description": "Stop/SubagentStop/PostToolUse hook - persists session state for handoff and statusline context"
+				},
+				"cook-after-plan-reminder": {
+					"type": "boolean",
+					"default": true,
+					"description": "SubagentStop hook - reminds agents to continue implementation after planning"
+				},
 				"descriptive-name": {
 					"type": "boolean",
 					"default": true,
-					"description": "PreToolUse hook - enforces kebab-case descriptive file naming for scripts"
+					"description": "PreToolUse hook - injects language-aware descriptive file naming guidance"
 				},
 				"dev-rules-reminder": {
 					"type": "boolean",
 					"default": true,
 					"description": "UserPromptSubmit hook - injects dev rules context"
+				},
+				"plan-format-kanban": {
+					"type": "boolean",
+					"default": true,
+					"description": "PostToolUse hook - keeps plan kanban metadata synchronized after edits"
+				},
+				"usage-quota-cache-refresh": {
+					"type": "boolean",
+					"default": true,
+					"description": "Lifecycle hook - refreshes cached usage quota information"
 				},
 				"usage-context-awareness": {
 					"type": "boolean",

@@ -39,6 +39,22 @@ describe("CkConfigManager", () => {
 		expect(config?.updatePipeline?.autoInitAfterUpdate).toBe(true);
 	});
 
+	test("loads project config files with a UTF-8 BOM", async () => {
+		await writeFile(
+			join(testDir, ".claude", ".ck.json"),
+			`\uFEFF${JSON.stringify({
+				hooks: {
+					"session-state": false,
+				},
+			})}`,
+		);
+
+		const config = await CkConfigManager.loadScope("project", testDir);
+
+		expect(config).not.toBeNull();
+		expect(config?.hooks?.["session-state"]).toBe(false);
+	});
+
 	test("normalizes legacy Gemini ids when loading merged config", async () => {
 		await writeFile(
 			join(testDir, ".claude", ".ck.json"),

@@ -1,12 +1,12 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 /**
  * Tests for portable registry v3.0 migration (Phase 1)
- * Note: These tests use the real ~/.claudekit/ directory
+ * Note: These tests isolate ~/.claudekit/ through CK_TEST_HOME.
  */
 import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
-import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
-import { homedir } from "node:os";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import {
 	type PortableRegistryV3,
@@ -18,50 +18,58 @@ import {
 	writePortableRegistry,
 } from "../portable-registry.js";
 
-const REGISTRY_PATH = join(homedir(), ".claudekit", "portable-registry.json");
-const MIGRATION_LOCK_PATH = join(homedir(), ".claudekit", ".migration.lock");
-let backupContent: string | null = null;
-let backupMigrationLockContent: string | null = null;
-let hadMigrationLock = false;
+const originalCkTestHome = process.env.CK_TEST_HOME;
+let testHome: string | null = null;
 let testFilesToRemove: string[] = [];
 
-beforeEach(async () => {
-	// Backup existing registry if present
-	if (existsSync(REGISTRY_PATH)) {
-		backupContent = await readFile(REGISTRY_PATH, "utf-8");
-		await rm(REGISTRY_PATH, { force: true });
+function getRegistryDir(): string {
+	if (!testHome) {
+		throw new Error("testHome is not initialized");
 	}
+	return join(testHome, ".claudekit");
+}
 
-	hadMigrationLock = existsSync(MIGRATION_LOCK_PATH);
-	if (hadMigrationLock) {
-		backupMigrationLockContent = await readFile(MIGRATION_LOCK_PATH, "utf-8");
-		await rm(MIGRATION_LOCK_PATH, { force: true });
+function getRegistryPath(): string {
+	return join(getRegistryDir(), "portable-registry.json");
+}
+
+function getMigrationLockPath(): string {
+	return join(getRegistryDir(), ".migration.lock");
+}
+
+async function readTestPortableRegistry(): Promise<PortableRegistryV3> {
+	return JSON.parse(await readFile(getRegistryPath(), "utf-8")) as PortableRegistryV3;
+}
+
+function pinTestHome(): void {
+	if (!testHome) {
+		throw new Error("testHome is not initialized");
 	}
+	process.env.CK_TEST_HOME = testHome;
+}
+
+beforeEach(async () => {
+	testHome = await mkdtemp(join(tmpdir(), "ck-portable-registry-"));
+	pinTestHome();
+	await mkdir(getRegistryDir(), { recursive: true });
 });
 
 afterEach(async () => {
-	// Restore backup or clean up
-	if (backupContent) {
-		await writeFile(REGISTRY_PATH, backupContent, "utf-8");
-		backupContent = null;
-	} else if (existsSync(REGISTRY_PATH)) {
-		await rm(REGISTRY_PATH, { force: true });
-	}
-
-	if (hadMigrationLock) {
-		await mkdir(join(homedir(), ".claudekit"), { recursive: true });
-		await writeFile(MIGRATION_LOCK_PATH, backupMigrationLockContent ?? "", "utf-8");
-	} else if (existsSync(MIGRATION_LOCK_PATH)) {
-		await rm(MIGRATION_LOCK_PATH, { force: true });
-	}
-
 	for (const path of testFilesToRemove) {
 		await rm(path, { force: true });
 	}
 	testFilesToRemove = [];
 
-	hadMigrationLock = false;
-	backupMigrationLockContent = null;
+	if (testHome) {
+		await rm(testHome, { recursive: true, force: true });
+		testHome = null;
+	}
+
+	if (originalCkTestHome === undefined) {
+		Reflect.deleteProperty(process.env, "CK_TEST_HOME");
+	} else {
+		process.env.CK_TEST_HOME = originalCkTestHome;
+	}
 });
 
 describe("PortableRegistryV3 schema validation", () => {
@@ -148,7 +156,7 @@ describe("v2.0 to v3.0 migration", () => {
 			],
 		};
 
-		await writeFile(REGISTRY_PATH, JSON.stringify(v2Registry, null, 2), "utf-8");
+		await writeFile(getRegistryPath(), JSON.stringify(v2Registry, null, 2), "utf-8");
 
 		// Read should auto-migrate to v3.0
 		const loaded = await readPortableRegistry();
@@ -163,7 +171,7 @@ describe("v2.0 to v3.0 migration", () => {
 	});
 
 	test("reads target file for targetChecksum during migration", async () => {
-		const targetPath = join(homedir(), ".claudekit", "test-target-file.md");
+		const targetPath = join(getRegistryDir(), "test-target-file.md");
 		const targetContent = "# Test Agent\n\nContent here";
 		await writeFile(targetPath, targetContent, "utf-8");
 
@@ -183,7 +191,7 @@ describe("v2.0 to v3.0 migration", () => {
 			],
 		};
 
-		await writeFile(REGISTRY_PATH, JSON.stringify(v2Registry, null, 2), "utf-8");
+		await writeFile(getRegistryPath(), JSON.stringify(v2Registry, null, 2), "utf-8");
 
 		// Read and migrate
 		const loaded = await readPortableRegistry();
@@ -213,7 +221,7 @@ describe("v2.0 to v3.0 migration", () => {
 			],
 		};
 
-		await writeFile(REGISTRY_PATH, JSON.stringify(v2Registry, null, 2), "utf-8");
+		await writeFile(getRegistryPath(), JSON.stringify(v2Registry, null, 2), "utf-8");
 		const loaded = await readPortableRegistry();
 
 		const inst = loaded.installations[0];
@@ -261,7 +269,7 @@ describe("v2.0 to v3.0 migration", () => {
 			],
 		};
 
-		await writeFile(REGISTRY_PATH, JSON.stringify(v2Registry, null, 2), "utf-8");
+		await writeFile(getRegistryPath(), JSON.stringify(v2Registry, null, 2), "utf-8");
 		const loaded = await readPortableRegistry();
 
 		expect(loaded.version).toBe("3.0");
@@ -306,7 +314,7 @@ describe("stale v3.0 registry repair", () => {
 			customTopLevel: "preserved",
 		};
 
-		await writeFile(REGISTRY_PATH, JSON.stringify(staleRegistry, null, 2), "utf-8");
+		await writeFile(getRegistryPath(), JSON.stringify(staleRegistry, null, 2), "utf-8");
 
 		const loaded = await readPortableRegistry();
 
@@ -321,7 +329,7 @@ describe("stale v3.0 registry repair", () => {
 		expect(loaded.installations[1].ownedSections).toEqual(["frontmatter"]);
 		expect(loaded.lastReconciled).toBe("2026-05-09T00:00:00.000Z");
 
-		const persistedRaw = JSON.parse(await readFile(REGISTRY_PATH, "utf-8")) as {
+		const persistedRaw = JSON.parse(await readFile(getRegistryPath(), "utf-8")) as {
 			customTopLevel?: string;
 			installations: Array<{
 				sourceChecksum?: string;
@@ -336,9 +344,9 @@ describe("stale v3.0 registry repair", () => {
 	});
 
 	test("computes target checksum from disk while repairing stale v3.0 entries", async () => {
-		const targetPath = join(homedir(), ".claudekit", `test-stale-v3-target-${process.pid}.md`);
+		const targetPath = join(getRegistryDir(), `test-stale-v3-target-${process.pid}.md`);
 		testFilesToRemove.push(targetPath);
-		await mkdir(join(homedir(), ".claudekit"), { recursive: true });
+		await mkdir(getRegistryDir(), { recursive: true });
 		const targetContent = "# Existing target\n\nContent on disk";
 		const expectedChecksum = createHash("sha256").update(targetContent, "utf-8").digest("hex");
 		await writeFile(targetPath, targetContent, "utf-8");
@@ -358,14 +366,14 @@ describe("stale v3.0 registry repair", () => {
 			],
 		};
 
-		await writeFile(REGISTRY_PATH, JSON.stringify(staleRegistry, null, 2), "utf-8");
+		await writeFile(getRegistryPath(), JSON.stringify(staleRegistry, null, 2), "utf-8");
 
 		const loaded = await readPortableRegistry();
 
 		expect(loaded.installations[0].targetChecksum).toBe(expectedChecksum);
 		expect(loaded.installations[0].targetChecksum).toMatch(/^[a-f0-9]{64}$/);
 
-		const persistedRaw = JSON.parse(await readFile(REGISTRY_PATH, "utf-8")) as {
+		const persistedRaw = JSON.parse(await readFile(getRegistryPath(), "utf-8")) as {
 			installations: Array<{ targetChecksum?: string }>;
 		};
 		expect(persistedRaw.installations[0].targetChecksum).toBe(
@@ -389,8 +397,8 @@ describe("stale v3.0 registry repair", () => {
 			],
 		};
 
-		await writeFile(REGISTRY_PATH, JSON.stringify(staleRegistry, null, 2), "utf-8");
-		await writeFile(MIGRATION_LOCK_PATH, String(Date.now()), "utf-8");
+		await writeFile(getRegistryPath(), JSON.stringify(staleRegistry, null, 2), "utf-8");
+		await writeFile(getMigrationLockPath(), String(Date.now()), "utf-8");
 
 		const loaded = await readPortableRegistry();
 
@@ -398,7 +406,7 @@ describe("stale v3.0 registry repair", () => {
 		expect(loaded.installations[0].targetChecksum).toBe("unknown");
 		expect(loaded.installations[0].installSource).toBe("kit");
 
-		const persistedRaw = JSON.parse(await readFile(REGISTRY_PATH, "utf-8")) as {
+		const persistedRaw = JSON.parse(await readFile(getRegistryPath(), "utf-8")) as {
 			installations: Array<{
 				sourceChecksum?: string;
 				targetChecksum?: string;
@@ -429,7 +437,7 @@ describe("stale v3.0 registry repair", () => {
 			],
 		};
 
-		await writeFile(REGISTRY_PATH, JSON.stringify(corruptedRegistry, null, 2), "utf-8");
+		await writeFile(getRegistryPath(), JSON.stringify(corruptedRegistry, null, 2), "utf-8");
 
 		await expect(readPortableRegistry()).rejects.toThrow(
 			"portable-registry.json has unsupported schema/version",
@@ -439,7 +447,7 @@ describe("stale v3.0 registry repair", () => {
 
 describe("invalid registry handling", () => {
 	test("keeps invalid JSON fatal", async () => {
-		await writeFile(REGISTRY_PATH, "{ invalid json", "utf-8");
+		await writeFile(getRegistryPath(), "{ invalid json", "utf-8");
 
 		await expect(readPortableRegistry()).rejects.toThrow(
 			"portable-registry.json is not valid JSON",
@@ -448,7 +456,7 @@ describe("invalid registry handling", () => {
 
 	test("keeps unsupported top-level versions fatal", async () => {
 		await writeFile(
-			REGISTRY_PATH,
+			getRegistryPath(),
 			JSON.stringify({ version: "4.0", installations: [] }, null, 2),
 			"utf-8",
 		);
@@ -476,15 +484,17 @@ describe("migration lock handling", () => {
 			],
 		};
 
-		await writeFile(REGISTRY_PATH, JSON.stringify(v2Registry, null, 2), "utf-8");
-		await writeFile(MIGRATION_LOCK_PATH, "invalid-timestamp", "utf-8");
+		await writeFile(getRegistryPath(), JSON.stringify(v2Registry, null, 2), "utf-8");
+		await writeFile(getMigrationLockPath(), "invalid-timestamp", "utf-8");
 
 		const loaded = await readPortableRegistry();
 		expect(loaded.version).toBe("3.0");
 		expect(loaded.installations).toHaveLength(1);
-		expect(existsSync(MIGRATION_LOCK_PATH)).toBe(true);
+		expect(existsSync(getMigrationLockPath())).toBe(true);
 
-		const persistedRaw = JSON.parse(await readFile(REGISTRY_PATH, "utf-8")) as { version: string };
+		const persistedRaw = JSON.parse(await readFile(getRegistryPath(), "utf-8")) as {
+			version: string;
+		};
 		expect(persistedRaw.version).toBe("2.0");
 	});
 
@@ -504,16 +514,18 @@ describe("migration lock handling", () => {
 			],
 		};
 
-		await writeFile(REGISTRY_PATH, JSON.stringify(v2Registry, null, 2), "utf-8");
-		await writeFile(MIGRATION_LOCK_PATH, String(Date.now() - 120000), "utf-8");
+		await writeFile(getRegistryPath(), JSON.stringify(v2Registry, null, 2), "utf-8");
+		await writeFile(getMigrationLockPath(), String(Date.now() - 120000), "utf-8");
 
 		const loaded = await readPortableRegistry();
 		expect(loaded.version).toBe("3.0");
 		expect(loaded.installations).toHaveLength(1);
 
-		const persistedRaw = JSON.parse(await readFile(REGISTRY_PATH, "utf-8")) as { version: string };
+		const persistedRaw = JSON.parse(await readFile(getRegistryPath(), "utf-8")) as {
+			version: string;
+		};
 		expect(persistedRaw.version).toBe("3.0");
-		expect(existsSync(MIGRATION_LOCK_PATH)).toBe(false);
+		expect(existsSync(getMigrationLockPath())).toBe(false);
 	});
 });
 
@@ -664,8 +676,10 @@ describe("removeInstallationsByFilter (stale entry cleanup)", () => {
 
 describe("addPortableInstallation (path alignment for cursor/windsurf)", () => {
 	test("records cursor skill at .cursor/skills/<name> path", async () => {
+		pinTestHome();
 		await writePortableRegistry({ version: "3.0", installations: [] });
 
+		pinTestHome();
 		await addPortableInstallation(
 			"scout",
 			"skill",
@@ -675,7 +689,8 @@ describe("addPortableInstallation (path alignment for cursor/windsurf)", () => {
 			".claude/skills/scout",
 		);
 
-		const loaded = await readPortableRegistry();
+		pinTestHome();
+		const loaded = await readTestPortableRegistry();
 		const entry = loaded.installations.find((i) => i.item === "scout");
 		expect(entry).toBeDefined();
 		expect(entry?.path).toBe(".cursor/skills/scout");
@@ -684,8 +699,10 @@ describe("addPortableInstallation (path alignment for cursor/windsurf)", () => {
 	});
 
 	test("records windsurf skill at .windsurf/skills/<name> path (project scope)", async () => {
+		pinTestHome();
 		await writePortableRegistry({ version: "3.0", installations: [] });
 
+		pinTestHome();
 		await addPortableInstallation(
 			"debug",
 			"skill",
@@ -695,7 +712,8 @@ describe("addPortableInstallation (path alignment for cursor/windsurf)", () => {
 			".claude/skills/debug",
 		);
 
-		const loaded = await readPortableRegistry();
+		pinTestHome();
+		const loaded = await readTestPortableRegistry();
 		const entry = loaded.installations.find((i) => i.item === "debug");
 		expect(entry).toBeDefined();
 		expect(entry?.path).toBe(".windsurf/skills/debug");
@@ -704,9 +722,11 @@ describe("addPortableInstallation (path alignment for cursor/windsurf)", () => {
 	});
 
 	test("records windsurf skill at ~/.codeium/windsurf/skills/<name> path (global scope)", async () => {
+		pinTestHome();
 		await writePortableRegistry({ version: "3.0", installations: [] });
 
 		const globalPath = join(homedir(), ".codeium", "windsurf", "skills", "debug");
+		pinTestHome();
 		await addPortableInstallation(
 			"debug",
 			"skill",
@@ -716,7 +736,8 @@ describe("addPortableInstallation (path alignment for cursor/windsurf)", () => {
 			".claude/skills/debug",
 		);
 
-		const loaded = await readPortableRegistry();
+		pinTestHome();
+		const loaded = await readTestPortableRegistry();
 		const entry = loaded.installations.find((i) => i.item === "debug" && i.global === true);
 		expect(entry).toBeDefined();
 		expect(entry?.path).toBe(globalPath);
@@ -806,7 +827,7 @@ describe("v2.0 schema forward compatibility", () => {
 			],
 		};
 
-		await writeFile(REGISTRY_PATH, JSON.stringify(v3Data, null, 2), "utf-8");
+		await writeFile(getRegistryPath(), JSON.stringify(v3Data, null, 2), "utf-8");
 
 		// Should not throw parse error
 		const loaded = await readPortableRegistry();

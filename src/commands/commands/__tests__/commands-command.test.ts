@@ -1,4 +1,4 @@
-import { afterAll, afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 import { existsSync } from "node:fs";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -9,7 +9,11 @@ const emptyRegistry = (): PortableRegistryV3 => ({ version: "3.0", installations
 const readPortableRegistryMock = mock(async (): Promise<PortableRegistryV3> => emptyRegistry());
 const removePortableInstallationMock = mock(async () => null);
 const syncPortableRegistryMock = mock(async () => ({ removed: [] }));
-const actualPortableRegistry = await import("../../portable/portable-registry.js");
+const registryDeps = {
+	readPortableRegistry: readPortableRegistryMock,
+	removePortableInstallation: removePortableInstallationMock,
+	syncPortableRegistry: syncPortableRegistryMock,
+};
 
 mock.module("@clack/prompts", () => ({
 	intro: mock(() => undefined),
@@ -33,19 +37,9 @@ mock.module("@clack/prompts", () => ({
 	},
 }));
 
-mock.module("../../portable/portable-registry.js", () => ({
-	...actualPortableRegistry,
-	readPortableRegistry: readPortableRegistryMock,
-	removePortableInstallation: removePortableInstallationMock,
-	syncPortableRegistry: syncPortableRegistryMock,
-}));
-
 const { commandsCommand } = await import("../commands-command.js");
 const { providers } = await import("../../portable/provider-registry.js");
-
-afterAll(() => {
-	mock.restore();
-});
+mock.restore();
 
 describe("commandsCommand force uninstall", () => {
 	const codexCommandPaths = providers.codex.commands;
@@ -100,6 +94,7 @@ describe("commandsCommand force uninstall", () => {
 			name: "local",
 			agent: ["codex"],
 			yes: true,
+			registry: registryDeps,
 		});
 
 		expect(existsSync(projectSkillPath)).toBe(false);
@@ -134,6 +129,7 @@ describe("commandsCommand force uninstall", () => {
 			agent: ["codex"],
 			global: true,
 			yes: true,
+			registry: registryDeps,
 		});
 
 		expect(existsSync(globalSkillPath)).toBe(false);

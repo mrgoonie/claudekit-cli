@@ -1,7 +1,7 @@
 # Project Roadmap: ClaudeKit CLI
 
-**Last Updated**: 2026-04-16
-**Version**: 3.41.4-dev.26
+**Last Updated**: 2026-05-20
+**Version**: 4.3.1-dev.2
 **Repository**: https://github.com/mrgoonie/claudekit-cli
 
 ---
@@ -63,6 +63,7 @@ ClaudeKit CLI (`ck`) is a command-line tool for bootstrapping and updating Claud
 - **Skills agentskills.io Integration**: Support for `metadata.version` and `metadata.author` fields (0feb2d7)
 - **Migrate UX Overhaul (PR #457)**: Action tabs (Install/Update/Skip/Delete/Conflict), type sub-sections, smart provider auto-selection, default scope to Global
 - **Hooks Migration (PR #455)**: hooks settings merger, hooks migration with settings.json auto-registration
+  - Codex compatibility fix: CKE wrapper hooks register by wrapped asset, CKM unsupported events warn+skip, excluded Claude/team hooks are not copied or registered, and stale CK-owned incompatible `.codex/hooks.json` entries are pruned on rerun.
 - **Droid Hooks (PR #454)**: Droid hooks migration support, explicit hooks capability per provider
 - **UI Improvements**: Biome formatting for JSX, conflict branch type comparison, tab sync, expand state reset
 - **Skills Dependencies**: New `skills-dependencies.ts` type file
@@ -510,7 +511,7 @@ Global Mode (Kit Installation):
 | **Reconciliation & Migration** | **Complete** | **100%** | **2026-02-20** |
 | **Dashboard & Web UI** | **In Progress** | **85%** | **2026-03-02** |
 | **Skills & API Key** | **In Progress** | **75%** | **2026-03-02** |
-| **Hooks Migration** | **Complete** | **100%** | **2026-02-15** |
+| **Hooks Migration** | **Complete** | **100%** | **2026-05-20** |
 | **GitHub Issues Auto-Responder (watch)** | **Complete** | **100%** | **2026-03-03** |
 | **OVERALL** | **PRODUCTION READY** | **93%** | **2026-03-03** |
 

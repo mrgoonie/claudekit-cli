@@ -38,11 +38,12 @@ bun run lint || fail "Lint failed. Run 'bun run lint:fix' to auto-fix, then re-s
 step "3/7" "Build CLI bundle"
 bun run build || fail "Build failed."
 
-step "4/7" "Tests (bun test --verbose)"
-# CI uses `timeout 300 bun test --verbose`; locally we trust dev to ctrl-c
-# but keep --verbose so local output format matches CI logs exactly when
-# diagnosing failures.
-bun test --verbose || fail "Tests failed."
+step "4/7" "Tests (bun test --max-concurrency=1 --verbose)"
+# CI uses `timeout 300 bun test --max-concurrency=1 --verbose`; locally we trust dev
+# to ctrl-c but keep --verbose so local output format matches CI logs exactly when
+# diagnosing failures. Keep max concurrency at 1 because several legacy tests use
+# process-wide Bun module mocks for portable registry helpers.
+bun test --max-concurrency=1 --verbose || fail "Tests failed."
 
 step "5/7" "Help parity + manifest/docs drift check"
 # Mirrors ci.yml "Verify help parity and regenerated docs" step verbatim.

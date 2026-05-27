@@ -230,6 +230,51 @@ describe("ReconcilePlanView — checkbox toggles flip", () => {
 		await user.click(checkbox);
 		expect(onFlip).toHaveBeenCalledWith(action, "execute");
 	});
+
+	it("renders existing skip rows unchecked until explicitly executed", async () => {
+		const user = userEvent.setup();
+		const onFlip = vi.fn();
+		const action = makeAction({
+			action: "skip",
+			item: "skipped-hook",
+			reasonCode: "user-edits-preserved",
+		});
+		const plan = makePlan([action]);
+
+		renderView(plan, new Map(), onFlip);
+
+		await user.click(screen.getByText(/Show skipped items/i));
+		await user.click(screen.getByRole("button", { name: /Commands/i }));
+
+		const checkbox = screen.getByRole("checkbox", { name: /Toggle item.*skipped-hook/i });
+		expect(checkbox).not.toBeChecked();
+
+		await user.click(checkbox);
+		expect(onFlip).toHaveBeenCalledWith(action, "execute");
+	});
+
+	it("does not allow ineligible skip rows to be executed from the checkbox", async () => {
+		const user = userEvent.setup();
+		const onFlip = vi.fn();
+		const action = makeAction({
+			action: "skip",
+			item: "unchanged-hook",
+			reasonCode: "no-changes",
+		});
+		const plan = makePlan([action]);
+
+		renderView(plan, new Map(), onFlip);
+
+		await user.click(screen.getByText(/Show skipped items/i));
+		await user.click(screen.getByRole("button", { name: /Commands/i }));
+
+		const checkbox = screen.getByRole("checkbox", { name: /Toggle item.*unchanged-hook/i });
+		expect(checkbox).not.toBeChecked();
+		expect(checkbox).toBeDisabled();
+
+		await user.click(checkbox);
+		expect(onFlip).not.toHaveBeenCalled();
+	});
 });
 
 // ─── Dim styling ──────────────────────────────────────────────────────────────
@@ -240,11 +285,24 @@ describe("ReconcilePlanView — dim state", () => {
 		const plan = makePlan([action]);
 		const flips = new Map([["codex:command:dim-me", "skip" as const]]);
 
-		const { container } = renderView(plan, flips);
+		renderView(plan, flips);
 
-		// Item row should have opacity-50 class
-		const dimmedRow = container.querySelector(".opacity-50");
-		expect(dimmedRow).not.toBeNull();
+		const dimmedRow = screen.getByText("codex/dim-me").closest(".rounded-md");
+		expect(dimmedRow?.className).toContain("opacity-50");
+	});
+
+	it("applies opacity-50 to existing skipped items", async () => {
+		const user = userEvent.setup();
+		const action = makeAction({ action: "skip", item: "already-skipped" });
+		const plan = makePlan([action]);
+
+		renderView(plan);
+
+		await user.click(screen.getByText(/Show skipped items/i));
+		await user.click(screen.getByRole("button", { name: /Commands/i }));
+
+		const dimmedRow = screen.getByText("codex/already-skipped").closest(".rounded-md");
+		expect(dimmedRow?.className).toContain("opacity-50");
 	});
 
 	it("applies full opacity to active items", () => {

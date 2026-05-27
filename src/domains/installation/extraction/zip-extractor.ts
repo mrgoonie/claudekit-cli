@@ -26,7 +26,7 @@ interface ExtractZipOptions {
 }
 
 /**
- * ZIP archive extractor with native OS fallback on macOS and Windows
+ * ZIP archive extractor with native OS fallback on macOS, Linux, and Windows
  */
 export class ZipExtractor {
 	/**
@@ -81,7 +81,11 @@ export class ZipExtractor {
 		await mkdir(tempExtractDir, { recursive: true });
 
 		try {
-			// Native tools avoid long JS extraction stalls on macOS and Windows.
+			// Native tools avoid long JS extraction stalls on macOS, Linux, and Windows.
+			// On Linux, the bundled extract-zip path hangs under Node >= 24.16.0 due to
+			// yauzl@2.10.0's fd-slicer destroy() colliding with Node's stream lifecycle
+			// (see thejoshwolfe/yauzl#169, fixed in yauzl@3.3.1; nodejs/node#63487).
+			// Shelling out to /usr/bin/unzip side-steps the broken JS path entirely.
 			const nativeSuccess = await this.tryNativeExtraction(archivePath, tempExtractDir);
 
 			if (!nativeSuccess) {
