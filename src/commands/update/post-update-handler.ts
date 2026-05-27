@@ -20,6 +20,8 @@ import {
 import { getInstalledKits } from "@/domains/migration/metadata-migration.js";
 import { versionsMatch } from "@/domains/versioning/checking/version-utils.js";
 import { getClaudeKitSetup } from "@/services/file-operations/claudekit-scanner.js";
+import { normalizeCommand } from "@/shared/command-normalizer.js";
+import { parseJsonContent } from "@/shared/json-content.js";
 import { logger } from "@/shared/logger.js";
 import { confirm, isCancel, log, spinner } from "@/shared/safe-prompts.js";
 import { AVAILABLE_KITS, type KitType, type Metadata, MetadataSchema } from "@/types";
@@ -42,6 +44,15 @@ const execAsync = promisify(exec);
 // Only allow alphanumeric chars and hyphens in provider names (defense-in-depth against injection)
 const SAFE_PROVIDER_NAME = /^[a-z0-9-]+$/;
 const HOOK_DEPENDENCY_EXTENSIONS = [".js", ".cjs", ".mjs", ".json"];
+
+interface CkSettingsSnapshot {
+	hooks?: Record<string, Array<{ command?: string; hooks?: Array<{ command?: string }> }>>;
+}
+
+interface CkConfigSnapshot {
+	hooks?: Record<string, unknown>;
+	kits?: Record<string, { installedSettings?: { hooks?: string[] } }>;
+}
 
 // ─── Kit selection ────────────────────────────────────────────────────────────
 
@@ -113,6 +124,78 @@ export async function readMetadataFile(claudeDir: string): Promise<Metadata | nu
 		);
 		return null;
 	}
+}
+
+function extractCkHookName(command: string): string | null {
+	if (!command.trim().startsWith("node ")) return null;
+	const normalized = command.replace(/\\/g, "/");
+	const match = normalized.match(/\/hooks\/([^/"'\s]+)\.(?:cjs|mjs|js)(?:["'\s]|$)/);
+	return match?.[1] ?? null;
+}
+
+function collectSettingsHookCommands(settings: CkSettingsSnapshot): Set<string> {
+	const commands = new Set<string>();
+	for (const entries of Object.values(settings.hooks ?? {})) {
+		for (const entry of entries) {
+			if (typeof entry.command === "string") {
+				commands.add(normalizeCommand(entry.command));
+			}
+			for (const hook of entry.hooks ?? []) {
+				if (typeof hook.command === "string") {
+					commands.add(normalizeCommand(hook.command));
+				}
+			}
+		}
+	}
+	return commands;
+}
+
+function getInstalledHookCommands(config: CkConfigSnapshot, kit?: KitType): string[] {
+	const kits = Object.entries(config.kits ?? {});
+	if (kits.length === 0) return [];
+
+	const kitKey = kit?.toLowerCase();
+	const preferred = kitKey
+		? kits.filter(([name]) => {
+				const normalizedName = name.toLowerCase();
+				return normalizedName === kitKey || normalizedName.includes(kitKey);
+			})
+		: [];
+	const candidates = preferred.length > 0 ? preferred : kits;
+
+	return candidates.flatMap(([, entry]) => entry.installedSettings?.hooks ?? []);
+}
+
+/**
+ * Counts CK hook registrations that were previously installed but are absent
+ * from settings.json. Explicit dashboard/.ck.json disables are not counted.
+ */
+export async function countMissingCkHookRegistrations(
+	claudeDir: string,
+	kit?: KitType,
+): Promise<number> {
+	const settingsPath = join(claudeDir, "settings.json");
+	const configPath = join(claudeDir, ".ck.json");
+	if (!existsSync(settingsPath) || !existsSync(configPath)) return 0;
+
+	const settings = parseJsonContent<CkSettingsSnapshot>(await readFile(settingsPath, "utf-8"));
+	const config = parseJsonContent<CkConfigSnapshot>(await readFile(configPath, "utf-8"));
+	const existingCommands = collectSettingsHookCommands(settings);
+	const disabledHooks = new Set(
+		Object.entries(config.hooks ?? {})
+			.filter(([, enabled]) => enabled === false)
+			.map(([name]) => name),
+	);
+
+	let missing = 0;
+	for (const command of getInstalledHookCommands(config, kit)) {
+		const hookName = extractCkHookName(command);
+		if (hookName && disabledHooks.has(hookName)) continue;
+		if (!existingCommands.has(normalizeCommand(command))) {
+			missing++;
+		}
+	}
+	return missing;
 }
 
 // ─── Init command builder ─────────────────────────────────────────────────────
@@ -333,6 +416,48 @@ export async function promptKitUpdate(
 					kit,
 					promptMessage: `Update local project ClaudeKit content${kit ? ` (${kit})` : ""}?`,
 				};
+			}
+		}
+
+		const selectedClaudeDir = selection.isGlobal ? setup.global.path : setup.project.path;
+		if (selectedClaudeDir) {
+			try {
+				const missingHookDeps = await findMissingHookDepsFn(selectedClaudeDir);
+				if (missingHookDeps.length > 0) {
+					logger.warning(
+						`Detected ${missingHookDeps.length} ${
+							selection.isGlobal ? "global" : "local"
+						} missing hook dependency(ies); reinstalling kit content`,
+					);
+					forceKitReinstall = true;
+				}
+			} catch (error) {
+				logger.verbose(
+					`Selected hook dependency self-heal check skipped: ${
+						error instanceof Error ? error.message : "unknown"
+					}`,
+				);
+			}
+
+			try {
+				const missingHookRegistrations = await countMissingCkHookRegistrations(
+					selectedClaudeDir,
+					selection.kit,
+				);
+				if (missingHookRegistrations > 0) {
+					logger.warning(
+						`Detected ${missingHookRegistrations} ${
+							selection.isGlobal ? "global" : "local"
+						} missing hook registration(s); reinstalling kit content`,
+					);
+					forceKitReinstall = true;
+				}
+			} catch (error) {
+				logger.verbose(
+					`Selected hook registration self-heal check skipped: ${
+						error instanceof Error ? error.message : "unknown"
+					}`,
+				);
 			}
 		}
 

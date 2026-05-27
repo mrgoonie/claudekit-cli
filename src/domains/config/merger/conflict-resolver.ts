@@ -203,21 +203,25 @@ export function mergeHookEntries(
 			// Check if entry should be added:
 			// - If no commands (malformed/empty), add it (can't determine user removal)
 			// - If has commands, check if at least one is new and not user-removed
-			const hasNonRemovedCommands =
-				commands.length === 0 ||
-				commands.some(
-					(cmd) =>
-						!existingCommands.has(normalizeCommand(cmd)) &&
-						!wasCommandInstalled(cmd, installedHooks),
-				);
+			const newCommands = commands.filter(
+				(cmd) =>
+					!existingCommands.has(normalizeCommand(cmd)) && !wasCommandInstalled(cmd, installedHooks),
+			);
+			const hasNonRemovedCommands = commands.length === 0 || newCommands.length > 0;
 
 			if (!isFullyDuplicated && hasNonRemovedCommands) {
-				// Filter out user-removed hooks before adding entry
+				// Filter out duplicate and user-removed hooks before adding entry
 				let filteredEntry = entry;
-				if ("hooks" in entry && entry.hooks && userRemovedCommands.length > 0) {
+				if ("hooks" in entry && entry.hooks && commands.length > 0) {
 					const filteredHooks = entry.hooks.filter(
-						(h) => !h.command || !wasCommandInstalled(h.command, installedHooks),
+						(h) =>
+							!h.command ||
+							(!existingCommands.has(normalizeCommand(h.command)) &&
+								!wasCommandInstalled(h.command, installedHooks)),
 					);
+					if (filteredHooks.length === 0) {
+						continue;
+					}
 					filteredEntry = { ...entry, hooks: filteredHooks };
 				} else if ("command" in entry && wasCommandInstalled(entry.command, installedHooks)) {
 					// Single command entry that was removed - skip entirely
@@ -235,17 +239,13 @@ export function mergeHookEntries(
 					matcherIndex.set(sourceMatcher, merged.length - 1);
 				}
 				// Register new commands and track newly installed
-				for (const cmd of commands) {
+				for (const cmd of newCommands) {
 					const normalizedCmd = normalizeCommand(cmd);
-					if (!existingCommands.has(normalizedCmd) && !wasCommandInstalled(cmd, installedHooks)) {
-						existingCommands.add(normalizedCmd);
-						result.newlyInstalledHooks.push(cmd);
-						// Track in hooksByOrigin
-						if (sourceKit) {
-							trackHookOrigin(result, sourceKit, cmd);
-						}
-					} else if (!existingCommands.has(normalizedCmd)) {
-						existingCommands.add(normalizedCmd);
+					existingCommands.add(normalizedCmd);
+					result.newlyInstalledHooks.push(cmd);
+					// Track in hooksByOrigin
+					if (sourceKit) {
+						trackHookOrigin(result, sourceKit, cmd);
 					}
 				}
 			}
