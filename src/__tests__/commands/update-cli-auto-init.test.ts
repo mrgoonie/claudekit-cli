@@ -30,6 +30,50 @@ async function writeMetadata(dir: string, version = "1.0.0") {
 	);
 }
 
+async function writeGlobalHookState(
+	dir: string,
+	options: { disabled?: Record<string, boolean>; includeSessionState?: boolean } = {},
+) {
+	const hooks = [{ type: "command", command: 'node "$HOME/.claude/hooks/simplify-gate.cjs"' }];
+	if (options.includeSessionState) {
+		hooks.push({ type: "command", command: 'node "$HOME/.claude/hooks/session-state.cjs"' });
+	}
+
+	await writeFile(
+		join(dir, "settings.json"),
+		JSON.stringify(
+			{
+				hooks: {
+					UserPromptSubmit: [{ hooks }],
+				},
+			},
+			null,
+			2,
+		),
+	);
+	await writeFile(
+		join(dir, ".ck.json"),
+		JSON.stringify(
+			{
+				hooks: options.disabled ?? {},
+				kits: {
+					"ClaudeKit Engineer": {
+						installedSettings: {
+							hooks: [
+								"node $HOME/.claude/hooks/simplify-gate.cjs",
+								"node $HOME/.claude/hooks/session-state.cjs",
+							],
+							mcpServers: [],
+						},
+					},
+				},
+			},
+			null,
+			2,
+		),
+	);
+}
+
 describe("promptKitUpdate auto-init behavior", () => {
 	let tempDir: string;
 
@@ -232,6 +276,34 @@ describe("promptKitUpdate auto-init behavior", () => {
 		expect(spawnCount()).toBe(0);
 		expect(capturedExecCmd()).toContain("--yes");
 		expect(capturedExecCmd()).toContain("--kit engineer");
+	});
+
+	test("restores missing global hook registrations during a kit update (--yes mode)", async () => {
+		await writeGlobalHookState(tempDir, { includeSessionState: false });
+
+		const { deps, execCount, spawnCount, capturedExecCmd } = makeDeps();
+		deps.getLatestReleaseTagFn = async () => "v2.0.0";
+		await promptKitUpdate(false, true, deps);
+
+		expect(execCount()).toBe(1);
+		expect(spawnCount()).toBe(0);
+		expect(capturedExecCmd()).toContain("ck init -g");
+		expect(capturedExecCmd()).toContain("--restore-ck-hooks");
+	});
+
+	test("does not force global hook restore for hooks explicitly disabled in .ck.json", async () => {
+		await writeGlobalHookState(tempDir, {
+			disabled: { "session-state": false },
+			includeSessionState: false,
+		});
+
+		const { deps, execCount, capturedExecCmd } = makeDeps();
+		deps.getLatestReleaseTagFn = async () => "v2.0.0";
+		await promptKitUpdate(false, true, deps);
+
+		expect(execCount()).toBe(1);
+		expect(capturedExecCmd()).toContain("ck init -g");
+		expect(capturedExecCmd()).not.toContain("--restore-ck-hooks");
 	});
 
 	test("reinstalls local kit when latest project settings have broken hook registrations (--yes mode)", async () => {
