@@ -5,18 +5,17 @@
  */
 import { existsSync } from "node:fs";
 import { mkdir, readFile, rename, unlink, writeFile } from "node:fs/promises";
-import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import lockfile from "proper-lockfile";
 import { z } from "zod";
 import { logger } from "../../shared/logger.js";
+import { PathResolver } from "../../shared/path-resolver.js";
 import { computeFileChecksum } from "./checksum-utils.js";
 import { UNKNOWN_CHECKSUM, normalizeChecksum } from "./reconcile-types.js";
 import type { PortableType, ProviderType } from "./types.js";
 
 function getPortableRegistryPaths() {
-	const home = homedir();
-	const claudekitDir = join(home, ".claudekit");
+	const claudekitDir = PathResolver.getConfigDir(false);
 	return {
 		registryPath: join(claudekitDir, "portable-registry.json"),
 		registryLockPath: join(claudekitDir, "portable-registry.lock"),
