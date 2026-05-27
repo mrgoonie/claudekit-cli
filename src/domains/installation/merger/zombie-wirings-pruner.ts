@@ -19,6 +19,7 @@ import { existsSync, readdirSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename, dirname, isAbsolute, resolve, sep } from "node:path";
 import type { HookConfig, HookEntry, SettingsJson } from "@/domains/config/merger/types.js";
+import { normalizeCommand } from "@/shared/command-normalizer.js";
 
 export interface PruneResult {
 	settings: SettingsJson;
@@ -32,8 +33,15 @@ export interface PruneResult {
  * @param hookDir  - Absolute path to the hooks directory (used as base for relative paths)
  * @returns Mutated settings and list of pruned file basenames
  */
-export function pruneZombieEngineerWirings(settings: SettingsJson, hookDir: string): PruneResult {
+export function pruneZombieEngineerWirings(
+	settings: SettingsJson,
+	hookDir: string,
+	preserveCommands: Set<string> = new Set(),
+): PruneResult {
 	const pruned: string[] = [];
+	const normalizedPreserveCommands = new Set(
+		Array.from(preserveCommands).map((command) => normalizeCommand(command)),
+	);
 
 	// Defense-in-depth: if hookDir is absent or contains no hook files, every existsSync
 	// check would false-negative and could prune everything. Skip pruning entirely in
@@ -62,7 +70,7 @@ export function pruneZombieEngineerWirings(settings: SettingsJson, hookDir: stri
 			if (!("hooks" in group) || !Array.isArray(group.hooks)) {
 				// Flat HookEntry (no hooks array) — apply same pruning logic
 				const entry = group as HookEntry;
-				if (shouldPruneEntry(entry, hookDir, pruned)) {
+				if (shouldPruneEntry(entry, hookDir, pruned, normalizedPreserveCommands)) {
 					continue;
 				}
 				keptGroups.push(group);
@@ -71,7 +79,7 @@ export function pruneZombieEngineerWirings(settings: SettingsJson, hookDir: stri
 
 			// HookConfig with hooks array — filter individual hook entries
 			const keptHooks = (group.hooks as HookEntry[]).filter((h) => {
-				return !shouldPruneEntry(h, hookDir, pruned);
+				return !shouldPruneEntry(h, hookDir, pruned, normalizedPreserveCommands);
 			});
 
 			if (keptHooks.length > 0) {
@@ -99,7 +107,12 @@ export function pruneZombieEngineerWirings(settings: SettingsJson, hookDir: stri
  * Determine whether a single hook entry should be pruned.
  * Side-effect: pushes the basename to `pruned` list when pruning.
  */
-function shouldPruneEntry(entry: HookEntry, hookDir: string, pruned: string[]): boolean {
+function shouldPruneEntry(
+	entry: HookEntry,
+	hookDir: string,
+	pruned: string[],
+	preserveCommands: Set<string>,
+): boolean {
 	if (isLegacyDescriptiveNamePrompt(entry)) {
 		pruned.push("legacy-descriptive-name-prompt");
 		return true;
@@ -107,6 +120,9 @@ function shouldPruneEntry(entry: HookEntry, hookDir: string, pruned: string[]): 
 
 	// Conservative: only prune entries explicitly tagged as engineer-origin
 	if (entry._origin !== "engineer") return false;
+	if (entry.command && preserveCommands.has(normalizeCommand(entry.command))) {
+		return false;
+	}
 
 	const filePath = extractHookFilePath(entry.command, hookDir);
 	if (!filePath) return false; // Can't resolve path — preserve (default-keep on uncertainty)

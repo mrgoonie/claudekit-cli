@@ -38,6 +38,7 @@ export async function resolveOptions(ctx: InitContext): Promise<InitContext> {
 		skipSetup: parsed.skipSetup ?? false,
 		forceOverwrite: parsed.forceOverwrite ?? false,
 		forceOverwriteSettings: parsed.forceOverwriteSettings ?? false,
+		restoreCkHooks: parsed.restoreCkHooks ?? false,
 		dryRun: parsed.dryRun ?? false,
 		prefix: parsed.prefix ?? false,
 		sync: parsed.sync ?? false,

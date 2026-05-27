@@ -59,6 +59,7 @@ export async function handleKitSelection(ctx: SetupContext): Promise<SetupContex
 			dryRun: false,
 			forceOverwrite: false,
 			forceOverwriteSettings: false,
+			restoreCkHooks: false,
 			skipSetup: true, // Skip setup wizard since we already ran it
 			refresh: false,
 			sync: false,

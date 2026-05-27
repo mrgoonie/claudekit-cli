@@ -95,6 +95,7 @@ export async function handleMerge(ctx: InitContext): Promise<InitContext> {
 
 	merger.setGlobalFlag(ctx.options.global);
 	merger.setForceOverwriteSettings(ctx.options.forceOverwriteSettings);
+	merger.setRestoreCkHooks(ctx.options.restoreCkHooks);
 	merger.setProjectDir(ctx.resolvedDir);
 	merger.setKitName(ctx.kit.name);
 

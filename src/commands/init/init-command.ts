@@ -125,6 +125,7 @@ function createInitContext(rawOptions: UpdateCommandOptions, prompts: PromptsMan
 		skipSetup: false,
 		forceOverwrite: false,
 		forceOverwriteSettings: false,
+		restoreCkHooks: false,
 		dryRun: false,
 		prefix: false,
 		sync: false,

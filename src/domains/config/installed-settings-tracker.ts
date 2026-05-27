@@ -8,6 +8,7 @@ import { existsSync } from "node:fs";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { logger, normalizeCommand } from "@/shared";
+import { parseJsonContent } from "@/shared/json-content.js";
 import type { InstalledSettings } from "@/types";
 
 const CK_JSON_FILE = ".ck.json";
@@ -52,7 +53,7 @@ export class InstalledSettingsTracker {
 
 		try {
 			const content = await readFile(ckJsonPath, "utf-8");
-			const data: CkJsonData = JSON.parse(content);
+			const data = parseJsonContent<CkJsonData>(content);
 
 			// Multi-kit format: kits.{kitName}.installedSettings
 			const installed = data.kits?.[this.kitName]?.installedSettings;
@@ -82,7 +83,7 @@ export class InstalledSettingsTracker {
 			// Load existing data
 			if (existsSync(ckJsonPath)) {
 				const content = await readFile(ckJsonPath, "utf-8");
-				data = JSON.parse(content);
+				data = parseJsonContent<CkJsonData>(content);
 			}
 
 			// Ensure kits object exists

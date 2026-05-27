@@ -126,11 +126,13 @@ export function buildInitCommand(
 	kit?: KitType,
 	beta?: boolean,
 	yes?: boolean,
+	restoreCkHooks?: boolean,
 ): string {
 	const parts = ["ck init"];
 	if (isGlobal) parts.push("-g");
 	if (kit) parts.push(`--kit ${kit}`);
 	if (yes) parts.push("--yes");
+	if (restoreCkHooks) parts.push("--restore-ck-hooks");
 	parts.push("--install-skills");
 	if (beta) parts.push("--beta");
 	return parts.join(" ");
@@ -368,6 +370,7 @@ export async function promptKitUpdate(
 						`Detected ${missingHookDeps.length} missing hook dependency(ies); reinstalling kit content`,
 					);
 					alreadyAtLatest = false;
+					forceKitReinstall = true;
 				}
 			} catch (error) {
 				logger.verbose(
@@ -389,6 +392,7 @@ export async function promptKitUpdate(
 						`Detected ${missingHookRefs} broken hook registration(s); reinstalling kit content`,
 					);
 					alreadyAtLatest = false;
+					forceKitReinstall = true;
 
 					// A project-local settings.json that points at missing project hooks must be
 					// repaired by a local ck init, even when a global kit also exists.
@@ -446,7 +450,13 @@ export async function promptKitUpdate(
 
 		if (yes) {
 			// Non-interactive: exec with pre-selected kit + spinner
-			const initCmd = buildInitCommand(selection.isGlobal, selection.kit, useBeta, true);
+			const initCmd = buildInitCommand(
+				selection.isGlobal,
+				selection.kit,
+				useBeta,
+				true,
+				forceKitReinstall,
+			);
 			logger.info(`Running: ${initCmd}`);
 			const s = (deps?.spinnerFn ?? spinner)();
 			s.start("Updating ClaudeKit content...");
@@ -486,6 +496,7 @@ export async function promptKitUpdate(
 			// Interactive: spawn ck init with inherited stdio
 			const args = ["init"];
 			if (selection.isGlobal) args.push("-g");
+			if (forceKitReinstall) args.push("--restore-ck-hooks");
 			args.push("--install-skills");
 			if (useBeta) args.push("--beta");
 
@@ -594,9 +605,9 @@ export async function promptMigrateUpdate(deps?: PromptMigrateUpdateDeps): Promi
 
 		if (!detectFn || !getConfigFn) return;
 
-		// Detect installed providers. Claude Code is not an auto-migration target,
-		// but it can still contain generated-context hook registrations that need
-		// self-healing after a CLI update.
+		// Detect installed providers. Claude Code is the source install, not a
+		// migration target; cleaning it as a migrated provider would remove current CK
+		// hooks immediately after update self-heal restores them.
 		const allProviders = await detectFn();
 		if (allProviders.length === 0) {
 			logger.verbose("No migration providers detected, skipping migrate step");
@@ -617,24 +628,28 @@ export async function promptMigrateUpdate(deps?: PromptMigrateUpdateDeps): Promi
 				deps?.cleanupMigratedHooksFn ??
 				(await import("@/commands/portable/migrated-hooks-cleanup.js"))
 					.cleanupMigratedHooksForProviders;
-			const cleanupProviders = allProviders.filter((p) => SAFE_PROVIDER_NAME.test(p));
-			const cleanupResults = await cleanupFn(cleanupProviders, { global: isGlobal });
-			const cleanupCount = cleanupResults.reduce(
-				(total, result) =>
-					total + result.hooksPruned + result.filesRemoved + result.registryEntriesRemoved,
-				0,
+			const cleanupProviders = allProviders.filter(
+				(p) => p !== "claude-code" && SAFE_PROVIDER_NAME.test(p),
 			);
-			if (cleanupCount > 0) {
-				logger.info(`Cleaned up ${cleanupCount} generated-context hook artifact(s)`);
+			if (cleanupProviders.length > 0) {
+				const cleanupResults = await cleanupFn(cleanupProviders, { global: isGlobal });
+				const cleanupCount = cleanupResults.reduce(
+					(total, result) =>
+						total + result.hooksPruned + result.filesRemoved + result.registryEntriesRemoved,
+					0,
+				);
+				if (cleanupCount > 0) {
+					logger.info(`Cleaned up ${cleanupCount} generated-context hook artifact(s)`);
+				}
+
+				await repairLegacyHookPromptsSafely();
+				await repairHookFileReferencesSafely();
 			}
 		} catch (error) {
 			logger.verbose(
 				`Migrated hook cleanup skipped: ${error instanceof Error ? error.message : "unknown"}`,
 			);
 		}
-
-		await repairLegacyHookPromptsSafely();
-		await repairHookFileReferencesSafely();
 
 		const targets = allProviders.filter((p) => p !== "claude-code");
 		if (targets.length === 0) {

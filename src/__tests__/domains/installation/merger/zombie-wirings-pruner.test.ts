@@ -596,6 +596,36 @@ describe("pruneZombieEngineerWirings — empty/missing hookDir guard (Fix 2)", (
 		const { pruned } = pruneZombieEngineerWirings(settings, testHookDir);
 		expect(pruned).toContain("ghost-check.cjs");
 	});
+
+	it("preserves missing engineer hook when command is present in current source settings", () => {
+		const command = `node "${join(testHookDir, "new-current-hook.cjs")}"`;
+		const settings: SettingsJson = {
+			hooks: {
+				PreToolUse: [
+					{
+						hooks: [
+							{
+								type: "command",
+								command,
+								_origin: "engineer",
+							},
+						],
+					},
+				],
+			},
+		};
+
+		const { pruned, settings: result } = pruneZombieEngineerWirings(
+			settings,
+			testHookDir,
+			new Set([command]),
+		);
+
+		expect(pruned).not.toContain("new-current-hook.cjs");
+		const remaining = (result.hooks?.PreToolUse?.[0] as { hooks?: Array<{ command: string }> })
+			.hooks?.[0];
+		expect(remaining?.command).toBe(command);
+	});
 });
 
 // ---------------------------------------------------------------------------

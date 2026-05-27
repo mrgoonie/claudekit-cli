@@ -631,6 +631,7 @@ Initialize or update ClaudeKit project (with interactive version selection)
 | `--dry-run` | Preview changes without applying them (requires --prefix) | — |
 | `--force-overwrite` | Override ownership protections and delete user-modified files | — |
 | `--force-overwrite-settings` | Fully replace settings.json instead of selective merge | — |
+| `--restore-ck-hooks` | Restore CK-managed hook registrations during update self-heal | — |
 | `--docs-dir <name>` | Custom docs folder name to avoid conflicts with existing folders | `docs` |
 | `--plans-dir <name>` | Custom plans folder name to avoid conflicts with existing folders | `plans` |
 
@@ -1071,4 +1072,4 @@ Watch GitHub issues and auto-respond with AI analysis
 - `ck watch --interval 60000` — Poll every 60 seconds instead of default 30s
 
 
-<!-- generated: 2026-05-19T17:31:51.698Z -->
+<!-- generated: 2026-05-27T02:11:15.512Z -->

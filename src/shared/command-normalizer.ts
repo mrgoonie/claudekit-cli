@@ -144,6 +144,13 @@ export function repairClaudeNodeCommandPath(
 		return { command, changed: command !== cmd, issue: "raw-relative" };
 	}
 
+	const quotedRelativeMatch = cmd.match(/^(node\s+)["'](?:\.\/)?(\.claude[/\\][^"']+)["'](.*)$/);
+	if (quotedRelativeMatch) {
+		const [, nodePrefix, relativePath, suffix] = quotedRelativeMatch;
+		const command = formatCanonicalClaudeCommand(nodePrefix, root, relativePath, suffix);
+		return { command, changed: command !== cmd, issue: "raw-relative" };
+	}
+
 	const embeddedQuotedMatch = cmd.match(
 		/^(node\s+)"(?:\$HOME|\$CLAUDE_PROJECT_DIR|%USERPROFILE%|%CLAUDE_PROJECT_DIR%)[/\\](\.claude[/\\][^"]+)"(.*)$/,
 	);

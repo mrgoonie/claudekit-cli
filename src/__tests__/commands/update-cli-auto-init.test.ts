@@ -322,6 +322,7 @@ describe("promptKitUpdate auto-init behavior", () => {
 		expect(capturedExecCmd()).not.toContain("-g");
 		expect(capturedExecCmd()).toContain("--yes");
 		expect(capturedExecCmd()).toContain("--kit engineer");
+		expect(capturedExecCmd()).toContain("--restore-ck-hooks");
 		expect(capturedExecCmd()).toContain("--beta");
 	});
 
