@@ -1,3 +1,49 @@
+## [4.4.0](https://github.com/mrgoonie/claudekit-cli/compare/v4.3.1...v4.4.0) (2026-05-27)
+
+### 🚀 Features
+
+* **codex:** wire Codex hooks on Windows + prune zombie hook entries ([9d8d102](https://github.com/mrgoonie/claudekit-cli/commit/9d8d10214b17aa6b9da959f3fcab0df8682c35b9))
+
+### 🐞 Bug Fixes
+
+* allow in-boundary symlinks in portable installer path validation ([dad3983](https://github.com/mrgoonie/claudekit-cli/commit/dad3983750d53b504d3975578b8b12050eecaba6)), closes [#829](https://github.com/mrgoonie/claudekit-cli/issues/829)
+* **codex:** rewrite Codex hook commands to wrappers on Windows (\$HOME/forward-slash form) ([0d9742b](https://github.com/mrgoonie/claudekit-cli/commit/0d9742bb63776ab52e86e8248934e0ef3e7d14ed))
+* extend cli update install timeout ([#866](https://github.com/mrgoonie/claudekit-cli/issues/866)) ([c63267a](https://github.com/mrgoonie/claudekit-cli/commit/c63267a1c8fd06348a25f80153bb904361d1e2b3))
+* handle ELOOP and narrow boundary realpath catch in symlink validation ([031d363](https://github.com/mrgoonie/claudekit-cli/commit/031d36398ec939524a1f3b5f334928ffd6cfa18b))
+* **install:** accept rules-bundled Claude guidance ([80f4b06](https://github.com/mrgoonie/claudekit-cli/commit/80f4b06023c91077d5f86ac52c21173d87dced3d))
+* **install:** harden zombie pruner against compound commands and empty hook dir ([1f864ee](https://github.com/mrgoonie/claudekit-cli/commit/1f864eeadb1deb6062ecc545393fbfa755740b74))
+* **install:** use native unzip on Linux to avoid yauzl hang ([0995d99](https://github.com/mrgoonie/claudekit-cli/commit/0995d999f25a2f252007c6f8ed19625ab8efcd9e)), closes [nodejs/node#63487](https://github.com/nodejs/node/issues/63487) [thejoshwolfe/yauzl#169](https://github.com/thejoshwolfe/yauzl/issues/169)
+* keep portable registry paths stable under lock ([#863](https://github.com/mrgoonie/claudekit-cli/issues/863)) ([a28b62c](https://github.com/mrgoonie/claudekit-cli/commit/a28b62cc1508284f365c703498b042f97fcaa11d))
+* make migrate conflict execution explicit ([a6a6245](https://github.com/mrgoonie/claudekit-cli/commit/a6a6245b6e3330fb8323ddd07770a35c44e59afd))
+* **migrate:** support Codex hook compatibility ([b5f04b2](https://github.com/mrgoonie/claudekit-cli/commit/b5f04b244eb6135a455ece636bfe8fec57b9bc13))
+* **plan:** remind agents to read generated files ([#833](https://github.com/mrgoonie/claudekit-cli/issues/833)) ([74e1ba2](https://github.com/mrgoonie/claudekit-cli/commit/74e1ba2fef88d510de79a536509acc3d1bbe803f))
+* prefer local hook self-heal during update ([35bdd7c](https://github.com/mrgoonie/claudekit-cli/commit/35bdd7c5b0fc31aebe610b4f3c7499b7f615bb7b))
+* prune legacy descriptive-name prompt hook ([3248e03](https://github.com/mrgoonie/claudekit-cli/commit/3248e03d803e60902368bba2af3bced8c6645e54)), closes [#838](https://github.com/mrgoonie/claudekit-cli/issues/838)
+* prune legacy hook prompts during health checks ([ce3c9bb](https://github.com/mrgoonie/claudekit-cli/commit/ce3c9bb2432bedb9b34f7c185b06a5dc861fc817))
+* prune legacy prompt hooks after init ([0b1958f](https://github.com/mrgoonie/claudekit-cli/commit/0b1958fc1da890e89fdc8be44e376ad1d75f6782))
+* repair doctor version and post-heal reporting ([#845](https://github.com/mrgoonie/claudekit-cli/issues/845)) ([22bf8d9](https://github.com/mrgoonie/claudekit-cli/commit/22bf8d9d002cb90d23f922e6b85112f31c9c03b3))
+* restore hooks with legacy metadata ([f5b3074](https://github.com/mrgoonie/claudekit-cli/commit/f5b30743d6d36991dbf73ee9a084e34cbc1c7de1))
+* restore portable registry home resolution ([6082c0b](https://github.com/mrgoonie/claudekit-cli/commit/6082c0bc73a6d81a0eb600739ea1bf508b0ade12))
+* restore sparse global hook registrations ([95326e7](https://github.com/mrgoonie/claudekit-cli/commit/95326e76859bb44aefbb40158094004b73fcfe2b))
+* **scripts:** preserve generated timestamps when content unchanged ([6845052](https://github.com/mrgoonie/claudekit-cli/commit/6845052e63f34631ef4d3b431ba94ba6e8fa4629)), closes [#831](https://github.com/mrgoonie/claudekit-cli/issues/831)
+* self-heal hook references after init ([85c3dd0](https://github.com/mrgoonie/claudekit-cli/commit/85c3dd00b679589ff963bc33d27a6232c2a06b44))
+* self-heal hook references after update cleanup ([ed275bd](https://github.com/mrgoonie/claudekit-cli/commit/ed275bd294d5abbefe413e5f9c7fdb91606e5448))
+* self-heal hooks during npm postinstall ([#862](https://github.com/mrgoonie/claudekit-cli/issues/862)) ([e28aec7](https://github.com/mrgoonie/claudekit-cli/commit/e28aec707ac75615867f19915ab9e60bc80a09be))
+* self-heal legacy prompt hooks during package update ([740c524](https://github.com/mrgoonie/claudekit-cli/commit/740c52411cbf7bed1f39214a368411cf6ad9db3d))
+* self-heal missing hook dependencies on update ([ad8e350](https://github.com/mrgoonie/claudekit-cli/commit/ad8e350a31c509d4137bf3b4a3eb60aeebb19300))
+* self-heal missing hook registrations during update ([1d42852](https://github.com/mrgoonie/claudekit-cli/commit/1d42852bacb7c55787d3574998a70c10c2da5103))
+* self-heal missing hook registrations on update ([a0675da](https://github.com/mrgoonie/claudekit-cli/commit/a0675da19eb897b6fabc7ed34f5f5f87c14073b0))
+
+### ✅ Tests
+
+* **codex:** add Windows Codex-hooks smoke harness for i9-bootcamp ([7e45c4c](https://github.com/mrgoonie/claudekit-cli/commit/7e45c4cade86b39d68a69e7c72d9dae14a05c61d))
+* **install:** remove duplicate baseline test file that raced on CLAUDE_CONFIG_DIR in CI ([1f9e19a](https://github.com/mrgoonie/claudekit-cli/commit/1f9e19a4ddab49fce473621fefe0d8fc38a3c971))
+* isolate portable registry home in CI ([c9e29db](https://github.com/mrgoonie/claudekit-cli/commit/c9e29db6e4134ffa97c7b494770f2da88c2ea811))
+
+### 👷 CI
+
+* build before release tests ([#865](https://github.com/mrgoonie/claudekit-cli/issues/865)) ([3cbd00c](https://github.com/mrgoonie/claudekit-cli/commit/3cbd00cf8a1a864fa701e02e72fa244616ed1a91))
+
 ## [4.3.1](https://github.com/mrgoonie/claudekit-cli/compare/v4.3.0...v4.3.1) (2026-05-13)
 
 ### 🐞 Bug Fixes
