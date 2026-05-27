@@ -236,6 +236,16 @@ const GlobalConfigPage: React.FC = () => {
 						description: t("fieldHookSubagentInitDesc"),
 					},
 					{
+						path: "hooks.session-state",
+						label: t("fieldHookSessionState"),
+						description: t("fieldHookSessionStateDesc"),
+					},
+					{
+						path: "hooks.cook-after-plan-reminder",
+						label: t("fieldHookCookAfterPlanReminder"),
+						description: t("fieldHookCookAfterPlanReminderDesc"),
+					},
+					{
 						path: "hooks.descriptive-name",
 						label: t("fieldHookDescriptiveName"),
 						description: t("fieldHookDescriptiveNameDesc"),
@@ -244,6 +254,16 @@ const GlobalConfigPage: React.FC = () => {
 						path: "hooks.dev-rules-reminder",
 						label: t("fieldHookDevRulesReminder"),
 						description: t("fieldHookDevRulesReminderDesc"),
+					},
+					{
+						path: "hooks.plan-format-kanban",
+						label: t("fieldHookPlanFormatKanban"),
+						description: t("fieldHookPlanFormatKanbanDesc"),
+					},
+					{
+						path: "hooks.usage-quota-cache-refresh",
+						label: t("fieldHookUsageQuotaCacheRefresh"),
+						description: t("fieldHookUsageQuotaCacheRefreshDesc"),
 					},
 					{
 						path: "hooks.usage-context-awareness",

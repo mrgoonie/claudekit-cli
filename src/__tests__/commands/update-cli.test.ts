@@ -94,6 +94,13 @@ describe("update-cli", () => {
 			expect(result).toBe("ck init -g --kit engineer --yes --install-skills --beta");
 		});
 
+		it("includes restore hook flag only when self-heal requested", () => {
+			expect(buildInitCommand(false, "engineer", false, true)).not.toContain("--restore-ck-hooks");
+			expect(buildInitCommand(false, "engineer", false, true, true)).toBe(
+				"ck init --kit engineer --yes --restore-ck-hooks --install-skills",
+			);
+		});
+
 		it("does not include --beta flag when beta is false", () => {
 			const result = buildInitCommand(false, "engineer", false);
 			expect(result).toBe("ck init --kit engineer --install-skills");

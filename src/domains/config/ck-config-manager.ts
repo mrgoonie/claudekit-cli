@@ -7,6 +7,7 @@ import { existsSync } from "node:fs";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
+import { parseJsonContent } from "@/shared/json-content.js";
 import { logger } from "@/shared/logger.js";
 import {
 	type CkConfig,
@@ -148,7 +149,7 @@ export class CkConfigManager {
 		try {
 			if (!existsSync(configPath)) return null;
 			const content = await readFile(configPath, "utf-8");
-			const data = normalizeCkConfigInput(JSON.parse(content));
+			const data = normalizeCkConfigInput(parseJsonContent(content));
 			return CkConfigSchema.parse(data);
 		} catch (error) {
 			logger.warning(
@@ -283,7 +284,7 @@ export class CkConfigManager {
 		if (!existingConfig && existsSync(configPath)) {
 			try {
 				const content = await readFile(configPath, "utf-8");
-				const parsed = JSON.parse(content);
+				const parsed = parseJsonContent(content);
 				if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
 					existingConfig = normalizeCkConfigInput(parsed) as Record<string, unknown>;
 				}

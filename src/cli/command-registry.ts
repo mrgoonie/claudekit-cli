@@ -110,6 +110,7 @@ export function registerCommands(cli: ReturnType<typeof cac>): void {
 			"--force-overwrite-settings",
 			"Fully replace settings.json instead of selective merge (destroys user customizations)",
 		)
+		.option("--restore-ck-hooks", "Restore CK-managed hook registrations during update self-heal")
 		.option("--skip-setup", "Skip interactive configuration wizard")
 		.option("--docs-dir <name>", "Custom docs folder name (default: docs)")
 		.option("--plans-dir <name>", "Custom plans folder name (default: plans)")

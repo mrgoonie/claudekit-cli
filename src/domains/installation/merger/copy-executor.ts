@@ -97,6 +97,13 @@ export class CopyExecutor {
 	}
 
 	/**
+	 * Restore CK-owned hook registrations during update self-heal.
+	 */
+	setRestoreCkHooks(restore: boolean): void {
+		this.settingsProcessor.setRestoreCkHooks(restore);
+	}
+
+	/**
 	 * Set deletion patterns from metadata.json for pruning stale hooks from settings.json
 	 */
 	setDeletions(deletions: string[]): void {

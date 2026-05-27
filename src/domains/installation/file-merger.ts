@@ -67,6 +67,13 @@ export class FileMerger {
 	}
 
 	/**
+	 * Restore CK-owned hook registrations during update self-heal.
+	 */
+	setRestoreCkHooks(restore: boolean): void {
+		this.copyExecutor.setRestoreCkHooks(restore);
+	}
+
+	/**
 	 * Set project directory for settings tracking
 	 */
 	setProjectDir(dir: string): void {

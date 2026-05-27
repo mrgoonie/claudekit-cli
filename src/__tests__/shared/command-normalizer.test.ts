@@ -39,6 +39,17 @@ describe("normalizeCommand", () => {
 		expect(result.command).toBe('node "$CLAUDE_PROJECT_DIR"/.claude/hooks/scout-block.cjs');
 	});
 
+	it("repairs quoted relative project commands from kit settings to the canonical CLAUDE_PROJECT_DIR form", () => {
+		const result = repairClaudeNodeCommandPath(
+			'node ".claude/hooks/session-init.cjs"',
+			"$CLAUDE_PROJECT_DIR",
+		);
+
+		expect(result.changed).toBe(true);
+		expect(result.issue).toBe("raw-relative");
+		expect(result.command).toBe('node "$CLAUDE_PROJECT_DIR"/.claude/hooks/session-init.cjs');
+	});
+
 	it("ignores non-node commands even when they mention .claude", () => {
 		const command = "bash .claude/hooks/scout-block.cjs";
 		const result = repairClaudeNodeCommandPath(command, "$CLAUDE_PROJECT_DIR");

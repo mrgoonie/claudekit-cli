@@ -132,6 +132,10 @@ export const initCommandHelp: CommandHelp = {
 					flags: "--force-overwrite-settings",
 					description: "Fully replace settings.json instead of selective merge",
 				},
+				{
+					flags: "--restore-ck-hooks",
+					description: "Restore CK-managed hook registrations during update self-heal",
+				},
 			],
 		},
 		folderOptionsGroup,

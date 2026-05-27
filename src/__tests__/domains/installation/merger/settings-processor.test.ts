@@ -54,6 +54,45 @@ describe("SettingsProcessor custom global dir support", () => {
 		return processor;
 	}
 
+	async function writeHookSourceSettings(): Promise<void> {
+		await writeFile(
+			sourceFile,
+			JSON.stringify(
+				{
+					hooks: {
+						SessionStart: [
+							{
+								matcher: "startup|resume|clear|compact",
+								hooks: [
+									{ type: "command", command: "node .claude/hooks/session-init.cjs" },
+									{
+										type: "command",
+										command: "node .claude/hooks/usage-quota-cache-refresh.cjs",
+									},
+								],
+							},
+						],
+						Stop: [
+							{
+								hooks: [{ type: "command", command: "node .claude/hooks/session-state.cjs" }],
+							},
+						],
+					},
+				},
+				null,
+				2,
+			),
+		);
+	}
+
+	function collectCommands(settings: {
+		hooks?: Record<string, Array<{ hooks?: Array<{ command?: string }> }>>;
+	}): string[] {
+		return Object.values(settings.hooks ?? {}).flatMap((groups) =>
+			groups.flatMap((group) => group.hooks?.map((hook) => hook.command ?? "") ?? []),
+		);
+	}
+
 	it("writes fresh global hook commands to the active CLAUDE_CONFIG_DIR path", async () => {
 		await writeFile(
 			sourceFile,
@@ -87,6 +126,127 @@ describe("SettingsProcessor custom global dir support", () => {
 		expect(writtenSettings.hooks.UserPromptSubmit[0].hooks[0].command).toBe(
 			`node "${toPosix(customClaudeDir)}/hooks/task-completed-handler.cjs"`,
 		);
+	});
+
+	it("restore mode re-adds CK hooks that installed-settings history would otherwise treat as user-deleted", async () => {
+		await writeHookSourceSettings();
+		await writeFile(destFile, JSON.stringify({ hooks: {} }, null, 2));
+		await writeFile(
+			join(customClaudeDir, ".ck.json"),
+			JSON.stringify(
+				{
+					kits: {
+						engineer: {
+							installedSettings: {
+								hooks: [
+									"node $HOME/.claude/hooks/session-init.cjs",
+									"node $HOME/.claude/hooks/usage-quota-cache-refresh.cjs",
+									"node $HOME/.claude/hooks/session-state.cjs",
+								],
+								mcpServers: [],
+							},
+						},
+					},
+				},
+				null,
+				2,
+			),
+		);
+
+		const processor = createProcessor();
+		processor.setRestoreCkHooks(true);
+		await processor.processSettingsJson(sourceFile, destFile);
+
+		const merged = JSON.parse(await readFile(destFile, "utf-8"));
+		const commands = collectCommands(merged);
+
+		expect(commands.some((command) => command.includes("session-init.cjs"))).toBe(true);
+		expect(commands.some((command) => command.includes("usage-quota-cache-refresh.cjs"))).toBe(
+			true,
+		);
+		expect(commands.some((command) => command.includes("session-state.cjs"))).toBe(true);
+	});
+
+	it("restore mode does not re-add hooks explicitly disabled in .ck.json", async () => {
+		await writeHookSourceSettings();
+		await writeFile(destFile, JSON.stringify({ hooks: {} }, null, 2));
+		await writeFile(
+			join(customClaudeDir, ".ck.json"),
+			JSON.stringify(
+				{
+					hooks: {
+						"session-state": false,
+					},
+					kits: {
+						engineer: {
+							installedSettings: {
+								hooks: [
+									"node $HOME/.claude/hooks/session-init.cjs",
+									"node $HOME/.claude/hooks/session-state.cjs",
+								],
+								mcpServers: [],
+							},
+						},
+					},
+				},
+				null,
+				2,
+			),
+		);
+
+		const processor = createProcessor();
+		processor.setRestoreCkHooks(true);
+		await processor.processSettingsJson(sourceFile, destFile);
+
+		const merged = JSON.parse(await readFile(destFile, "utf-8"));
+		const commands = collectCommands(merged);
+
+		expect(commands.some((command) => command.includes("session-init.cjs"))).toBe(true);
+		expect(commands.some((command) => command.includes("session-state.cjs"))).toBe(false);
+	});
+
+	it("local restore mode does not re-add hooks explicitly disabled in project .claude/.ck.json", async () => {
+		await writeHookSourceSettings();
+		const projectDir = join(testDir, "project");
+		const localClaudeDir = join(projectDir, ".claude");
+		const localDestFile = join(localClaudeDir, "settings.json");
+		await mkdir(localClaudeDir, { recursive: true });
+		await writeFile(localDestFile, JSON.stringify({ hooks: {} }, null, 2));
+		await writeFile(
+			join(localClaudeDir, ".ck.json"),
+			`\uFEFF${JSON.stringify(
+				{
+					hooks: {
+						"session-state": false,
+					},
+					kits: {
+						engineer: {
+							installedSettings: {
+								hooks: [
+									"node $HOME/.claude/hooks/session-init.cjs",
+									"node $HOME/.claude/hooks/session-state.cjs",
+								],
+								mcpServers: [],
+							},
+						},
+					},
+				},
+				null,
+				2,
+			)}`,
+		);
+
+		const processor = new SettingsProcessor();
+		processor.setProjectDir(projectDir);
+		processor.setKitName("engineer");
+		processor.setRestoreCkHooks(true);
+		await processor.processSettingsJson(sourceFile, localDestFile);
+
+		const merged = JSON.parse(await readFile(localDestFile, "utf-8"));
+		const commands = collectCommands(merged);
+
+		expect(commands.some((command) => command.includes("session-init.cjs"))).toBe(true);
+		expect(commands.some((command) => command.includes("session-state.cjs"))).toBe(false);
 	});
 
 	it("deduplicates legacy $HOME hooks against the custom global path on merge", async () => {

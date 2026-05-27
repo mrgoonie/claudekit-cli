@@ -90,9 +90,9 @@ describe("CkConfigManager", () => {
 		it("should have consistent hook counts across all locations", () => {
 			const hooksInNames = CK_HOOK_NAMES.length;
 			const hooksInDefaults = Object.keys(DEFAULT_CK_CONFIG.hooks ?? {}).length;
-			// Both should be 9 (matching the hook count)
-			expect(hooksInNames).toBe(9);
-			expect(hooksInDefaults).toBe(9);
+			// Both should stay in sync with the hook count.
+			expect(hooksInNames).toBe(13);
+			expect(hooksInDefaults).toBe(13);
 		});
 
 		it("should have all hooks from CK_HOOK_NAMES in DEFAULT_CK_CONFIG.hooks", () => {
@@ -119,7 +119,7 @@ describe("CkConfigManager", () => {
 			}
 		});
 
-		it("should parse valid hooks config with all 9 hooks (incl. simplify-gate)", async () => {
+		it("should parse valid hooks config with all known hooks", async () => {
 			const hooksConfig = {
 				"session-init": true,
 				"subagent-init": true,
@@ -130,6 +130,10 @@ describe("CkConfigManager", () => {
 				"scout-block": true,
 				"privacy-block": true,
 				"simplify-gate": true,
+				"session-state": true,
+				"cook-after-plan-reminder": true,
+				"plan-format-kanban": true,
+				"usage-quota-cache-refresh": true,
 			};
 
 			const testConfig: CkConfig = {
@@ -165,6 +169,10 @@ describe("CkConfigManager", () => {
 				"scout-block",
 				"privacy-block",
 				"simplify-gate",
+				"session-state",
+				"cook-after-plan-reminder",
+				"plan-format-kanban",
+				"usage-quota-cache-refresh",
 			];
 
 			for (const hook of expectedHooks) {
@@ -183,6 +191,10 @@ describe("CkConfigManager", () => {
 				"scout-block",
 				"privacy-block",
 				"simplify-gate",
+				"session-state",
+				"cook-after-plan-reminder",
+				"plan-format-kanban",
+				"usage-quota-cache-refresh",
 			]);
 
 			for (const hook of CK_HOOK_NAMES) {

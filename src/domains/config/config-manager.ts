@@ -3,6 +3,7 @@ import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { chmod } from "node:fs/promises";
 import { platform } from "node:os";
 import { join } from "node:path";
+import { parseJsonContent } from "@/shared/json-content.js";
 import { logger } from "@/shared/logger.js";
 import { PathResolver } from "@/shared/path-resolver.js";
 import {
@@ -59,7 +60,7 @@ export class ConfigManager {
 		try {
 			if (existsSync(configFile)) {
 				const content = await readFile(configFile, "utf-8");
-				const data = JSON.parse(content);
+				const data = parseJsonContent<Record<string, unknown>>(content);
 				ConfigManager.config = ConfigSchema.parse(data);
 				logger.debug(`Config loaded from ${configFile}`);
 				return ConfigManager.config;
@@ -149,7 +150,7 @@ export class ConfigManager {
 		try {
 			if (existsSync(configPath)) {
 				const content = await readFile(configPath, "utf-8");
-				const data = JSON.parse(content);
+				const data = parseJsonContent<Record<string, unknown>>(content);
 				// Project config uses "paths" key for folder configuration
 				const folders = FoldersConfigSchema.parse(data.paths || data);
 				logger.debug(`Project config loaded from ${configPath}`);
@@ -191,7 +192,7 @@ export class ConfigManager {
 			if (existsSync(configPath)) {
 				try {
 					const content = await readFile(configPath, "utf-8");
-					existingConfig = JSON.parse(content);
+					existingConfig = parseJsonContent<Record<string, unknown>>(content);
 				} catch (error) {
 					// If parsing fails, start fresh
 					logger.debug(

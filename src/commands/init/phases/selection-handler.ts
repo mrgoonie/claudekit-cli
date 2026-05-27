@@ -517,6 +517,7 @@ export async function handleSelection(ctx: InitContext): Promise<InitContext> {
 		ctx.options.yes &&
 		!ctx.options.fresh &&
 		!ctx.options.force &&
+		!ctx.options.restoreCkHooks &&
 		releaseTag &&
 		!isOfflineMode &&
 		!pendingKits?.length

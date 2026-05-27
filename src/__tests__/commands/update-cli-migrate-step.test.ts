@@ -165,7 +165,7 @@ describe("promptMigrateUpdate (step 3 of update pipeline)", () => {
 	});
 
 	test("runs missing hook repair again after migrated hook cleanup", async () => {
-		detectInstalledProvidersMock.mockResolvedValue(["claude-code"]);
+		detectInstalledProvidersMock.mockResolvedValue(["codex"]);
 		const repairResults = [0, 2];
 		const deps = makeDeps();
 		deps.repairHookFileReferencesFn = async (projectDir) => {
@@ -184,7 +184,7 @@ describe("promptMigrateUpdate (step 3 of update pipeline)", () => {
 		expect(orderedCalls).toEqual(["legacy", "repair", "cleanup", "legacy", "repair"]);
 		expect(legacyRepairCalls).toEqual([process.cwd(), process.cwd()]);
 		expect(repairCalls).toEqual([process.cwd(), process.cwd()]);
-		expect(cleanupCalls).toEqual([{ providers: ["claude-code"], global: false }]);
+		expect(cleanupCalls).toEqual([{ providers: ["codex"], global: false }]);
 		expect(logger.info).toHaveBeenCalledWith("Cleaned up 2 generated-context hook artifact(s)");
 		expect(logger.info).toHaveBeenCalledWith("Repaired 2 missing hook file reference(s)");
 		expect(execCalls).toEqual([]);
@@ -196,6 +196,9 @@ describe("promptMigrateUpdate (step 3 of update pipeline)", () => {
 			config: { updatePipeline: { autoMigrateAfterUpdate: true } },
 		});
 		await promptMigrateUpdate(makeDeps());
+		expect(cleanupCalls).toEqual([]);
+		expect(legacyRepairCalls).toEqual([process.cwd()]);
+		expect(repairCalls).toEqual([process.cwd()]);
 		expect(execCalls).toEqual([]);
 	});
 
@@ -205,9 +208,7 @@ describe("promptMigrateUpdate (step 3 of update pipeline)", () => {
 			config: { updatePipeline: { autoMigrateAfterUpdate: true, migrateProviders: "auto" } },
 		});
 		await promptMigrateUpdate(makeDeps());
-		expect(cleanupCalls).toEqual([
-			{ providers: ["claude-code", "codex", "gemini-cli"], global: false },
-		]);
+		expect(cleanupCalls).toEqual([{ providers: ["codex", "gemini-cli"], global: false }]);
 		expect(execCalls).toEqual(["ck migrate --agent codex --agent gemini-cli --yes"]);
 	});
 
