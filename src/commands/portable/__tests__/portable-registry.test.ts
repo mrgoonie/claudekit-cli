@@ -5,8 +5,8 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
  */
 import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
-import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
-import { homedir } from "node:os";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import {
 	type PortableRegistryV3,
@@ -525,6 +525,38 @@ describe("empty registry initialization", () => {
 		expect(loaded.installations).toEqual([]);
 		expect(loaded.lastReconciled).toBeUndefined();
 		expect(loaded.appliedManifestVersion).toBeUndefined();
+	});
+
+	test("uses CK_TEST_HOME for registry isolation", async () => {
+		const originalCkTestHome = process.env.CK_TEST_HOME;
+		const testHome = await mkdtemp(join(tmpdir(), "ck-portable-registry-home-"));
+
+		try {
+			process.env.CK_TEST_HOME = testHome;
+
+			await addPortableInstallation(
+				"isolated",
+				"skill",
+				"cursor",
+				false,
+				".cursor/skills/isolated",
+				".claude/skills/isolated",
+			);
+
+			const isolatedRegistryPath = join(testHome, ".claudekit", "portable-registry.json");
+			expect(existsSync(isolatedRegistryPath)).toBe(true);
+
+			const loaded = await readPortableRegistry();
+			expect(loaded.installations).toHaveLength(1);
+			expect(loaded.installations[0]?.item).toBe("isolated");
+		} finally {
+			if (originalCkTestHome === undefined) {
+				Reflect.deleteProperty(process.env, "CK_TEST_HOME");
+			} else {
+				process.env.CK_TEST_HOME = originalCkTestHome;
+			}
+			await rm(testHome, { recursive: true, force: true });
+		}
 	});
 });
 
