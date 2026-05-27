@@ -6,6 +6,7 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
+	CLI_UPDATE_INSTALL_TIMEOUT_MS,
 	type KitSelectionParams,
 	type UpdateCliCommandDeps,
 	buildInitCommand,
@@ -822,10 +823,9 @@ describe("update-cli", () => {
 
 			expect(deps.npmRegistryClient.getDevVersion).toHaveBeenCalledTimes(1);
 			expect(deps.npmRegistryClient.getLatestVersion).not.toHaveBeenCalled();
-			expect(deps.execAsyncFn).toHaveBeenCalledWith(
-				"npm install -g claudekit-cli@3.36.0-dev.37",
-				expect.any(Object),
-			);
+			expect(deps.execAsyncFn).toHaveBeenCalledWith("npm install -g claudekit-cli@3.36.0-dev.37", {
+				timeout: CLI_UPDATE_INSTALL_TIMEOUT_MS,
+			});
 			expect(deps.promptKitUpdateFn).toHaveBeenCalledWith(true, true);
 		});
 

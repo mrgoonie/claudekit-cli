@@ -15,6 +15,8 @@ export interface RunUpdateDeps {
 	spinnerStop: (msg: string) => void;
 }
 
+export const CLI_UPDATE_INSTALL_TIMEOUT_MS = 600000;
+
 /** Extract stdout string from exec result (handles both string and object forms). */
 export function extractCommandStdout(
 	result: { stdout?: string; stderr?: string } | string,
@@ -37,7 +39,7 @@ export async function runPackageManagerUpdate(
 
 	spinnerStart("Updating CLI...");
 	try {
-		await execAsyncFn(updateCmd, { timeout: 120000 });
+		await execAsyncFn(updateCmd, { timeout: CLI_UPDATE_INSTALL_TIMEOUT_MS });
 		spinnerStop("Update completed");
 	} catch (error) {
 		spinnerStop("Update failed");

@@ -1,6 +1,6 @@
 {
-	"version": "4.3.1-dev.19",
-	"generatedAt": "2026-05-27T13:27:14.698Z",
+	"version": "4.3.1-dev.20",
+	"generatedAt": "2026-05-27T13:56:54.428Z",
 	"commands": {
 		"agents": {
 			"name": "agents",
