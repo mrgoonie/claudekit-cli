@@ -151,4 +151,104 @@ fs.writeFileSync(process.env.CK_POSTINSTALL_STUB_OUTPUT, JSON.stringify(process.
 			"--beta",
 		]);
 	});
+
+	test("restores sparse global CK hooks when legacy metadata has no hook snapshot", async () => {
+		const globalClaudeDir = join(tempDir, ".claude");
+		await mkdir(globalClaudeDir, { recursive: true });
+
+		await writeFile(
+			join(globalClaudeDir, "settings.json"),
+			JSON.stringify(
+				{
+					hooks: {
+						UserPromptSubmit: [
+							{
+								hooks: [
+									{
+										type: "command",
+										command: 'node "$HOME/.claude/hooks/simplify-gate.cjs"',
+									},
+								],
+							},
+						],
+						PreToolUse: [
+							{
+								hooks: [
+									{
+										type: "command",
+										command: 'node "$HOME/.claude/hooks/descriptive-name.cjs"',
+									},
+									{
+										type: "command",
+										command: 'node "$HOME/.claude/hooks/privacy-block.cjs"',
+									},
+									{
+										type: "command",
+										command: 'node "$HOME/.claude/hooks/scout-block.cjs"',
+									},
+								],
+							},
+						],
+					},
+				},
+				null,
+				2,
+			),
+		);
+		await writeFile(
+			join(globalClaudeDir, ".ck.json"),
+			JSON.stringify(
+				{
+					hooks: {},
+					kits: {
+						"ClaudeKit Engineer": {
+							version: "v2.19.2-beta.1",
+						},
+					},
+				},
+				null,
+				2,
+			),
+		);
+		await writeFile(
+			join(globalClaudeDir, "metadata.json"),
+			JSON.stringify({
+				scope: "global",
+				kits: { engineer: { version: "v2.19.2-beta.1" } },
+			}),
+		);
+
+		const stubPath = join(tempDir, "ck-stub.cjs");
+		const stubOutputPath = join(tempDir, "ck-stub-output.json");
+		await writeFile(
+			stubPath,
+			`#!/usr/bin/env node
+const fs = require("node:fs");
+fs.writeFileSync(process.env.CK_POSTINSTALL_STUB_OUTPUT, JSON.stringify(process.argv.slice(2)));
+`,
+		);
+		await chmod(stubPath, 0o755);
+
+		execFileSync(process.execPath, [scriptPath], {
+			env: {
+				...process.env,
+				CK_POSTINSTALL_CK_BIN: stubPath,
+				CK_POSTINSTALL_STUB_OUTPUT: stubOutputPath,
+				CK_TEST_HOME: tempDir,
+			},
+			stdio: "pipe",
+		});
+
+		const args = JSON.parse(await readFile(stubOutputPath, "utf8"));
+		expect(args).toEqual([
+			"init",
+			"-g",
+			"--kit",
+			"engineer",
+			"--yes",
+			"--restore-ck-hooks",
+			"--install-skills",
+			"--beta",
+		]);
+	});
 });
