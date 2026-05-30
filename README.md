@@ -50,7 +50,7 @@ Without a purchased kit and repository access, the CLI will not be able to downl
 
 The ClaudeKit CLI is published on npm at [npmjs.com/package/claudekit-cli](https://www.npmjs.com/package/claudekit-cli).
 
-End-user runtime note: global installs from `npm`, `pnpm`, `yarn`, or `bun` all execute the packaged Node.js CLI. Bun is optional for users and only needed for local ClaudeKit CLI development workflows.
+End-user runtime note: global installs from `npm`, `pnpm`, `yarn`, or `bun` all execute the packaged Node.js CLI. Bun is optional for users and only needed for local ClaudeKit CLI development workflows. Most commands do not require native build tools; `ck content` uses an optional SQLite driver and shows remediation steps if that driver is unavailable.
 
 ### Using npm (Recommended)
 
@@ -406,6 +406,8 @@ ck content start --verbose
 ```
 
 **Features:** 11-phase pipeline (scan → filter → classify → context → create → validate → review → photo → publish → engage → analyze), noise filtering, context caching (24h TTL), content validation, photo generation, 3 review modes (auto/manual/hybrid), quiet hours scheduling, engagement tracking, SQLite database, platform-specific adapters.
+
+**Runtime dependency:** `ck content` uses the optional native SQLite driver `better-sqlite3`. If the driver is unavailable, other CLI commands still work and `ck content` prints reinstall/build-tool guidance.
 
 **Config:** `.ck.json` under `content` key. See [docs/ck-content.md](./docs/ck-content.md) for full configuration reference.
 
