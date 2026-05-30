@@ -17,6 +17,8 @@
 
 ## Quick Start
 
+`ck content` uses the optional native SQLite driver `better-sqlite3` for local persistence. If that driver is not available in the current CLI install, ClaudeKit keeps other commands usable and `ck content` prints reinstall or Windows build-tool guidance.
+
 ```bash
 # Interactive onboarding setup
 ck content setup

@@ -26,6 +26,20 @@ export function extractCommandStdout(
 	return "";
 }
 
+export function isNativeDependencyBuildError(errorMessage: string): boolean {
+	const normalized = errorMessage.toLowerCase();
+	return (
+		(normalized.includes("better-sqlite3") ||
+			normalized.includes("prebuild-install") ||
+			normalized.includes("node-gyp")) &&
+		(normalized.includes("no prebuilt binaries found") ||
+			normalized.includes("could not find any visual studio installation") ||
+			normalized.includes("visual studio build tools") ||
+			normalized.includes("desktop development with c++") ||
+			normalized.includes("node-gyp rebuild"))
+	);
+}
+
 /**
  * Execute the package manager update command.
  * Throws CliUpdateError with platform-appropriate guidance on permission or generic failures.
@@ -60,6 +74,19 @@ export async function runPackageManagerUpdate(
 				? `Run your terminal as Administrator and retry: ${updateCmd}`
 				: `sudo ${updateCmd}`;
 			throw new CliUpdateError(`Permission denied. Try: ${elevationHint}${permHint}`);
+		}
+
+		if (isNativeDependencyBuildError(errorMessage)) {
+			throw new CliUpdateError(
+				[
+					"Update failed while installing a native optional dependency.",
+					"ClaudeKit CLI should not require native SQLite for normal install/update commands.",
+					"",
+					`Manual update: ${redactCommandForLog(updateCmd)}`,
+					"",
+					"If this persists, retry after updating ClaudeKit CLI to a version where `better-sqlite3` is optional, or install Visual Studio Build Tools with the Desktop development with C++ workload for `ck content` support.",
+				].join("\n"),
+			);
 		}
 
 		logger.error(`Update failed: ${errorMessage}`);
