@@ -253,17 +253,20 @@ export function registerSystemRoutes(app: Express): void {
 	// GET /api/system/info - environment info for System tab
 	app.get("/api/system/info", async (_req: Request, res: Response) => {
 		try {
-			const [packageJson, installLocation, gitVersion, ghVersion] = await Promise.all([
+			const [packageJson, installLocation, gitVersion, ghVersion, bunVersion] = await Promise.all([
 				getPackageJson(),
 				runCommand("which", ["ck"], "not found"),
 				runCommand("git", ["--version"], "unknown"),
 				runCommand("gh", ["--version"], "unknown").then((out) => out.split("\n")[0] ?? "unknown"),
+				// Detect bun on PATH (same as git/gh) rather than the in-process `Bun` global,
+				// which is only defined when the CLI itself runs under the Bun runtime.
+				runCommand("bun", ["--version"], "").then((out) => out || null),
 			]);
 
 			const response: SystemInfoResponse = {
 				configPath: PathResolver.getGlobalKitDir(),
 				nodeVersion: process.version,
-				bunVersion: typeof Bun !== "undefined" ? Bun.version : null,
+				bunVersion,
 				os: `${process.platform} ${process.arch}`,
 				cliVersion: packageJson?.version ?? "unknown",
 				packageManager: detectPackageManager(),
