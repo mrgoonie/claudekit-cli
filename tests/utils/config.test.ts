@@ -14,6 +14,14 @@ describe("ConfigManager", () => {
 	let testPaths: TestPaths;
 
 	beforeEach(async () => {
+		// Reset ConfigManager's static cache BEFORE each test, not only after.
+		// The cache is a process-global static and Bun shares it across test
+		// files, so a sibling test that loads a real config (when CK_TEST_HOME
+		// is unset) can leak its value into the first test here — which has no
+		// preceding afterEach to clear it. Mirrors the afterEach reset.
+		(ConfigManager as any).config = null;
+		ConfigManager.setGlobalFlag(false);
+
 		// Setup isolated test paths - PathResolver will use these
 		testPaths = setupTestPaths();
 	});
