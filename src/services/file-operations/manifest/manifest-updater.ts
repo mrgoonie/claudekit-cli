@@ -26,6 +26,7 @@ export async function writeManifest(
 	kitType: KitType | undefined,
 	trackedFiles: TrackedFile[],
 	userConfigFiles: string[],
+	ignoredSkills: string[] = [],
 ): Promise<void> {
 	const metadataPath = join(claudeDir, "metadata.json");
 
@@ -61,18 +62,31 @@ export async function writeManifest(
 			}
 		}
 
+		const existingKits = existingMetadata.kits || {};
+		const normalizedTrackedPaths = trackedFiles.map((file) => normalizeMetadataPath(file.path));
+		const existingIgnoredSkills = existingKits[kit]?.ignoredSkills ?? [];
+		const mergedIgnoredSkills = uniqueNormalizedSkillRoots([
+			...existingIgnoredSkills,
+			...ignoredSkills,
+		]).filter(
+			(skillRoot) =>
+				!normalizedTrackedPaths.some(
+					(path) => path === `${skillRoot}/SKILL.md` || path.startsWith(`${skillRoot}/`),
+				),
+		);
+
 		// Build kit-specific metadata
 		const installedAt = new Date().toISOString();
 		const kitMetadata: KitMetadata = {
 			version,
 			installedAt,
 			files: trackedFiles.length > 0 ? trackedFiles : undefined,
+			ignoredSkills: mergedIgnoredSkills.length > 0 ? mergedIgnoredSkills : undefined,
 		};
 
 		// Detect multi-kit scenario: are there OTHER kits besides the one being installed?
 		// - If installing "marketing" and "engineer" already exists → otherKitsExist = true
 		// - If re-installing "engineer" and only "engineer" exists → otherKitsExist = false
-		const existingKits = existingMetadata.kits || {};
 		const otherKitsExist = Object.keys(existingKits).some((k) => k !== kit);
 
 		// Build metadata with multi-kit structure
@@ -107,6 +121,29 @@ export async function writeManifest(
 			logger.debug(`Released lock on ${metadataPath}`);
 		}
 	}
+}
+
+function normalizeMetadataPath(path: string): string {
+	return path
+		.replace(/\\/g, "/")
+		.replace(/^\.claude\//, "")
+		.replace(/\/+$/, "");
+}
+
+function normalizeSkillRoot(path: string): string | null {
+	const normalized = normalizeMetadataPath(path);
+	return normalized.startsWith("skills/") && normalized.split("/").length >= 2 ? normalized : null;
+}
+
+function uniqueNormalizedSkillRoots(paths: string[]): string[] {
+	return Array.from(
+		new Set(
+			paths.flatMap((path) => {
+				const root = normalizeSkillRoot(path);
+				return root ? [root] : [];
+			}),
+		),
+	).sort();
 }
 
 /**

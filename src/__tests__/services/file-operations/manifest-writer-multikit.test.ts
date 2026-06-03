@@ -91,6 +91,58 @@ describe("ManifestWriter multi-kit", () => {
 			expect(metadata.kits?.engineer?.version).toBe("v2.0.0");
 		});
 
+		it("preserves ignored skills when rewriting kit metadata", async () => {
+			const existing: Metadata = {
+				kits: {
+					engineer: {
+						version: "v1.0.0",
+						installedAt: "2024-01-01T00:00:00.000Z",
+						ignoredSkills: ["skills/shopify"],
+					},
+				},
+				scope: "local",
+			};
+			await writeFile(join(testDir, "metadata.json"), JSON.stringify(existing));
+
+			const writer = new ManifestWriter();
+			await writer.writeManifest(testDir, "ClaudeKit Engineer", "v2.0.0", "local", "engineer");
+
+			const content = await readFile(join(testDir, "metadata.json"), "utf-8");
+			const metadata = JSON.parse(content) as Metadata;
+
+			expect(metadata.kits?.engineer?.ignoredSkills).toEqual(["skills/shopify"]);
+		});
+
+		it("clears ignored skills after the skill is tracked again", async () => {
+			const existing: Metadata = {
+				kits: {
+					engineer: {
+						version: "v1.0.0",
+						installedAt: "2024-01-01T00:00:00.000Z",
+						ignoredSkills: ["skills/shopify"],
+					},
+				},
+				scope: "local",
+			};
+			await writeFile(join(testDir, "metadata.json"), JSON.stringify(existing));
+			await mkdir(join(testDir, "skills", "shopify"), { recursive: true });
+			await writeFile(join(testDir, "skills", "shopify", "SKILL.md"), "# Shopify\n");
+
+			const writer = new ManifestWriter();
+			await writer.addTrackedFile(
+				join(testDir, "skills", "shopify", "SKILL.md"),
+				"skills/shopify/SKILL.md",
+				"ck",
+				"v2.0.0",
+			);
+			await writer.writeManifest(testDir, "ClaudeKit Engineer", "v2.0.0", "local", "engineer");
+
+			const content = await readFile(join(testDir, "metadata.json"), "utf-8");
+			const metadata = JSON.parse(content) as Metadata;
+
+			expect(metadata.kits?.engineer?.ignoredSkills).toBeUndefined();
+		});
+
 		it("migrates legacy format before writing", async () => {
 			// Pre-create legacy metadata
 			const legacy: Metadata = {
