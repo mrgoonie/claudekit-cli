@@ -246,6 +246,8 @@ export interface WriteManifestOptions {
 	mode: "local" | "global";
 	/** Kit type for manifest metadata */
 	kitType?: KitType;
+	/** Skill roots intentionally skipped because the user removed them */
+	ignoredSkills?: string[];
 }
 
 /**
@@ -327,6 +329,7 @@ export async function trackFilesWithProgress(
 		manifestOptions.kitType,
 		tracker.getTrackedFiles(),
 		tracker.getUserConfigFiles(),
+		manifestOptions.ignoredSkills,
 	);
 
 	return trackResult;
