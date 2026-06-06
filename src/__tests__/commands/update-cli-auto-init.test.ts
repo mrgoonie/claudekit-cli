@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { PromptKitUpdateDeps } from "@/commands/update-cli.js";
 import { promptKitUpdate } from "@/commands/update-cli.js";
+import { countMissingCkHookRegistrations } from "@/commands/update/post-update-handler.js";
 
 const confirmMock = mock(async (_options: { message: string }) => true);
 const isCancelMock = mock((value: unknown) => value === "cancelled");
@@ -304,6 +305,60 @@ describe("promptKitUpdate auto-init behavior", () => {
 		expect(execCount()).toBe(1);
 		expect(capturedExecCmd()).toContain("ck init -g");
 		expect(capturedExecCmd()).not.toContain("--restore-ck-hooks");
+	});
+
+	test("counts missing hook registrations by hook identity instead of stale command variants", async () => {
+		await writeFile(
+			join(tempDir, "settings.json"),
+			JSON.stringify(
+				{
+					hooks: {
+						UserPromptSubmit: [
+							{
+								hooks: [
+									{
+										type: "command",
+										command: 'node "$HOME/.claude/hooks/session-init.cjs"',
+									},
+								],
+							},
+						],
+					},
+				},
+				null,
+				2,
+			),
+		);
+		await writeFile(
+			join(tempDir, ".ck.json"),
+			JSON.stringify(
+				{
+					hooks: {
+						"privacy-block": false,
+					},
+					kits: {
+						"ClaudeKit Engineer": {
+							installedSettings: {
+								hooks: [
+									"node $HOME/.claude/hooks/session-init.cjs",
+									"bash $HOME/.claude/hooks/node-hook-runner.sh $HOME/.claude/hooks/session-init.cjs",
+									"node $HOME/.claude/hooks/post-edit-simplify-reminder.cjs",
+									"bash $HOME/.claude/hooks/node-hook-runner.sh $HOME/.claude/hooks/post-edit-simplify-reminder.cjs",
+									"node $HOME/.claude/hooks/privacy-block.cjs",
+									"bash $HOME/.claude/hooks/node-hook-runner.sh $HOME/.claude/hooks/privacy-block.cjs",
+									"node $HOME/.claude/hooks/task-completed-handler.cjs",
+								],
+								mcpServers: [],
+							},
+						},
+					},
+				},
+				null,
+				2,
+			),
+		);
+
+		await expect(countMissingCkHookRegistrations(tempDir, "engineer")).resolves.toBe(1);
 	});
 
 	test("reinstalls local kit when latest project settings have broken hook registrations (--yes mode)", async () => {

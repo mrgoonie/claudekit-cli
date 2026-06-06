@@ -167,6 +167,63 @@ describe("SettingsProcessor custom global dir support", () => {
 		expect(commands.some((command) => command.includes("session-state.cjs"))).toBe(true);
 	});
 
+	it("restore mode refreshes installed-settings tracking to the current source baseline", async () => {
+		await writeHookSourceSettings();
+		await writeFile(destFile, JSON.stringify({ hooks: {} }, null, 2));
+		await writeFile(
+			join(customClaudeDir, ".ck.json"),
+			JSON.stringify(
+				{
+					kits: {
+						engineer: {
+							installedSettings: {
+								hooks: [
+									"node $HOME/.claude/hooks/session-init.cjs",
+									"node $HOME/.claude/hooks/usage-quota-cache-refresh.cjs",
+									"bash $HOME/.claude/hooks/node-hook-runner.sh $HOME/.claude/hooks/session-init.cjs",
+									"bash $HOME/.claude/hooks/node-hook-runner.sh $HOME/.claude/hooks/usage-quota-cache-refresh.cjs",
+									"node $HOME/.claude/hooks/team-context-inject.cjs",
+									"node $HOME/.claude/hooks/post-edit-simplify-reminder.cjs",
+									"node $HOME/.claude/hooks/task-completed-handler.cjs",
+									"node $HOME/.claude/hooks/teammate-idle-handler.cjs",
+								],
+								mcpServers: [],
+							},
+						},
+					},
+				},
+				null,
+				2,
+			),
+		);
+
+		const processor = createProcessor();
+		processor.setRestoreCkHooks(true);
+		await processor.processSettingsJson(sourceFile, destFile);
+
+		const ckJson = JSON.parse(await readFile(join(customClaudeDir, ".ck.json"), "utf-8")) as {
+			kits: { engineer: { installedSettings: { hooks: string[] } } };
+		};
+		const trackedHooks = ckJson.kits.engineer.installedSettings.hooks;
+
+		expect(trackedHooks.some((command) => command.includes("node-hook-runner.sh"))).toBe(false);
+		expect(trackedHooks.some((command) => command.includes("team-context-inject.cjs"))).toBe(false);
+		expect(
+			trackedHooks.some((command) => command.includes("post-edit-simplify-reminder.cjs")),
+		).toBe(false);
+		expect(trackedHooks.some((command) => command.includes("session-init.cjs"))).toBe(true);
+		expect(trackedHooks.some((command) => command.includes("usage-quota-cache-refresh.cjs"))).toBe(
+			true,
+		);
+		expect(trackedHooks.some((command) => command.includes("session-state.cjs"))).toBe(true);
+		expect(trackedHooks.some((command) => command.includes("task-completed-handler.cjs"))).toBe(
+			true,
+		);
+		expect(trackedHooks.some((command) => command.includes("teammate-idle-handler.cjs"))).toBe(
+			true,
+		);
+	});
+
 	it("restore mode does not re-add hooks explicitly disabled in .ck.json", async () => {
 		await writeHookSourceSettings();
 		await writeFile(destFile, JSON.stringify({ hooks: {} }, null, 2));
