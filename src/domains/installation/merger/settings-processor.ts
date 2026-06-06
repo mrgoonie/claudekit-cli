@@ -12,6 +12,8 @@ import type { InstalledSettings } from "@/types";
 import { copy, pathExists, readFile, writeFile } from "fs-extra";
 import semver from "semver";
 
+const DYNAMIC_INJECTED_HOOKS = new Set(["task-completed-handler", "teammate-idle-handler"]);
+
 /**
  * SettingsProcessor handles settings.json processing with selective merge and path transformation
  */
@@ -266,20 +268,6 @@ export class SettingsProcessor {
 			logger.warning(`Duplicate hooks skipped: ${mergeResult.conflictsDetected.length}`);
 		}
 
-		// Update tracking with newly installed items
-		if (
-			this.tracker &&
-			(mergeResult.newlyInstalledHooks.length > 0 || mergeResult.newlyInstalledServers.length > 0)
-		) {
-			for (const hook of mergeResult.newlyInstalledHooks) {
-				this.tracker.trackHook(hook, installedSettings);
-			}
-			for (const server of mergeResult.newlyInstalledServers) {
-				this.tracker.trackMcpServer(server, installedSettings);
-			}
-			await this.tracker.saveInstalledSettings(installedSettings);
-		}
-
 		if (this.migrateLegacyStatusLineRunner(mergeResult.merged, sourceSettings)) {
 			logger.info("Migrated legacy statusLine runner command to current ClaudeKit statusline");
 		}
@@ -312,6 +300,8 @@ export class SettingsProcessor {
 		// Write merged settings
 		await SettingsMerger.writeSettingsFile(destFile, mergeResult.merged);
 		logger.success("Merged settings.json (user customizations preserved)");
+
+		await this.refreshInstalledSettingsTracking(sourceSettings, installedSettings);
 
 		// Inject team hooks if supported
 		await this.injectTeamHooksIfSupported(destFile, mergeResult.merged);
@@ -636,7 +626,13 @@ export class SettingsProcessor {
 	private async trackInstalledSettings(settings: SettingsJson): Promise<void> {
 		if (!this.tracker) return;
 
+		await this.tracker.saveInstalledSettings(this.collectInstalledSettings(settings));
+		logger.debug("Tracked installed settings for fresh install");
+	}
+
+	private collectInstalledSettings(settings: SettingsJson): InstalledSettings {
 		const installedSettings: InstalledSettings = { hooks: [], mcpServers: [] };
+		if (!this.tracker) return installedSettings;
 
 		// Track all hooks
 		if (settings.hooks) {
@@ -663,8 +659,34 @@ export class SettingsProcessor {
 			}
 		}
 
-		await this.tracker.saveInstalledSettings(installedSettings);
-		logger.debug("Tracked installed settings for fresh install");
+		return installedSettings;
+	}
+
+	private async refreshInstalledSettingsTracking(
+		sourceSettings: SettingsJson,
+		previousInstalledSettings: InstalledSettings,
+	): Promise<void> {
+		if (!this.tracker) return;
+
+		const trackingSource = structuredClone(sourceSettings);
+		this.fixHookCommandPaths(trackingSource);
+		const refreshedSettings = this.collectInstalledSettings(trackingSource);
+		this.preserveDynamicInjectedHookTracking(previousInstalledSettings, refreshedSettings);
+		await this.tracker.saveInstalledSettings(refreshedSettings);
+		logger.debug("Refreshed installed settings tracking baseline");
+	}
+
+	private preserveDynamicInjectedHookTracking(
+		previousInstalledSettings: InstalledSettings,
+		refreshedSettings: InstalledSettings,
+	): void {
+		if (!previousInstalledSettings.hooks || !this.tracker) return;
+
+		for (const command of previousInstalledSettings.hooks) {
+			const hookName = this.extractCkHookName(command);
+			if (!hookName || !DYNAMIC_INJECTED_HOOKS.has(hookName)) continue;
+			this.tracker.trackHook(command, refreshedSettings);
+		}
 	}
 
 	/**

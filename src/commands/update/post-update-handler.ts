@@ -44,6 +44,7 @@ const execAsync = promisify(exec);
 // Only allow alphanumeric chars and hyphens in provider names (defense-in-depth against injection)
 const SAFE_PROVIDER_NAME = /^[a-z0-9-]+$/;
 const HOOK_DEPENDENCY_EXTENSIONS = [".js", ".cjs", ".mjs", ".json"];
+const DYNAMIC_INJECTED_HOOKS = new Set(["task-completed-handler", "teammate-idle-handler"]);
 
 interface CkSettingsSnapshot {
 	hooks?: Record<string, Array<{ command?: string; hooks?: Array<{ command?: string }> }>>;
@@ -127,7 +128,6 @@ export async function readMetadataFile(claudeDir: string): Promise<Metadata | nu
 }
 
 function extractCkHookName(command: string): string | null {
-	if (!command.trim().startsWith("node ")) return null;
 	const normalized = command.replace(/\\/g, "/");
 	const match = normalized.match(/\/hooks\/([^/"'\s]+)\.(?:cjs|mjs|js)(?:["'\s]|$)/);
 	return match?.[1] ?? null;
@@ -181,21 +181,33 @@ export async function countMissingCkHookRegistrations(
 	const settings = parseJsonContent<CkSettingsSnapshot>(await readFile(settingsPath, "utf-8"));
 	const config = parseJsonContent<CkConfigSnapshot>(await readFile(configPath, "utf-8"));
 	const existingCommands = collectSettingsHookCommands(settings);
+	const existingHookNames = new Set<string>();
+	for (const command of existingCommands) {
+		const hookName = extractCkHookName(command);
+		if (hookName) existingHookNames.add(hookName);
+	}
 	const disabledHooks = new Set(
 		Object.entries(config.hooks ?? {})
 			.filter(([, enabled]) => enabled === false)
 			.map(([name]) => name),
 	);
 
-	let missing = 0;
+	const missingHookNames = new Set<string>();
+	const missingCommands = new Set<string>();
 	for (const command of getInstalledHookCommands(config, kit)) {
 		const hookName = extractCkHookName(command);
-		if (hookName && disabledHooks.has(hookName)) continue;
-		if (!existingCommands.has(normalizeCommand(command))) {
-			missing++;
+		if (hookName) {
+			if (disabledHooks.has(hookName) || DYNAMIC_INJECTED_HOOKS.has(hookName)) continue;
+			if (!existingHookNames.has(hookName)) missingHookNames.add(hookName);
+			continue;
+		}
+
+		const normalizedCommand = normalizeCommand(command);
+		if (!existingCommands.has(normalizedCommand)) {
+			missingCommands.add(normalizedCommand);
 		}
 	}
-	return missing;
+	return missingHookNames.size + missingCommands.size;
 }
 
 // ─── Init command builder ─────────────────────────────────────────────────────
