@@ -54,25 +54,19 @@ async function writeGlobalHookState(
 	);
 	await writeFile(
 		join(dir, ".ck.json"),
-		JSON.stringify(
-			{
-				hooks: options.disabled ?? {},
-				kits: {
-					"ClaudeKit Engineer": {
-						installedSettings: {
-							hooks: [
-								"node $HOME/.claude/hooks/simplify-gate.cjs",
-								"node $HOME/.claude/hooks/session-state.cjs",
-							],
-							mcpServers: [],
-						},
-					},
-				},
-			},
-			null,
-			2,
-		),
+		JSON.stringify({ hooks: options.disabled ?? {} }, null, 2),
 	);
+
+	// Kit-shipped managed-hooks manifest (deterministic source of truth) plus the
+	// hook files it references — both required by the detector.
+	const hooksDir = join(dir, "hooks");
+	await mkdir(hooksDir, { recursive: true });
+	await writeFile(
+		join(hooksDir, "managed-hooks.json"),
+		JSON.stringify({ managedHooks: ["simplify-gate", "session-state"] }),
+	);
+	await writeFile(join(hooksDir, "simplify-gate.cjs"), "// stub\n");
+	await writeFile(join(hooksDir, "session-state.cjs"), "// stub\n");
 }
 
 describe("promptKitUpdate auto-init behavior", () => {
@@ -307,58 +301,104 @@ describe("promptKitUpdate auto-init behavior", () => {
 		expect(capturedExecCmd()).not.toContain("--restore-ck-hooks");
 	});
 
-	test("counts missing hook registrations by hook identity instead of stale command variants", async () => {
+	// Helpers for the kit-shipped managed-hooks manifest model.
+	async function writeManagedHooksManifest(dir: string, names: string[]) {
+		const hooksDir = join(dir, "hooks");
+		await mkdir(hooksDir, { recursive: true });
+		await writeFile(join(hooksDir, "managed-hooks.json"), JSON.stringify({ managedHooks: names }));
+		// existsSync(<name>.cjs) gates counting — create a file per managed hook.
+		for (const name of names) {
+			await writeFile(join(hooksDir, `${name}.cjs`), "// stub\n");
+		}
+	}
+
+	async function writeLiveHooks(dir: string, names: string[]) {
+		const hooks = names.map((name) => ({
+			type: "command",
+			command: `node "$HOME/.claude/hooks/${name}.cjs"`,
+		}));
 		await writeFile(
-			join(tempDir, "settings.json"),
-			JSON.stringify(
-				{
-					hooks: {
-						UserPromptSubmit: [
-							{
-								hooks: [
-									{
-										type: "command",
-										command: 'node "$HOME/.claude/hooks/session-init.cjs"',
-									},
-								],
-							},
-						],
-					},
-				},
-				null,
-				2,
-			),
+			join(dir, "settings.json"),
+			JSON.stringify({ hooks: { UserPromptSubmit: [{ hooks }] } }, null, 2),
 		);
-		await writeFile(
-			join(tempDir, ".ck.json"),
-			JSON.stringify(
-				{
-					hooks: {
-						"privacy-block": false,
-					},
-					kits: {
-						"ClaudeKit Engineer": {
-							installedSettings: {
-								hooks: [
-									"node $HOME/.claude/hooks/session-init.cjs",
-									"bash $HOME/.claude/hooks/node-hook-runner.sh $HOME/.claude/hooks/session-init.cjs",
-									"node $HOME/.claude/hooks/post-edit-simplify-reminder.cjs",
-									"bash $HOME/.claude/hooks/node-hook-runner.sh $HOME/.claude/hooks/post-edit-simplify-reminder.cjs",
-									"node $HOME/.claude/hooks/privacy-block.cjs",
-									"bash $HOME/.claude/hooks/node-hook-runner.sh $HOME/.claude/hooks/privacy-block.cjs",
-									"node $HOME/.claude/hooks/task-completed-handler.cjs",
-								],
-								mcpServers: [],
-							},
-						},
-					},
-				},
-				null,
-				2,
-			),
+	}
+
+	async function writeDisabledHooks(dir: string, disabled: Record<string, boolean>) {
+		await writeFile(join(dir, ".ck.json"), JSON.stringify({ hooks: disabled }, null, 2));
+	}
+
+	test("reproduces real-world drift: team hooks + disabled hooks yield zero missing", async () => {
+		// 11 template (managed) hooks shipped by the kit.
+		const managed = [
+			"cook-after-plan-reminder",
+			"descriptive-name",
+			"dev-rules-reminder",
+			"plan-format-kanban",
+			"privacy-block",
+			"scout-block",
+			"session-init",
+			"session-state",
+			"simplify-gate",
+			"subagent-init",
+			"usage-quota-cache-refresh",
+		];
+		await writeManagedHooksManifest(tempDir, managed);
+		// settings.json has the 9 enabled hooks (privacy-block + scout-block disabled).
+		await writeLiveHooks(
+			tempDir,
+			managed.filter((n) => n !== "privacy-block" && n !== "scout-block"),
 		);
+		await writeDisabledHooks(tempDir, { "privacy-block": false, "scout-block": false });
+		// Team hooks exist on disk but are NOT in the manifest — must never be flagged.
+		await writeFile(join(tempDir, "hooks", "task-completed-handler.cjs"), "// stub\n");
+		await writeFile(join(tempDir, "hooks", "teammate-idle-handler.cjs"), "// stub\n");
+
+		await expect(countMissingCkHookRegistrations(tempDir, "engineer")).resolves.toBe(0);
+	});
+
+	test("counts a managed hook genuinely missing from settings.json", async () => {
+		await writeManagedHooksManifest(tempDir, ["session-init", "post-edit-simplify-reminder"]);
+		await writeLiveHooks(tempDir, ["session-init"]); // post-edit-simplify-reminder absent
+		await writeDisabledHooks(tempDir, {});
 
 		await expect(countMissingCkHookRegistrations(tempDir, "engineer")).resolves.toBe(1);
+	});
+
+	test("does not count an explicitly disabled managed hook", async () => {
+		await writeManagedHooksManifest(tempDir, ["session-init", "privacy-block"]);
+		await writeLiveHooks(tempDir, ["session-init"]); // privacy-block absent but disabled
+		await writeDisabledHooks(tempDir, { "privacy-block": false });
+
+		await expect(countMissingCkHookRegistrations(tempDir, "engineer")).resolves.toBe(0);
+	});
+
+	test("does not count a managed hook whose file the kit no longer ships", async () => {
+		await writeManagedHooksManifest(tempDir, ["session-init"]);
+		await writeLiveHooks(tempDir, []); // session-init absent from settings
+		await writeDisabledHooks(tempDir, {});
+		// Remove the hook file to simulate the kit dropping it.
+		await rm(join(tempDir, "hooks", "session-init.cjs"));
+
+		await expect(countMissingCkHookRegistrations(tempDir, "engineer")).resolves.toBe(0);
+	});
+
+	test("returns 0 when no managed-hooks manifest is present (older install)", async () => {
+		await writeLiveHooks(tempDir, ["session-init"]);
+		await writeDisabledHooks(tempDir, {});
+		// No hooks/managed-hooks.json — self-heal stays silent, no false positive.
+
+		await expect(countMissingCkHookRegistrations(tempDir, "engineer")).resolves.toBe(0);
+	});
+
+	test("converges: once the missing hook is registered, re-detection is zero", async () => {
+		await writeManagedHooksManifest(tempDir, ["session-init", "session-state"]);
+		await writeLiveHooks(tempDir, ["session-init"]);
+		await writeDisabledHooks(tempDir, {});
+		await expect(countMissingCkHookRegistrations(tempDir, "engineer")).resolves.toBe(1);
+
+		// Simulate restore adding the missing hook to settings.json.
+		await writeLiveHooks(tempDir, ["session-init", "session-state"]);
+		await expect(countMissingCkHookRegistrations(tempDir, "engineer")).resolves.toBe(0);
 	});
 
 	test("reinstalls local kit when latest project settings have broken hook registrations (--yes mode)", async () => {
