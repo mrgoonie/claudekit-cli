@@ -9,7 +9,7 @@ import type { CommandHelp } from "../help-types.js";
 export const migrateCommandHelp: CommandHelp = {
 	name: "migrate",
 	description:
-		"Migrate Claude Code agents, commands, skills, config, rules, and hooks to other providers",
+		"Migrate Claude Code agents, commands, skills, config, rules, and hooks to other providers (e.g. Codex). Set updatePipeline.autoMigrateAfterUpdate to keep targets in sync with Claude Code on each `ck update`.",
 	usage: "ck migrate [options]",
 	examples: [
 		{

@@ -27,6 +27,7 @@ import { confirm, isCancel, log, spinner } from "@/shared/safe-prompts.js";
 import { AVAILABLE_KITS, type KitType, type Metadata, MetadataSchema } from "@/types";
 import type { MigrateScopeConfig } from "@/types/ck-config.js";
 import { pathExists, readFile } from "fs-extra";
+import { codexSyncNoticeLines, shouldShowCodexSyncNotice } from "./codex-sync-notice.js";
 import type {
 	ExecAsyncFn,
 	KitSelectionParams,
@@ -841,6 +842,13 @@ export async function promptMigrateUpdate(deps?: PromptMigrateUpdateDeps): Promi
 			migrateScope = pipeline?.migrateScope;
 		} catch {
 			// Non-fatal
+		}
+
+		// Persistent discoverability: surface the opt-in Codex sync to users who
+		// have Codex installed but have not enabled auto-migrate. Shown on every
+		// run while sync is off (no one-time suppression) so it stays visible.
+		if (shouldShowCodexSyncNotice({ providers: targets, autoMigrateEnabled: autoMigrate })) {
+			for (const line of codexSyncNoticeLines()) logger.info(line);
 		}
 
 		// Skip if user hasn't opted in — --yes alone doesn't trigger migration
