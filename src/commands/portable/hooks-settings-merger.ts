@@ -1040,6 +1040,18 @@ async function migrateHooksSettingsForCodex(
 		// false-negative when the project lives under the home directory.
 		const flagResult = await ensureCodexHooksFeatureFlag(configTomlPath, isGlobal);
 		featureFlagWritten = flagResult.status === "written" || flagResult.status === "updated";
+		// Surface a failed flag write instead of swallowing it. Without
+		// `[features] hooks = true`, Codex ignores the hooks file we just wrote,
+		// so the migration is effectively a no-op. Recording a warning lets the
+		// caller report it and lets the next run self-heal the drift.
+		if (flagResult.status === "failed") {
+			warnings.push({
+				reason: "codex-feature-flag-write-failed",
+				message: `Codex hooks are registered but enabling them failed: ${
+					flagResult.error ?? "unknown error"
+				}. Run \`ck migrate --agent codex\` again to retry.`,
+			});
+		}
 	}
 
 	return {

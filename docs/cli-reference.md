@@ -643,7 +643,7 @@ Initialize or update ClaudeKit project (with interactive version selection)
 
 ## ck migrate
 
-Migrate Claude Code agents, commands, skills, config, rules, and hooks to other providers
+Migrate Claude Code agents, commands, skills, config, rules, and hooks to other providers (e.g. Codex). Set updatePipeline.autoMigrateAfterUpdate to keep targets in sync with Claude Code on each `ck update`.
 
 **Usage:** `ck migrate [options]`
 
@@ -1072,4 +1072,4 @@ Watch GitHub issues and auto-respond with AI analysis
 - `ck watch --interval 60000` — Poll every 60 seconds instead of default 30s
 
 
-<!-- generated: 2026-05-27T02:11:15.512Z -->
+<!-- generated: 2026-06-09T16:16:57.335Z -->

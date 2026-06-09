@@ -27,6 +27,7 @@ import { confirm, isCancel, log, spinner } from "@/shared/safe-prompts.js";
 import { AVAILABLE_KITS, type KitType, type Metadata, MetadataSchema } from "@/types";
 import type { MigrateScopeConfig } from "@/types/ck-config.js";
 import { pathExists, readFile } from "fs-extra";
+import { renderCodexSyncNotice, shouldShowCodexSyncNotice } from "./codex-sync-notice.js";
 import type {
 	ExecAsyncFn,
 	KitSelectionParams,
@@ -44,7 +45,13 @@ const execAsync = promisify(exec);
 // Only allow alphanumeric chars and hyphens in provider names (defense-in-depth against injection)
 const SAFE_PROVIDER_NAME = /^[a-z0-9-]+$/;
 const HOOK_DEPENDENCY_EXTENSIONS = [".js", ".cjs", ".mjs", ".json"];
-const DYNAMIC_INJECTED_HOOKS = new Set(["task-completed-handler", "teammate-idle-handler"]);
+
+// Kit-shipped manifest listing the hooks the kit registers UNCONDITIONALLY.
+// It is copied verbatim with the rest of the kit hooks directory during install,
+// so it is the deterministic, kit-versioned source of truth at self-heal time.
+// Conditionally injected hooks (e.g. team hooks added only when the runtime
+// supports them) are intentionally absent, so they are never flagged as missing.
+const MANAGED_HOOKS_MANIFEST = "managed-hooks.json";
 
 interface CkSettingsSnapshot {
 	hooks?: Record<string, Array<{ command?: string; hooks?: Array<{ command?: string }> }>>;
@@ -52,7 +59,10 @@ interface CkSettingsSnapshot {
 
 interface CkConfigSnapshot {
 	hooks?: Record<string, unknown>;
-	kits?: Record<string, { installedSettings?: { hooks?: string[] } }>;
+}
+
+interface ManagedHooksManifest {
+	managedHooks?: string[];
 }
 
 // ─── Kit selection ────────────────────────────────────────────────────────────
@@ -150,64 +160,91 @@ function collectSettingsHookCommands(settings: CkSettingsSnapshot): Set<string> 
 	return commands;
 }
 
-function getInstalledHookCommands(config: CkConfigSnapshot, kit?: KitType): string[] {
-	const kits = Object.entries(config.kits ?? {});
-	if (kits.length === 0) return [];
+/** Live CK hook names currently registered in settings.json. */
+function collectSettingsHookNames(settings: CkSettingsSnapshot): Set<string> {
+	const names = new Set<string>();
+	for (const command of collectSettingsHookCommands(settings)) {
+		const hookName = extractCkHookName(command);
+		if (hookName) names.add(hookName);
+	}
+	return names;
+}
 
-	const kitKey = kit?.toLowerCase();
-	const preferred = kitKey
-		? kits.filter(([name]) => {
-				const normalizedName = name.toLowerCase();
-				return normalizedName === kitKey || normalizedName.includes(kitKey);
-			})
-		: [];
-	const candidates = preferred.length > 0 ? preferred : kits;
+/** Read the kit-shipped managed-hooks manifest from the hooks directory. */
+async function readManagedHookNames(claudeDir: string): Promise<string[]> {
+	const manifestPath = join(claudeDir, "hooks", MANAGED_HOOKS_MANIFEST);
+	if (!existsSync(manifestPath)) return [];
+	try {
+		const data = parseJsonContent<ManagedHooksManifest>(await readFile(manifestPath, "utf-8"));
+		if (!Array.isArray(data.managedHooks)) return [];
+		return data.managedHooks.filter((name): name is string => typeof name === "string");
+	} catch (error) {
+		logger.verbose(
+			`Failed to read managed-hooks manifest: ${error instanceof Error ? error.message : "unknown"}`,
+		);
+		return [];
+	}
+}
 
-	return candidates.flatMap(([, entry]) => entry.installedSettings?.hooks ?? []);
+/** Hook names the user explicitly disabled in .ck.json (the only removal channel). */
+async function readDisabledHookNames(claudeDir: string): Promise<Set<string>> {
+	const configPath = join(claudeDir, ".ck.json");
+	if (!existsSync(configPath)) return new Set();
+	try {
+		const config = parseJsonContent<CkConfigSnapshot>(await readFile(configPath, "utf-8"));
+		return new Set(
+			Object.entries(config.hooks ?? {})
+				.filter(([, enabled]) => enabled === false)
+				.map(([name]) => name),
+		);
+	} catch (error) {
+		logger.verbose(
+			`Failed to read .ck.json hook disables: ${error instanceof Error ? error.message : "unknown"}`,
+		);
+		return new Set();
+	}
 }
 
 /**
- * Counts CK hook registrations that were previously installed but are absent
- * from settings.json. Explicit dashboard/.ck.json disables are not counted.
+ * Counts managed hooks the kit registers unconditionally (per the kit-shipped
+ * hooks/managed-hooks.json manifest) that are absent from settings.json.
+ *
+ * Deterministic by construction:
+ *   - The manifest is the single source of truth for "should be registered".
+ *   - Conditionally injected hooks (team hooks) are never in the manifest, so
+ *     they are never counted — no hardcoded denylist needed.
+ *   - Hooks the user explicitly disabled in .ck.json are skipped (the disable
+ *     map is the only supported removal channel; a managed hook merely absent
+ *     from settings.json is treated as broken and restored).
+ *   - A managed hook whose .cjs file is absent (kit dropped it) is skipped.
+ *   - When no manifest is present (older installs), returns 0 — the self-heal
+ *     stays silent rather than firing a false positive.
+ *
+ * @param kit Retained for call-site compatibility; the manifest is per-install.
  */
 export async function countMissingCkHookRegistrations(
 	claudeDir: string,
 	kit?: KitType,
 ): Promise<number> {
+	void kit;
 	const settingsPath = join(claudeDir, "settings.json");
-	const configPath = join(claudeDir, ".ck.json");
-	if (!existsSync(settingsPath) || !existsSync(configPath)) return 0;
+	if (!existsSync(settingsPath)) return 0;
+
+	const managedHooks = await readManagedHookNames(claudeDir);
+	if (managedHooks.length === 0) return 0;
 
 	const settings = parseJsonContent<CkSettingsSnapshot>(await readFile(settingsPath, "utf-8"));
-	const config = parseJsonContent<CkConfigSnapshot>(await readFile(configPath, "utf-8"));
-	const existingCommands = collectSettingsHookCommands(settings);
-	const existingHookNames = new Set<string>();
-	for (const command of existingCommands) {
-		const hookName = extractCkHookName(command);
-		if (hookName) existingHookNames.add(hookName);
-	}
-	const disabledHooks = new Set(
-		Object.entries(config.hooks ?? {})
-			.filter(([, enabled]) => enabled === false)
-			.map(([name]) => name),
-	);
+	const liveHookNames = collectSettingsHookNames(settings);
+	const disabledHooks = await readDisabledHookNames(claudeDir);
+	const hooksDir = join(claudeDir, "hooks");
 
-	const missingHookNames = new Set<string>();
-	const missingCommands = new Set<string>();
-	for (const command of getInstalledHookCommands(config, kit)) {
-		const hookName = extractCkHookName(command);
-		if (hookName) {
-			if (disabledHooks.has(hookName) || DYNAMIC_INJECTED_HOOKS.has(hookName)) continue;
-			if (!existingHookNames.has(hookName)) missingHookNames.add(hookName);
-			continue;
-		}
-
-		const normalizedCommand = normalizeCommand(command);
-		if (!existingCommands.has(normalizedCommand)) {
-			missingCommands.add(normalizedCommand);
-		}
+	let missing = 0;
+	for (const name of managedHooks) {
+		if (disabledHooks.has(name)) continue;
+		if (!existsSync(join(hooksDir, `${name}.cjs`))) continue;
+		if (!liveHookNames.has(name)) missing++;
 	}
-	return missingHookNames.size + missingCommands.size;
+	return missing;
 }
 
 // ─── Init command builder ─────────────────────────────────────────────────────
@@ -805,6 +842,13 @@ export async function promptMigrateUpdate(deps?: PromptMigrateUpdateDeps): Promi
 			migrateScope = pipeline?.migrateScope;
 		} catch {
 			// Non-fatal
+		}
+
+		// Persistent discoverability: surface the opt-in Codex sync to users who
+		// have Codex installed but have not enabled auto-migrate. Shown on every
+		// run while sync is off (no one-time suppression) so it stays visible.
+		if (shouldShowCodexSyncNotice({ providers: targets, autoMigrateEnabled: autoMigrate })) {
+			for (const line of renderCodexSyncNotice()) logger.info(line);
 		}
 
 		// Skip if user hasn't opted in — --yes alone doesn't trigger migration
