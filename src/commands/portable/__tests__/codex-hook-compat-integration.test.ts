@@ -909,10 +909,9 @@ describe("codex hook compat — N1: wrapper paths written to hooks.json commands
 		// Re-read the hooks.json written by the previous test (same project dir)
 		// This test is deliberately separate to assert disk state independently.
 		const hooksJsonPath = join(testProjectDir, ".codex", "hooks.json");
-		if (!existsSync(hooksJsonPath)) {
-			// If previous test failed to produce the file, skip rather than cascade failure
-			return;
-		}
+		// Hard assertion: file must exist — early return would let this pass vacuously
+		// if the previous test failed to produce the file.
+		expect(existsSync(hooksJsonPath)).toBe(true);
 
 		const written = readJson(hooksJsonPath) as {
 			hooks: Record<string, Array<{ hooks: Array<{ command: string }> }>>;
@@ -932,4 +931,455 @@ describe("codex hook compat — N1: wrapper paths written to hooks.json commands
 			}
 		}
 	}, 10000);
+});
+
+// ---- Fix #883 — project-scope $CLAUDE_PROJECT_DIR in hook commands ----------
+
+describe("project-scope migration resolves $CLAUDE_PROJECT_DIR (#883)", () => {
+	/**
+	 * Regression test for GH-883.
+	 *
+	 * Claude Code emits project-scope hooks as:
+	 *   node "$CLAUDE_PROJECT_DIR"/.claude/hooks/<name>.cjs  (form 2, var-only quoted)
+	 *
+	 * Before the fix, the converter only recognised $HOME / ~ / %USERPROFILE% prefix
+	 * forms. $CLAUDE_PROJECT_DIR tokens survived into .codex/hooks.json. Codex never
+	 * defines this env var, so every migrated hook exited 1 on every fire.
+	 *
+	 * After the fix:
+	 *   - wrappable .cjs hooks → absolute hash-prefixed wrapper paths (no env var)
+	 *   - non-wrappable .sh hooks → absolute projectDir-resolved path (no env var)
+	 *   - second migration run → no duplicate entries (stable absolute-path keys)
+	 *   - pre-broken installs (re-run `ck migrate`) → broken entries pruned,
+	 *     exactly one correct entry per hook, hooksPruned > 0
+	 */
+
+	const issue883Dir = join(testRoot, "issue-883-project-dir");
+
+	let targetHookAbsPaths: string[] = [];
+	let testProjectDir883: string;
+	let sourceHooksDir883: string;
+	let codexHooksDir883: string;
+
+	beforeAll(() => {
+		// Mirror provider convention: project-scoped hooks live under
+		// <project>/.claude/hooks/ (source) and <project>/.codex/hooks/ (target).
+		testProjectDir883 = join(issue883Dir, "project");
+		sourceHooksDir883 = join(testProjectDir883, ".claude", "hooks");
+		codexHooksDir883 = join(testProjectDir883, ".codex", "hooks");
+
+		mkdirSync(sourceHooksDir883, { recursive: true });
+		mkdirSync(codexHooksDir883, { recursive: true });
+		mkdirSync(join(testProjectDir883, ".claude"), { recursive: true });
+		mkdirSync(join(testProjectDir883, ".codex"), { recursive: true });
+
+		// Wrappable .cjs hook — Claude settings.json commands reference the source path via the env var form
+		const cjsName = "simplify-gate.cjs";
+		const sourceHookPath = join(sourceHooksDir883, cjsName);
+		writeFileSync(
+			sourceHookPath,
+			`#!/usr/bin/env node\n"use strict";\nprocess.stdout.write(JSON.stringify({result:"ok"}));\nprocess.exit(0);\n`,
+			{ mode: 0o755 },
+		);
+
+		// Installer copies hook files to .codex/hooks/ before migrateHooksSettings runs.
+		// migrateHooksSettings receives TARGET paths as installedHookAbsolutePaths, while
+		// Claude's settings.json commands still reference SOURCE paths via the env var form.
+		const targetHookPath = join(codexHooksDir883, cjsName);
+		writeFileSync(
+			targetHookPath,
+			`#!/usr/bin/env node\n"use strict";\nprocess.stdout.write(JSON.stringify({result:"ok"}));\nprocess.exit(0);\n`,
+			{ mode: 0o755 },
+		);
+		targetHookAbsPaths = [targetHookPath];
+
+		// Non-wrappable .sh runner — placed in both source and target dirs
+		writeFileSync(join(sourceHooksDir883, "runner.sh"), "#!/bin/bash\necho ok\n", { mode: 0o755 });
+		writeFileSync(join(codexHooksDir883, "runner.sh"), "#!/bin/bash\necho ok\n", { mode: 0o755 });
+	});
+
+	it("#883 headline: no CLAUDE_PROJECT_DIR token survives in written hooks.json", async () => {
+		// Claude Code's exact emission form (form 2: var-only quoted) for project-scope hooks
+		const settingsJson = {
+			hooks: {
+				PreToolUse: [
+					{
+						matcher: "Bash",
+						hooks: [
+							{
+								type: "command",
+								// Form 2 — "$CLAUDE_PROJECT_DIR"/<rel> — the standard Claude Code emission
+								command: `node "$CLAUDE_PROJECT_DIR"/.claude/hooks/simplify-gate.cjs`,
+							},
+						],
+					},
+				],
+				SessionStart: [
+					{
+						matcher: "startup",
+						hooks: [
+							{
+								type: "command",
+								command: `node "$CLAUDE_PROJECT_DIR"/.claude/hooks/simplify-gate.cjs`,
+							},
+						],
+					},
+				],
+			},
+		};
+		writeFileSync(
+			join(testProjectDir883, ".claude", "settings.json"),
+			JSON.stringify(settingsJson, null, 2),
+		);
+
+		process.chdir(testProjectDir883);
+
+		const result = await migrateHooksSettings({
+			sourceProvider: "claude-code",
+			targetProvider: "codex",
+			installedHookFiles: ["simplify-gate.cjs"],
+			global: false,
+			installedHookAbsolutePaths: targetHookAbsPaths,
+		});
+
+		expect(result.success).toBe(true);
+		expect(result.status).toBe("registered");
+		expect(result.hooksRegistered).toBeGreaterThan(0);
+
+		const hooksJsonPath = join(testProjectDir883, ".codex", "hooks.json");
+		expect(existsSync(hooksJsonPath)).toBe(true);
+
+		const rawJson = readFileSync(hooksJsonPath, "utf8");
+
+		// HEADLINE ASSERTION: zero occurrences of CLAUDE_PROJECT_DIR anywhere in the file
+		expect(rawJson).not.toContain("CLAUDE_PROJECT_DIR");
+	}, 15000);
+
+	it("#883: wrappable hook commands are absolute hash-prefixed wrappers", async () => {
+		const hooksJsonPath = join(testProjectDir883, ".codex", "hooks.json");
+		// Hard assertion: file must exist — early return would let this pass vacuously.
+		expect(existsSync(hooksJsonPath)).toBe(true);
+
+		const written = readJson(hooksJsonPath) as {
+			hooks: Record<string, Array<{ hooks: Array<{ command: string }> }>>;
+		};
+
+		const allCommands: string[] = [];
+		for (const groups of Object.values(written.hooks)) {
+			for (const group of groups) {
+				for (const entry of group.hooks) {
+					allCommands.push(entry.command);
+				}
+			}
+		}
+
+		// Every command must be an absolute path — no relative paths, no env var tokens
+		for (const cmd of allCommands) {
+			expect(cmd).not.toContain("CLAUDE_PROJECT_DIR");
+			// Command must reference an absolute path (starts with /)
+			expect(cmd).toMatch(/\/[^"]+\.cjs/);
+			// Must be a hash-prefixed wrapper: {8 hex chars}-<name>.cjs
+			expect(cmd).toMatch(/\/[0-9a-f]{8}-[^/]+\.cjs/);
+		}
+	}, 10000);
+
+	it("#883: wrapper files exist on disk at the referenced paths", async () => {
+		const hooksJsonPath = join(testProjectDir883, ".codex", "hooks.json");
+		// Hard assertion: file must exist — early return would let this pass vacuously.
+		expect(existsSync(hooksJsonPath)).toBe(true);
+
+		const written = readJson(hooksJsonPath) as {
+			hooks: Record<string, Array<{ hooks: Array<{ command: string }> }>>;
+		};
+
+		const pathPattern = /node\s+"([^"]+\.cjs)"/g;
+		for (const groups of Object.values(written.hooks)) {
+			for (const group of groups) {
+				for (const entry of group.hooks) {
+					const matches = [...entry.command.matchAll(pathPattern)];
+					for (const m of matches) {
+						const referencedPath = m[1];
+						expect(existsSync(referencedPath)).toBe(true);
+					}
+				}
+			}
+		}
+	}, 10000);
+
+	it("#883: non-wrappable .sh hook is resolved to absolute project path", async () => {
+		// Write a settings.json that has the .sh runner (non-wrappable — .sh excluded from wrappers)
+		const shTestDir = join(issue883Dir, "sh-test");
+		const shSourceHooksDir = join(shTestDir, ".claude", "hooks");
+		const shCodexHooksDir = join(shTestDir, ".codex", "hooks");
+		mkdirSync(shSourceHooksDir, { recursive: true });
+		mkdirSync(shCodexHooksDir, { recursive: true });
+		writeFileSync(join(shSourceHooksDir, "runner.sh"), "#!/bin/bash\necho ok\n", { mode: 0o755 });
+		writeFileSync(join(shCodexHooksDir, "runner.sh"), "#!/bin/bash\necho ok\n", { mode: 0o755 });
+
+		const shSettingsJson = {
+			hooks: {
+				PreToolUse: [
+					{
+						matcher: "Bash",
+						hooks: [
+							{
+								type: "command",
+								command: `bash "$CLAUDE_PROJECT_DIR"/.claude/hooks/runner.sh`,
+							},
+						],
+					},
+				],
+			},
+		};
+		writeFileSync(
+			join(shTestDir, ".claude", "settings.json"),
+			JSON.stringify(shSettingsJson, null, 2),
+		);
+
+		process.chdir(shTestDir);
+
+		const result = await migrateHooksSettings({
+			sourceProvider: "claude-code",
+			targetProvider: "codex",
+			installedHookFiles: ["runner.sh"],
+			global: false,
+			// No installedHookAbsolutePaths: .sh is non-wrappable (CJS-only wrapper path)
+		});
+
+		expect(result.success).toBe(true);
+
+		const hooksJsonPath = join(shTestDir, ".codex", "hooks.json");
+		// Hard assertion: the .sh non-wrappable hook must have been written.
+		// An early return here would let the test pass vacuously if the file wasn't written.
+		expect(existsSync(hooksJsonPath)).toBe(true);
+
+		const rawJson = readFileSync(hooksJsonPath, "utf8");
+		// No CLAUDE_PROJECT_DIR env var in any output
+		expect(rawJson).not.toContain("CLAUDE_PROJECT_DIR");
+
+		// Pin: the resolved command must contain the absolute project path and the .sh basename
+		// with balanced quotes (not just absence of the env var token).
+		const written = readJson(hooksJsonPath) as {
+			hooks: Record<string, Array<{ hooks: Array<{ command: string }> }>>;
+		};
+		const allCommands: string[] = [];
+		for (const groups of Object.values(written.hooks)) {
+			for (const group of groups) {
+				for (const entry of group.hooks) {
+					allCommands.push(entry.command);
+				}
+			}
+		}
+		// Every command must reference the absolute resolved path with balanced quotes
+		for (const cmd of allCommands) {
+			expect(cmd).toContain(`${shTestDir}/.codex/hooks/runner.sh`);
+			// Must be quoted (path may contain spaces)
+			expect(cmd).toMatch(/"[^"]*runner\.sh[^"]*"/);
+		}
+	}, 15000);
+
+	it("#883 idempotency: second migration produces no duplicate entries", async () => {
+		// Restore cwd to project dir (afterEach resets it between tests)
+		process.chdir(testProjectDir883);
+
+		// Delete the hooks.json from prior tests so we start fresh for this assertion
+		const hooksJsonPath = join(testProjectDir883, ".codex", "hooks.json");
+		if (existsSync(hooksJsonPath)) {
+			rmSync(hooksJsonPath);
+		}
+
+		const settingsJson = {
+			hooks: {
+				PreToolUse: [
+					{
+						matcher: "Bash",
+						hooks: [
+							{
+								type: "command",
+								command: `node "$CLAUDE_PROJECT_DIR"/.claude/hooks/simplify-gate.cjs`,
+							},
+						],
+					},
+				],
+			},
+		};
+		writeFileSync(
+			join(testProjectDir883, ".claude", "settings.json"),
+			JSON.stringify(settingsJson, null, 2),
+		);
+
+		// First migration run
+		await migrateHooksSettings({
+			sourceProvider: "claude-code",
+			targetProvider: "codex",
+			installedHookFiles: ["simplify-gate.cjs"],
+			global: false,
+			installedHookAbsolutePaths: targetHookAbsPaths,
+		});
+
+		const countHooksInSection = (
+			hooks: Record<string, Array<{ hooks: Array<{ command: string }> }>>,
+		): number => {
+			let n = 0;
+			for (const groups of Object.values(hooks)) {
+				for (const g of groups) n += g.hooks.length;
+			}
+			return n;
+		};
+
+		const afterFirst = readJson(hooksJsonPath) as {
+			hooks: Record<string, Array<{ hooks: Array<{ command: string }> }>>;
+		};
+		const countAfterFirst = countHooksInSection(afterFirst.hooks);
+		expect(countAfterFirst).toBeGreaterThan(0);
+
+		// Second migration run (idempotent)
+		process.chdir(testProjectDir883);
+		await migrateHooksSettings({
+			sourceProvider: "claude-code",
+			targetProvider: "codex",
+			installedHookFiles: ["simplify-gate.cjs"],
+			global: false,
+			installedHookAbsolutePaths: targetHookAbsPaths,
+		});
+
+		const afterSecond = readJson(hooksJsonPath) as {
+			hooks: Record<string, Array<{ hooks: Array<{ command: string }> }>>;
+		};
+		const countAfterSecond = countHooksInSection(afterSecond.hooks);
+
+		// No duplicates: hook count must remain the same after second run
+		expect(countAfterSecond).toBe(countAfterFirst);
+
+		// Still no env var tokens after second run
+		const rawJson = readFileSync(hooksJsonPath, "utf8");
+		expect(rawJson).not.toContain("CLAUDE_PROJECT_DIR");
+	}, 20000);
+
+	it("#883 H2 self-heal: pre-broken hooks.json entries are pruned and replaced with fixed entries", async () => {
+		const selfHealDir = join(issue883Dir, "self-heal");
+		const selfHealSourceHooks = join(selfHealDir, ".claude", "hooks");
+		const selfHealCodexHooks = join(selfHealDir, ".codex", "hooks");
+		mkdirSync(selfHealSourceHooks, { recursive: true });
+		mkdirSync(selfHealCodexHooks, { recursive: true });
+
+		// Write hook files on disk (both source and target)
+		writeFileSync(
+			join(selfHealSourceHooks, "simplify-gate.cjs"),
+			`#!/usr/bin/env node\n"use strict";\nprocess.stdout.write(JSON.stringify({result:"ok"}));\nprocess.exit(0);\n`,
+			{ mode: 0o755 },
+		);
+		const selfHealTargetHookPath = join(selfHealCodexHooks, "simplify-gate.cjs");
+		writeFileSync(
+			selfHealTargetHookPath,
+			`#!/usr/bin/env node\n"use strict";\nprocess.stdout.write(JSON.stringify({result:"ok"}));\nprocess.exit(0);\n`,
+			{ mode: 0o755 },
+		);
+
+		// Pre-seed .codex/hooks.json with OLD broken entries that the field reporter will hit.
+		// Form 2: "$CLAUDE_PROJECT_DIR"/<rel> targeting .codex/hooks/ (post-Phase-2-fallback form)
+		// Form 1: "$CLAUDE_PROJECT_DIR/<rel>" (fully-quoted form also encountered in broken installs)
+		const brokenHooksJson = {
+			hooks: {
+				PreToolUse: [
+					{
+						matcher: "Bash",
+						hooks: [
+							{
+								type: "command",
+								// Form 2: var-only quoted — most common broken form from Phase-2 fallback
+								command: `node "$CLAUDE_PROJECT_DIR"/.codex/hooks/simplify-gate.cjs`,
+							},
+						],
+					},
+				],
+				SessionStart: [
+					{
+						matcher: "startup",
+						hooks: [
+							{
+								type: "command",
+								// Form 1: fully-quoted variant also seen in broken installs
+								command: `node "$CLAUDE_PROJECT_DIR/.codex/hooks/simplify-gate.cjs"`,
+							},
+						],
+					},
+				],
+			},
+		};
+		const selfHealHooksJsonPath = join(selfHealDir, ".codex", "hooks.json");
+		writeFileSync(selfHealHooksJsonPath, JSON.stringify(brokenHooksJson, null, 2));
+
+		// Source settings.json with the correct Claude Code form (what Claude wrote)
+		const settingsJson = {
+			hooks: {
+				PreToolUse: [
+					{
+						matcher: "Bash",
+						hooks: [
+							{
+								type: "command",
+								command: `node "$CLAUDE_PROJECT_DIR"/.claude/hooks/simplify-gate.cjs`,
+							},
+						],
+					},
+				],
+				SessionStart: [
+					{
+						matcher: "startup",
+						hooks: [
+							{
+								type: "command",
+								command: `node "$CLAUDE_PROJECT_DIR"/.claude/hooks/simplify-gate.cjs`,
+							},
+						],
+					},
+				],
+			},
+		};
+		writeFileSync(
+			join(selfHealDir, ".claude", "settings.json"),
+			JSON.stringify(settingsJson, null, 2),
+		);
+
+		process.chdir(selfHealDir);
+
+		const result = await migrateHooksSettings({
+			sourceProvider: "claude-code",
+			targetProvider: "codex",
+			installedHookFiles: ["simplify-gate.cjs"],
+			global: false,
+			installedHookAbsolutePaths: [selfHealTargetHookPath],
+		});
+
+		expect(result.success).toBe(true);
+		expect(result.status).toBe("registered");
+		// hooksPruned must reflect the broken entries that were removed by self-heal
+		expect(result.hooksPruned).toBeGreaterThan(0);
+
+		const rawJson = readFileSync(selfHealHooksJsonPath, "utf8");
+
+		// No CLAUDE_PROJECT_DIR tokens remain in the healed file
+		expect(rawJson).not.toContain("CLAUDE_PROJECT_DIR");
+
+		const written = readJson(selfHealHooksJsonPath) as {
+			hooks: Record<string, Array<{ hooks: Array<{ command: string }> }>>;
+		};
+
+		// Exactly one hook entry per event: the fixed absolute-wrapper command.
+		// Broken entries were pruned; the new correct entry was deduplicated into one.
+		for (const groups of Object.values(written.hooks)) {
+			let totalHooks = 0;
+			for (const group of groups) {
+				totalHooks += group.hooks.length;
+				for (const entry of group.hooks) {
+					// Each surviving entry must be an absolute hash-prefixed wrapper
+					expect(entry.command).not.toContain("CLAUDE_PROJECT_DIR");
+					expect(entry.command).toMatch(/\/[0-9a-f]{8}-[^/]+\.cjs/);
+				}
+			}
+			// Only one hook per event (broken entries pruned, one correct entry merged)
+			expect(totalHooks).toBe(1);
+		}
+	}, 20000);
 });

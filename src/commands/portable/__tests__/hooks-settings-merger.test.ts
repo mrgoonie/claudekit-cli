@@ -1092,3 +1092,245 @@ describe("mapHookEventsForProvider (Gemini CLI)", () => {
 		expect(entry?.timeout).toBe(5000);
 	});
 });
+
+// ---------------------------------------------------------------------------
+// Phase 2 tests: codex-gated broken-entry prune (pruneVariableTokenBrokenEntries)
+// ---------------------------------------------------------------------------
+
+describe("mergeHooksIntoSettings — broken CLAUDE_PROJECT_DIR entry prune (Phase 2)", () => {
+	it("drops form-2 broken entry: $CLAUDE_PROJECT_DIR/.codex/hooks/x.cjs (quoted var)", async () => {
+		// Form 2 per plan.md: `"$CLAUDE_PROJECT_DIR"/.codex/hooks/x.cjs` — var-only quoted
+		const path = join(testDir, "prune-var-form2.json");
+		const brokenCmd = 'node "$CLAUDE_PROJECT_DIR"/.codex/hooks/broken.cjs';
+		writeFileSync(
+			path,
+			JSON.stringify({
+				hooks: {
+					SessionStart: [{ hooks: [{ type: "command", command: brokenCmd }] }],
+				},
+			}),
+		);
+		const result = await mergeHooksIntoSettings(
+			path,
+			{ SessionStart: [{ hooks: [{ type: "command", command: "echo ok" }] }] },
+			{ targetProvider: "codex" },
+		);
+		expect(result.hooksPruned).toBeGreaterThanOrEqual(1);
+		const content = JSON.parse(await Bun.file(path).text());
+		const commands = content.hooks.SessionStart.flatMap((g: { hooks: { command: string }[] }) =>
+			g.hooks.map((h) => h.command),
+		);
+		expect(commands).not.toContain(brokenCmd);
+	});
+
+	it("drops form-1 broken entry: $CLAUDE_PROJECT_DIR/.codex/hooks/y.cjs (fully quoted)", async () => {
+		// Form 1 per plan.md: `"$CLAUDE_PROJECT_DIR/.codex/hooks/y.cjs"` — fully quoted
+		const path = join(testDir, "prune-var-form1.json");
+		const brokenCmd = 'node "$CLAUDE_PROJECT_DIR/.codex/hooks/y.cjs"';
+		writeFileSync(
+			path,
+			JSON.stringify({
+				hooks: {
+					PreToolUse: [{ hooks: [{ type: "command", command: brokenCmd }] }],
+				},
+			}),
+		);
+		const result = await mergeHooksIntoSettings(
+			path,
+			{ PreToolUse: [{ hooks: [{ type: "command", command: "echo ok" }] }] },
+			{ targetProvider: "codex" },
+		);
+		expect(result.hooksPruned).toBeGreaterThanOrEqual(1);
+		const content = JSON.parse(await Bun.file(path).text());
+		const commands = content.hooks.PreToolUse.flatMap((g: { hooks: { command: string }[] }) =>
+			g.hooks.map((h) => h.command),
+		);
+		expect(commands).not.toContain(brokenCmd);
+	});
+
+	it("drops Windows-form broken entry: %CLAUDE_PROJECT_DIR%/.codex/hooks/z.cjs", async () => {
+		// Windows form per plan.md §5
+		const path = join(testDir, "prune-var-windows.json");
+		const brokenCmd = 'node "%CLAUDE_PROJECT_DIR%/.codex/hooks/z.cjs"';
+		writeFileSync(
+			path,
+			JSON.stringify({
+				hooks: {
+					UserPromptSubmit: [{ hooks: [{ type: "command", command: brokenCmd }] }],
+				},
+			}),
+		);
+		const result = await mergeHooksIntoSettings(
+			path,
+			{ UserPromptSubmit: [{ hooks: [{ type: "command", command: "echo ok" }] }] },
+			{ targetProvider: "codex" },
+		);
+		expect(result.hooksPruned).toBeGreaterThanOrEqual(1);
+		const content = JSON.parse(await Bun.file(path).text());
+		const commands = content.hooks.UserPromptSubmit.flatMap((g: { hooks: { command: string }[] }) =>
+			g.hooks.map((h) => h.command),
+		);
+		expect(commands).not.toContain(brokenCmd);
+	});
+
+	it("counts all three broken forms into hooksPruned", async () => {
+		// All three variable forms in a single hooks.json — verify count is 3.
+		const path = join(testDir, "prune-var-all-forms.json");
+		writeFileSync(
+			path,
+			JSON.stringify({
+				hooks: {
+					SessionStart: [
+						{
+							hooks: [
+								{
+									type: "command",
+									command: 'node "$CLAUDE_PROJECT_DIR"/.codex/hooks/x.cjs',
+								},
+								{
+									type: "command",
+									command: 'node "$CLAUDE_PROJECT_DIR/.codex/hooks/y.cjs"',
+								},
+								{
+									type: "command",
+									command: 'node "%CLAUDE_PROJECT_DIR%/.codex/hooks/z.cjs"',
+								},
+							],
+						},
+					],
+				},
+			}),
+		);
+		const result = await mergeHooksIntoSettings(
+			path,
+			{ SessionStart: [{ hooks: [{ type: "command", command: "echo ok" }] }] },
+			{ targetProvider: "codex" },
+		);
+		expect(result.hooksPruned).toBe(3);
+		const content = JSON.parse(await Bun.file(path).text());
+		const commands = content.hooks.SessionStart.flatMap((g: { hooks: { command: string }[] }) =>
+			g.hooks.map((h) => h.command),
+		);
+		expect(commands).not.toContain('node "$CLAUDE_PROJECT_DIR"/.codex/hooks/x.cjs');
+		expect(commands).not.toContain('node "$CLAUDE_PROJECT_DIR/.codex/hooks/y.cjs"');
+		expect(commands).not.toContain('node "%CLAUDE_PROJECT_DIR%/.codex/hooks/z.cjs"');
+	});
+
+	it("leaves broken entries untouched when targetProvider is NOT codex", async () => {
+		// The var is legitimate in Claude Code settings — prune must be codex-gated.
+		// Use ${CLAUDE_PROJECT_DIR} form (braces, no surrounding quotes): the char
+		// before the '/' is '}', which extractAbsolutePaths does NOT anchor on, so
+		// pruneStaleFileHooks won't catch it — only pruneVariableTokenBrokenEntries
+		// would prune it, and that function is codex-gated.
+		const path = join(testDir, "prune-var-non-codex.json");
+		const claudeCmd = "node ${CLAUDE_PROJECT_DIR}/.claude/hooks/hook.cjs";
+		writeFileSync(
+			path,
+			JSON.stringify({
+				hooks: {
+					SessionStart: [{ hooks: [{ type: "command", command: claudeCmd }] }],
+				},
+			}),
+		);
+		// No targetProvider → defaults to undefined (non-codex), so var-token prune is skipped.
+		const result = await mergeHooksIntoSettings(path, {
+			SessionStart: [{ hooks: [{ type: "command", command: "echo ok" }] }],
+		});
+		expect(result.hooksPruned).toBe(0);
+		const content = JSON.parse(await Bun.file(path).text());
+		const commands = content.hooks.SessionStart.flatMap((g: { hooks: { command: string }[] }) =>
+			g.hooks.map((h) => h.command),
+		);
+		expect(commands).toContain(claudeCmd);
+	});
+
+	it("preserves user-owned $CLAUDE_PROJECT_DIR command NOT referencing CK hook dirs", async () => {
+		// User hook that happens to use $CLAUDE_PROJECT_DIR for a custom script —
+		// must NOT be pruned because the path does not reference .claude/hooks/ or .codex/hooks/.
+		const path = join(testDir, "prune-var-user-owned.json");
+		const userCmd = 'node "$CLAUDE_PROJECT_DIR"/scripts/own.cjs';
+		writeFileSync(
+			path,
+			JSON.stringify({
+				hooks: {
+					PreToolUse: [
+						{
+							hooks: [
+								{ type: "command", command: userCmd },
+								{
+									type: "command",
+									command: 'node "$CLAUDE_PROJECT_DIR"/.codex/hooks/broken.cjs',
+								},
+							],
+						},
+					],
+				},
+			}),
+		);
+		const result = await mergeHooksIntoSettings(
+			path,
+			{ PreToolUse: [{ hooks: [{ type: "command", command: "echo ok" }] }] },
+			{ targetProvider: "codex" },
+		);
+		// Only the CK-dir entry is pruned; user hook survives.
+		expect(result.hooksPruned).toBe(1);
+		const content = JSON.parse(await Bun.file(path).text());
+		const commands = content.hooks.PreToolUse.flatMap((g: { hooks: { command: string }[] }) =>
+			g.hooks.map((h) => h.command),
+		);
+		expect(commands).toContain(userCmd);
+		expect(commands).not.toContain('node "$CLAUDE_PROJECT_DIR"/.codex/hooks/broken.cjs');
+	});
+
+	it("also drops .claude/hooks/ reference with var token (broken from previous migrate)", async () => {
+		// After a partial migrate, command may still reference .claude/hooks/ with the var.
+		const path = join(testDir, "prune-var-claude-dir.json");
+		const brokenCmd = 'node "$CLAUDE_PROJECT_DIR"/.claude/hooks/session-init.cjs';
+		writeFileSync(
+			path,
+			JSON.stringify({
+				hooks: {
+					SessionStart: [{ hooks: [{ type: "command", command: brokenCmd }] }],
+				},
+			}),
+		);
+		const result = await mergeHooksIntoSettings(
+			path,
+			{ SessionStart: [{ hooks: [{ type: "command", command: "echo ok" }] }] },
+			{ targetProvider: "codex" },
+		);
+		expect(result.hooksPruned).toBeGreaterThanOrEqual(1);
+		const content = JSON.parse(await Bun.file(path).text());
+		const commands = content.hooks.SessionStart.flatMap((g: { hooks: { command: string }[] }) =>
+			g.hooks.map((h) => h.command),
+		);
+		expect(commands).not.toContain(brokenCmd);
+	});
+});
+
+// Regression guard: generic-pipeline var-preserving dir rewrite.
+// rewriteHookPaths does a substring replaceAll on the hooks dir —
+// it matches regardless of prefix (including $CLAUDE_PROJECT_DIR).
+// No behavior change; this test asserts the existing behavior is preserved.
+describe("rewriteHookPaths — regression guard: var-prefixed command dir rewrite", () => {
+	it("rewrites .claude/hooks/ to .factory/hooks/ even when preceded by $CLAUDE_PROJECT_DIR", () => {
+		// Regression guard (plan.md §Out-of-Scope): generic-pipeline rewrite already handles
+		// var-prefixed forms via substring replaceAll. Assert var is preserved, only dir changes.
+		const hooks = {
+			PreToolUse: [
+				{
+					hooks: [
+						{
+							type: "command",
+							command: 'node "$CLAUDE_PROJECT_DIR"/.claude/hooks/x.cjs',
+						},
+					],
+				},
+			],
+		};
+		const result = rewriteHookPaths(hooks, ".claude/hooks", ".factory/hooks");
+		expect(result.PreToolUse[0].hooks[0].command).toBe(
+			'node "$CLAUDE_PROJECT_DIR"/.factory/hooks/x.cjs',
+		);
+	});
+});

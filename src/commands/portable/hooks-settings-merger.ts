@@ -355,10 +355,20 @@ export async function mergeHooksIntoSettings(
 
 	const existingHooks = (existingSettings.hooks ?? {}) as HooksSection;
 	const incompatibleCleanup = pruneIncompatibleHookRegistrations(existingHooks, options);
+	// Self-heal broken-install entries: drop codex-target entries whose command
+	// still contains a $CLAUDE_PROJECT_DIR variable token referencing a CK hook
+	// dir (.claude/hooks/ or .codex/hooks/). Codex never defines this var — these
+	// entries always exit 1 and cannot be deduplicated away by re-running migrate
+	// (different command string). Must run BEFORE pruneStaleFileHooks so that
+	// var-token entries are counted here; some forms are also caught by the
+	// stale-path prune (which extracts the root-relative path), and we want the
+	// count to reflect intentional var-token removal rather than a path-check side
+	// effect. Gated to codex only — the var is legitimate in Claude Code settings.
+	const brokenCleanup = pruneVariableTokenBrokenEntries(incompatibleCleanup.hooks, options);
 	// Self-heal stale ck-managed entries: drop hooks whose command is an
 	// absolute file path pointing at a missing file. Fixes the "duplicates"
 	// symptom after users purge ~/.codex/hooks/ without clearing hooks.json (#739).
-	const pruned = pruneStaleFileHooks(incompatibleCleanup.hooks);
+	const pruned = pruneStaleFileHooks(brokenCleanup.hooks);
 	const merged = deduplicateMerge(pruned, newHooks);
 	existingSettings.hooks = merged;
 
@@ -374,7 +384,10 @@ export async function mergeHooksIntoSettings(
 		throw new Error(`Failed to write settings: ${err}. Backup preserved at: ${backupPath}`);
 	}
 
-	return { backupPath, hooksPruned: incompatibleCleanup.hooksPruned };
+	return {
+		backupPath,
+		hooksPruned: incompatibleCleanup.hooksPruned + brokenCleanup.hooksPruned,
+	};
 }
 
 function pruneIncompatibleHookRegistrations(
@@ -406,6 +419,55 @@ function pruneIncompatibleHookRegistrations(
 	}
 
 	return { hooks: pruned, hooksPruned };
+}
+
+/**
+ * Drop Codex-target entries that contain a $CLAUDE_PROJECT_DIR variable token
+ * AND reference a CK-managed hook dir (.claude/hooks/ or .codex/hooks/).
+ *
+ * These entries are by definition broken under Codex: Codex never defines
+ * CLAUDE_PROJECT_DIR, so every such hook exits 1 on every fire. They survive
+ * re-runs of `ck migrate` because deduplicateMerge keys on exact command string
+ * (old broken ≠ new fixed → both kept). This explicit prune repairs field-broken
+ * installs without risking user-owned commands that happen to reference the var
+ * for other purposes (e.g. `node "$CLAUDE_PROJECT_DIR"/scripts/own.cjs`).
+ *
+ * Gated to targetProvider === "codex": the var is legitimate in Claude Code settings.
+ */
+function pruneVariableTokenBrokenEntries(
+	hooks: HooksSection,
+	options: MergeHooksOptions,
+): { hooks: HooksSection; hooksPruned: number } {
+	if (options.targetProvider !== "codex") return { hooks, hooksPruned: 0 };
+
+	// Matches all CLAUDE_PROJECT_DIR variable forms (plan.md §"$CLAUDE_PROJECT_DIR forms"):
+	//   $CLAUDE_PROJECT_DIR  ${CLAUDE_PROJECT_DIR}  %CLAUDE_PROJECT_DIR%
+	const varPattern = /\$\{?CLAUDE_PROJECT_DIR\}?|%CLAUDE_PROJECT_DIR%/;
+	// CK-managed hook dirs referenced by broken entries.
+	const ckHookDirPattern = /\.claude\/hooks\/|\.codex\/hooks\//;
+
+	let hooksPruned = 0;
+	const result: HooksSection = {};
+
+	for (const [event, groups] of Object.entries(hooks)) {
+		const keptGroups: HookGroup[] = [];
+		for (const group of groups) {
+			const keptHooks = group.hooks.filter((entry) => {
+				const cmd = entry.command;
+				// Drop only when BOTH conditions hold: var token present AND targets CK hook dir.
+				// This preserves user hooks like `node "$CLAUDE_PROJECT_DIR"/scripts/own.cjs`.
+				if (varPattern.test(cmd) && ckHookDirPattern.test(cmd)) {
+					hooksPruned += 1;
+					return false;
+				}
+				return true;
+			});
+			if (keptHooks.length > 0) keptGroups.push({ ...group, hooks: keptHooks });
+		}
+		if (keptGroups.length > 0) result[event] = keptGroups;
+	}
+
+	return { hooks: result, hooksPruned };
 }
 
 function commandTargetsHookDir(command: string, targetHooksDir: string): boolean {
@@ -820,6 +882,11 @@ async function migrateHooksSettingsForCodex(
 		? targetSettingsPath
 		: join(process.cwd(), targetSettingsPath);
 
+	// Capture project root once, at the same point resolvedSourcePath is computed.
+	// Passed to the converter so $CLAUDE_PROJECT_DIR forms are resolved to absolute
+	// paths for project-scope migrations. Undefined for global scope (no env var to resolve).
+	const projectDir: string | undefined = isGlobal ? undefined : process.cwd();
+
 	// Step 3: Read source hooks
 	const sourceHooksResult = await inspectHooksSettings(resolvedSourcePath);
 	if (sourceHooksResult.status === "missing-file") {
@@ -977,11 +1044,15 @@ async function migrateHooksSettingsForCodex(
 	// commandSubstitutions (per-file map) takes precedence over the directory-level rewrite in
 	// rewriteCommandPath. For hooks not covered by the map, directory rewrite still applies as
 	// fallback so non-wrapper code paths remain functional.
+	// projectDir is threaded here (ONE call site) so the converter can resolve
+	// $CLAUDE_PROJECT_DIR variable forms to absolute paths for project-scope migrations.
+	// Global-scope migrations pass undefined → no behavior change.
 	const effectiveTargetDir = targetHooksDir || sourceHooksDir;
 	const converted = convertClaudeHooksToCodex(filtered, capabilities, {
 		sourceDir: sourceHooksDir,
 		targetDir: effectiveTargetDir,
 		commandSubstitutions: commandSubstitutions.size > 0 ? commandSubstitutions : undefined,
+		projectDir,
 	});
 
 	// Count hooks to register
