@@ -118,15 +118,28 @@ export class CheckRunner {
 		// "unreachable"/timeout on a perfectly healthy connection. Run the network
 		// group first against a free event loop so its timing stays honest, then
 		// run the remaining (loop-blocking) checkers together.
-		const networkCheckers = checkers.filter((c) => c.group === "network");
-		const otherCheckers = checkers.filter((c) => c.group !== "network");
+		const indexedCheckers = checkers.map((checker, index) => ({ checker, index }));
+		const networkCheckers = indexedCheckers.filter(({ checker }) => checker.group === "network");
+		const otherCheckers = indexedCheckers.filter(({ checker }) => checker.group !== "network");
 
 		const networkResults = networkCheckers.length
-			? await Promise.all(networkCheckers.map(runChecker))
+			? await Promise.all(
+					networkCheckers.map(async ({ checker, index }) => ({
+						index,
+						results: await runChecker(checker),
+					})),
+				)
 			: [];
-		const otherResults = await Promise.all(otherCheckers.map(runChecker));
+		const otherResults = await Promise.all(
+			otherCheckers.map(async ({ checker, index }) => ({
+				index,
+				results: await runChecker(checker),
+			})),
+		);
 
-		return [...networkResults, ...otherResults].flat();
+		return [...networkResults, ...otherResults]
+			.sort((a, b) => a.index - b.index)
+			.flatMap(({ results }) => results);
 	}
 
 	/**

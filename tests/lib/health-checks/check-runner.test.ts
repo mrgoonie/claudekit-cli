@@ -290,5 +290,77 @@ describe("CheckRunner", () => {
 			// Auth should finish before system (10ms vs 50ms)
 			expect(executionOrder.indexOf("auth-end")).toBeLessThan(executionOrder.indexOf("system-end"));
 		});
+
+		test("runs network checks first but returns results in registration order", async () => {
+			const runner = new CheckRunner({});
+			const executionOrder: string[] = [];
+
+			runner.registerChecker({
+				group: "system",
+				run: async () => {
+					executionOrder.push("system-start");
+					return [
+						{
+							id: "system-check",
+							name: "System",
+							group: "system",
+							status: "pass",
+							message: "OK",
+							autoFixable: false,
+						},
+					];
+				},
+			});
+
+			runner.registerChecker({
+				group: "network",
+				run: async () => {
+					executionOrder.push("network-start");
+					await new Promise((resolve) => setTimeout(resolve, 1));
+					executionOrder.push("network-end");
+					return [
+						{
+							id: "network-check",
+							name: "Network",
+							group: "network",
+							status: "pass",
+							message: "OK",
+							autoFixable: false,
+						},
+					];
+				},
+			});
+
+			runner.registerChecker({
+				group: "auth",
+				run: async () => {
+					executionOrder.push("auth-start");
+					return [
+						{
+							id: "auth-check",
+							name: "Auth",
+							group: "auth",
+							status: "pass",
+							message: "OK",
+							autoFixable: false,
+						},
+					];
+				},
+			});
+
+			const summary = await runner.run();
+
+			expect(executionOrder.indexOf("network-start")).toBeLessThan(
+				executionOrder.indexOf("system-start"),
+			);
+			expect(executionOrder.indexOf("network-end")).toBeLessThan(
+				executionOrder.indexOf("system-start"),
+			);
+			expect(summary.checks.map((check) => check.id)).toEqual([
+				"system-check",
+				"network-check",
+				"auth-check",
+			]);
+		});
 	});
 });
