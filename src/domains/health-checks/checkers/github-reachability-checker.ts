@@ -110,9 +110,24 @@ export function createDefaultDeps(): GitHubReachabilityDeps {
 }
 
 function createDefaultDns(): GitHubReachabilityDeps["dns"] {
+	// Resolve via getaddrinfo (`dns.lookup`) rather than c-ares
+	// (`dns.resolve4`/`resolve6`). getaddrinfo honors the OS resolver path —
+	// the systemd-resolved/stub resolver, /etc/hosts, nsswitch ordering, and
+	// the local DNS cache — which is the exact path git, gh, and `fetch` use.
+	// c-ares fires raw queries straight at the resolv.conf nameservers,
+	// bypassing that cache, so a single slow round-trip (flaky Wi-Fi, captive
+	// portal, VPN split-DNS, throttled UDP/53) blew the probe's tight timeout
+	// and produced false "unreachable" results while every other tool on the
+	// machine resolved fine. The `{ family, all }` lookup returns the same
+	// `string[]` shape the probe contract expects.
+	const lookupFamily = (host: string, family: 4 | 6) =>
+		dnsPromises
+			.lookup(host, { family, all: true })
+			.then((records) => records.map((record) => record.address));
+
 	return {
-		resolve4: (host) => dnsPromises.resolve4(host),
-		resolve6: (host) => dnsPromises.resolve6(host),
+		resolve4: (host) => lookupFamily(host, 4),
+		resolve6: (host) => lookupFamily(host, 6),
 	};
 }
 
@@ -341,13 +356,35 @@ export async function checkGitHubReachability(
 /** Race a promise against a timeout reject */
 function raceTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
 	return new Promise<T>((resolve, reject) => {
-		const timer = setTimeout(() => reject(new Error(`timeout after ${ms}ms`)), ms);
+		let settled = false;
+		const timer = setTimeout(() => {
+			// Defer the rejection by one event-loop turn instead of rejecting
+			// inline. `ck doctor` runs every checker concurrently via Promise.all,
+			// and sibling checkers make synchronous child-process calls
+			// (`spawnSync` for `gh auth status`, `npm view`, `node --check`) that
+			// freeze the single thread. A frozen loop makes this wall-clock timer
+			// fire the instant it resumes — even when the awaited DNS/socket I/O
+			// already completed during the freeze and its callback is waiting in
+			// the poll phase. `setImmediate` runs in the check phase (after poll),
+			// so a completed-but-unprocessed result settles the race first instead
+			// of being discarded as a spurious timeout. A genuinely unresolved
+			// promise still rejects on the next turn.
+			setImmediate(() => {
+				if (settled) return;
+				settled = true;
+				reject(new Error(`timeout after ${ms}ms`));
+			});
+		}, ms);
 		promise.then(
 			(v) => {
+				if (settled) return;
+				settled = true;
 				clearTimeout(timer);
 				resolve(v);
 			},
 			(e) => {
+				if (settled) return;
+				settled = true;
 				clearTimeout(timer);
 				reject(e);
 			},
