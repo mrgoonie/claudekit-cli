@@ -1,6 +1,6 @@
 {
 	"name": "claudekit-cli",
-	"version": "4.4.0",
+	"version": "4.4.0-dev.9",
 	"description": "CLI tool for bootstrapping and updating ClaudeKit projects",
 	"type": "module",
 	"repository": {
@@ -70,7 +70,6 @@
 	"dependencies": {
 		"@clack/prompts": "^0.7.0",
 		"@octokit/rest": "^22.0.0",
-		"better-sqlite3": "^12.6.2",
 		"cac": "^6.7.14",
 		"chokidar": "^5.0.0",
 		"cli-progress": "^3.12.0",
@@ -94,6 +93,9 @@
 		"tmp": "^0.2.3",
 		"ws": "^8.19.0",
 		"zod": "^3.23.8"
+	},
+	"optionalDependencies": {
+		"better-sqlite3": "^12.6.2"
 	},
 	"devDependencies": {
 		"@biomejs/biome": "^1.9.4",

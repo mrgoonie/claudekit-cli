@@ -525,3 +525,4 @@ Global Mode (Kit Installation):
 - Future development focuses on maintenance, security updates, minor enhancements
 - No breaking changes anticipated in v1.x releases
 - Modularization improves maintainability and LLM context efficiency
+- 2026-06-02: Kit updates now preserve user-deleted CK-managed skill directories as ignored skills, with `--force-overwrite` as the reinstall path

@@ -5,6 +5,10 @@ import { type KitType, USER_CONFIG_PATTERNS } from "@/types";
 import { copy, pathExists } from "fs-extra";
 import ignore, { type Ignore } from "ignore";
 import { type FileConflictInfo, SelectiveMerger } from "../selective-merger.js";
+import {
+	findIgnoredSkillDirectories,
+	shouldSkipIgnoredSkill,
+} from "./deleted-skill-preservation.js";
 import { FileScanner } from "./file-scanner.js";
 import { SettingsProcessor } from "./settings-processor.js";
 
@@ -56,6 +60,8 @@ export class CopyExecutor {
 	// Multi-kit context
 	private claudeDir: string | null = null;
 	private installingKit: KitType | null = null;
+	private ignoredSkillDirectories: Set<string> = new Set();
+	private preserveDeletedSkills = true;
 
 	constructor(neverCopyPatterns: string[]) {
 		this.userConfigChecker = ignore().add(USER_CONFIG_PATTERNS);
@@ -94,6 +100,10 @@ export class CopyExecutor {
 	 */
 	setForceOverwriteSettings(force: boolean): void {
 		this.settingsProcessor.setForceOverwriteSettings(force);
+	}
+
+	setPreserveDeletedSkills(preserve: boolean): void {
+		this.preserveDeletedSkills = preserve;
 	}
 
 	/**
@@ -206,8 +216,10 @@ export class CopyExecutor {
 	 */
 	async copyFiles(sourceDir: string, destDir: string): Promise<void> {
 		const files = await this.fileScanner.getFiles(sourceDir, sourceDir);
+		await this.loadIgnoredSkillDirectories(files, sourceDir, destDir);
 		let copiedCount = 0;
 		let skippedCount = 0;
+		let ignoredSkillSkipped = 0;
 
 		for (const file of files) {
 			const relativePath = relative(sourceDir, file);
@@ -219,6 +231,12 @@ export class CopyExecutor {
 			if (this.fileScanner.shouldNeverCopy(normalizedRelativePath)) {
 				logger.debug(`Skipping security-sensitive file: ${normalizedRelativePath}`);
 				skippedCount++;
+				continue;
+			}
+
+			if (this.shouldSkipIgnoredSkill(normalizedRelativePath)) {
+				logger.debug(`Preserving ignored skill file: ${normalizedRelativePath}`);
+				ignoredSkillSkipped++;
 				continue;
 			}
 
@@ -285,6 +303,8 @@ export class CopyExecutor {
 		if (copiedCount > 0) parts.push(`Updated ${copiedCount} file(s)`);
 		if (this.unchangedSkipped > 0) parts.push(`skipped ${this.unchangedSkipped} unchanged`);
 		if (this.sharedSkipped > 0) parts.push(`preserved ${this.sharedSkipped} shared`);
+		if (ignoredSkillSkipped > 0)
+			parts.push(`preserved ${ignoredSkillSkipped} ignored skill file(s)`);
 		if (skippedCount > 0) parts.push(`skipped ${skippedCount} protected`);
 
 		if (parts.length > 0) {
@@ -331,6 +351,10 @@ export class CopyExecutor {
 		return this.fileConflicts;
 	}
 
+	getIgnoredSkillDirectories(): string[] {
+		return Array.from(this.ignoredSkillDirectories).sort();
+	}
+
 	/**
 	 * Track a file as installed
 	 */
@@ -343,5 +367,27 @@ export class CopyExecutor {
 			this.installedDirectories.add(`${dir}/`);
 			dir = dirname(dir);
 		}
+	}
+
+	private async loadIgnoredSkillDirectories(
+		files: string[],
+		sourceDir: string,
+		destDir: string,
+	): Promise<void> {
+		this.ignoredSkillDirectories.clear();
+		if (!this.preserveDeletedSkills) return;
+		if (!this.claudeDir || !this.installingKit) return;
+
+		this.ignoredSkillDirectories = await findIgnoredSkillDirectories({
+			files,
+			sourceDir,
+			destDir,
+			claudeDir: this.claudeDir,
+			installingKit: this.installingKit,
+		});
+	}
+
+	private shouldSkipIgnoredSkill(normalizedRelativePath: string): boolean {
+		return shouldSkipIgnoredSkill(normalizedRelativePath, this.ignoredSkillDirectories);
 	}
 }

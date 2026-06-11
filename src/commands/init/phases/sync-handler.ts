@@ -5,6 +5,7 @@
 
 import { copyFile, mkdir, open, readFile, rename, stat, unlink, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
+import { handleDeletions } from "@/domains/installation/deletion-handler.js";
 import {
 	ConfigVersionChecker,
 	MergeUI,
@@ -279,12 +280,13 @@ export async function executeSyncMerge(ctx: InitContext): Promise<InitContext> {
 
 		// Load source metadata to get deletions array
 		// This prevents "Skipping invalid path" warnings for intentionally deleted files
+		let sourceMetadata: ClaudeKitMetadata | null = null;
 		let deletions: string[] = [];
 		try {
 			const sourceMetadataPath = join(upstreamDir, "metadata.json");
 			if (await pathExists(sourceMetadataPath)) {
 				const content = await readFile(sourceMetadataPath, "utf-8");
-				const sourceMetadata = JSON.parse(content) as ClaudeKitMetadata;
+				sourceMetadata = JSON.parse(content) as ClaudeKitMetadata;
 				deletions = sourceMetadata.deletions || [];
 			}
 		} catch (error) {
@@ -307,7 +309,9 @@ export async function executeSyncMerge(ctx: InitContext): Promise<InitContext> {
 		// Display plan summary
 		displaySyncPlan(plan);
 
-		if (plan.autoUpdate.length === 0 && plan.needsReview.length === 0) {
+		const hasSyncUpdates = plan.autoUpdate.length > 0 || plan.needsReview.length > 0;
+		const hasDeletionPatterns = deletions.length > 0;
+		if (!hasSyncUpdates && !hasDeletionPatterns) {
 			ctx.prompts.note("All files are up to date or user-owned.", "No Changes Needed");
 			return { ...ctx, cancelled: true };
 		}
@@ -316,6 +320,38 @@ export async function executeSyncMerge(ctx: InitContext): Promise<InitContext> {
 		const backupDir = PathResolver.getBackupDir();
 		await createBackup(ctx.claudeDir, trackedFiles, backupDir);
 		logger.success(`Backup created at ${pc.dim(backupDir)}`);
+
+		if (sourceMetadata?.deletions && sourceMetadata.deletions.length > 0) {
+			try {
+				const deletionResult = await handleDeletions(sourceMetadata, ctx.claudeDir, ctx.kitType);
+
+				if (deletionResult.deletedPaths.length > 0) {
+					logger.info(`Removed ${deletionResult.deletedPaths.length} deprecated file(s)`);
+					for (const path of deletionResult.deletedPaths) {
+						logger.verbose(`  - ${path}`);
+					}
+				}
+
+				if (deletionResult.preservedPaths.length > 0) {
+					logger.verbose(`Preserved ${deletionResult.preservedPaths.length} user-owned file(s)`);
+				}
+
+				if (!hasSyncUpdates) {
+					if (deletionResult.deletedPaths.length > 0) {
+						ctx.prompts.outro("Config sync completed successfully");
+					} else {
+						ctx.prompts.note("All files are up to date or user-owned.", "No Changes Needed");
+					}
+					return { ...ctx, cancelled: true };
+				}
+			} catch (error) {
+				logger.debug(`Cleanup of deprecated files failed during sync: ${error}`);
+				if (!hasSyncUpdates) {
+					ctx.prompts.note("All files are up to date or user-owned.", "No Changes Needed");
+					return { ...ctx, cancelled: true };
+				}
+			}
+		}
 
 		// Apply auto-updates
 		if (plan.autoUpdate.length > 0) {

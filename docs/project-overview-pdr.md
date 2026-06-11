@@ -270,6 +270,8 @@ ClaudeKit CLI provides a comprehensive solution with:
 - User prompted before migration in interactive mode
 - Backup created before any file movement
 - Customized skills preserved during migration
+- Deleted CK-managed skill directories are preserved as ignored skills on future updates
+- `--force-overwrite` can reinstall previously ignored skills
 - Rollback successful on any error
 - New manifest written after successful migration
 - Non-interactive mode works in CI/CD environments
