@@ -412,6 +412,18 @@
 							"description": "Separator color",
 							"maxLength": 30,
 							"pattern": "^[a-zA-Z]+$"
+						},
+						"quotaLow": {
+							"type": "string",
+							"description": "Quota section color when all windows <85%",
+							"maxLength": 30,
+							"pattern": "^[a-zA-Z]+$"
+						},
+						"quotaHigh": {
+							"type": "string",
+							"description": "Quota section color when any window >=85%",
+							"maxLength": 30,
+							"pattern": "^[a-zA-Z]+$"
 						}
 					},
 					"additionalProperties": false
