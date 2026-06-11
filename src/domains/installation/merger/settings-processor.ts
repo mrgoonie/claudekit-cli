@@ -12,7 +12,21 @@ import type { InstalledSettings } from "@/types";
 import { copy, pathExists, readFile, writeFile } from "fs-extra";
 import semver from "semver";
 
-const DYNAMIC_INJECTED_HOOKS = new Set(["task-completed-handler", "teammate-idle-handler"]);
+const DYNAMIC_TEAM_HOOKS = [
+	{
+		event: "TaskCompleted",
+		handler: "task-completed-handler.cjs",
+		hookName: "task-completed-handler",
+	},
+	{
+		event: "TeammateIdle",
+		handler: "teammate-idle-handler.cjs",
+		hookName: "teammate-idle-handler",
+	},
+] as const;
+const DYNAMIC_INJECTED_HOOKS: Set<string> = new Set(
+	DYNAMIC_TEAM_HOOKS.map(({ hookName }) => hookName),
+);
 
 /**
  * SettingsProcessor handles settings.json processing with selective merge and path transformation
@@ -301,7 +315,7 @@ export class SettingsProcessor {
 		await SettingsMerger.writeSettingsFile(destFile, mergeResult.merged);
 		logger.success("Merged settings.json (user customizations preserved)");
 
-		await this.refreshInstalledSettingsTracking(sourceSettings, installedSettings);
+		await this.refreshInstalledSettingsTracking(sourceSettings, installedSettings, destFile);
 
 		// Inject team hooks if supported
 		await this.injectTeamHooksIfSupported(destFile, mergeResult.merged);
@@ -665,26 +679,37 @@ export class SettingsProcessor {
 	private async refreshInstalledSettingsTracking(
 		sourceSettings: SettingsJson,
 		previousInstalledSettings: InstalledSettings,
+		destFile: string,
 	): Promise<void> {
 		if (!this.tracker) return;
 
 		const trackingSource = structuredClone(sourceSettings);
 		this.fixHookCommandPaths(trackingSource);
 		const refreshedSettings = this.collectInstalledSettings(trackingSource);
-		this.preserveDynamicInjectedHookTracking(previousInstalledSettings, refreshedSettings);
+		const disabledHooks = await this.getDisabledHookNames();
+		await this.preserveDynamicInjectedHookTracking(
+			previousInstalledSettings,
+			refreshedSettings,
+			destFile,
+			disabledHooks,
+		);
 		await this.tracker.saveInstalledSettings(refreshedSettings);
 		logger.debug("Refreshed installed settings tracking baseline");
 	}
 
-	private preserveDynamicInjectedHookTracking(
+	private async preserveDynamicInjectedHookTracking(
 		previousInstalledSettings: InstalledSettings,
 		refreshedSettings: InstalledSettings,
-	): void {
+		destFile: string,
+		disabledHooks: Set<string>,
+	): Promise<void> {
 		if (!previousInstalledSettings.hooks || !this.tracker) return;
 
 		for (const command of previousInstalledSettings.hooks) {
 			const hookName = this.extractCkHookName(command);
 			if (!hookName || !DYNAMIC_INJECTED_HOOKS.has(hookName)) continue;
+			if (disabledHooks.has(hookName)) continue;
+			if (!(await this.dynamicTeamHookHandlerExists(destFile, `${hookName}.cjs`))) continue;
 			this.tracker.trackHook(command, refreshedSettings);
 		}
 	}
@@ -976,8 +1001,8 @@ export class SettingsProcessor {
 	}
 
 	/**
-	 * Inject team hooks if Claude Code >= 2.1.33 is detected
-	 * Adds TaskCompleted and TeammateIdle hooks if not already present
+	 * Inject team hooks if Claude Code >= 2.1.33 is detected and the installed
+	 * kit actually ships the corresponding handler scripts.
 	 * @param destFile - Path to settings.json
 	 * @param existingSettings - Optional parsed settings to avoid re-reading from disk
 	 */
@@ -991,15 +1016,6 @@ export class SettingsProcessor {
 			return;
 		}
 
-		if (!this.isVersionAtLeast(version, SettingsProcessor.MIN_TEAM_HOOKS_VERSION)) {
-			logger.debug(
-				`Claude Code ${version} does not support team hooks (requires >= 2.1.33), skipping injection`,
-			);
-			return;
-		}
-
-		logger.debug(`Claude Code ${version} detected, checking team hooks`);
-
 		// Use provided settings or read from disk
 		const settings = existingSettings ?? (await SettingsMerger.readSettingsFile(destFile));
 		if (!settings) {
@@ -1012,18 +1028,31 @@ export class SettingsProcessor {
 			settings.hooks = {};
 		}
 
+		if (!this.isVersionAtLeast(version, SettingsProcessor.MIN_TEAM_HOOKS_VERSION)) {
+			const pruned = this.removeDynamicTeamHookRegistrations(settings);
+			if (pruned > 0) {
+				await SettingsMerger.writeSettingsFile(destFile, settings);
+				logger.info(
+					`Pruned ${pruned} team hook registration(s) unsupported by Claude Code ${version}`,
+				);
+			} else {
+				logger.debug(
+					`Claude Code ${version} does not support team hooks (requires >= 2.1.33), skipping injection`,
+				);
+			}
+			return;
+		}
+
+		logger.debug(`Claude Code ${version} detected, checking team hooks`);
+
+		let changed = false;
 		let injected = false;
 		const installedSettings = this.tracker
 			? await this.tracker.loadInstalledSettings()
 			: { hooks: [], mcpServers: [] };
+		const disabledHooks = await this.getDisabledHookNames();
 
-		// Inject hooks only if not present AND not previously removed by user
-		const teamHooks = [
-			{ event: "TaskCompleted", handler: "task-completed-handler.cjs" },
-			{ event: "TeammateIdle", handler: "teammate-idle-handler.cjs" },
-		] as const;
-
-		for (const { event, handler } of teamHooks) {
+		for (const { event, handler, hookName } of DYNAMIC_TEAM_HOOKS) {
 			const hookCommand = this.formatCommandPath(
 				"node ",
 				this.isGlobal ? this.getCanonicalGlobalCommandRoot() : "$CLAUDE_PROJECT_DIR",
@@ -1031,16 +1060,27 @@ export class SettingsProcessor {
 			);
 			const eventHooks = settings.hooks[event];
 
-			if (eventHooks && eventHooks.length > 0) continue; // Already present
-
-			// Respect user deletion: if CK previously installed this hook but user removed it, skip
-			if (this.tracker?.wasHookInstalled(hookCommand, installedSettings)) {
-				logger.debug(`Skipping ${event} hook injection (previously removed by user)`);
+			if (disabledHooks.has(hookName)) {
+				if (this.removeDynamicTeamHookRegistration(settings, event, hookName)) {
+					changed = true;
+					logger.info(`Skipped ${event} hook disabled in .ck.json`);
+				}
 				continue;
 			}
 
+			if (!(await this.dynamicTeamHookHandlerExists(destFile, handler))) {
+				if (this.removeDynamicTeamHookRegistration(settings, event, hookName)) {
+					changed = true;
+					logger.info(`Pruned ${event} hook because ${handler} is not installed`);
+				}
+				continue;
+			}
+
+			if (eventHooks && eventHooks.length > 0) continue; // Already present
+
 			settings.hooks[event] = [{ hooks: [{ type: "command", command: hookCommand }] }];
 			logger.info(`Injected ${event} hook`);
+			changed = true;
 			injected = true;
 
 			if (this.tracker) {
@@ -1048,16 +1088,80 @@ export class SettingsProcessor {
 			}
 		}
 
-		// Write back if hooks were injected
-		if (injected) {
+		// Write back if hooks were injected or stale dynamic registrations were pruned.
+		if (changed) {
 			await SettingsMerger.writeSettingsFile(destFile, settings);
-			// Save tracking
 			if (this.tracker) {
 				await this.tracker.saveInstalledSettings(installedSettings);
 			}
-			logger.success("Team hooks injected successfully");
+			if (injected) {
+				logger.success("Team hooks injected successfully");
+			}
 		} else {
 			logger.debug("Team hooks already present, no injection needed");
 		}
+	}
+
+	private async dynamicTeamHookHandlerExists(destFile: string, handler: string): Promise<boolean> {
+		return pathExists(join(dirname(destFile), "hooks", handler));
+	}
+
+	private removeDynamicTeamHookRegistrations(settings: SettingsJson): number {
+		let removed = 0;
+		for (const { event, hookName } of DYNAMIC_TEAM_HOOKS) {
+			if (this.removeDynamicTeamHookRegistration(settings, event, hookName)) {
+				removed++;
+			}
+		}
+		return removed;
+	}
+
+	private removeDynamicTeamHookRegistration(
+		settings: SettingsJson,
+		event: string,
+		hookName: string,
+	): boolean {
+		const hooks = settings.hooks;
+		const entries = hooks?.[event];
+		if (!entries) return false;
+
+		let removed = false;
+		const filteredEntries: Array<(typeof entries)[number]> = [];
+
+		for (const entry of entries) {
+			if ("hooks" in entry && Array.isArray(entry.hooks)) {
+				const keptHooks = entry.hooks.filter((hook) => {
+					const command = typeof hook.command === "string" ? hook.command : "";
+					if (this.extractCkHookName(command) === hookName) {
+						removed = true;
+						return false;
+					}
+					return true;
+				});
+				if (keptHooks.length > 0) {
+					filteredEntries.push({ ...entry, hooks: keptHooks } as (typeof entries)[number]);
+				}
+				continue;
+			}
+
+			if (
+				"command" in entry &&
+				typeof entry.command === "string" &&
+				this.extractCkHookName(entry.command) === hookName
+			) {
+				removed = true;
+				continue;
+			}
+
+			filteredEntries.push(entry);
+		}
+
+		if (!removed) return false;
+		if (filteredEntries.length > 0) {
+			hooks[event] = filteredEntries as typeof entries;
+		} else {
+			delete hooks[event];
+		}
+		return true;
 	}
 }
