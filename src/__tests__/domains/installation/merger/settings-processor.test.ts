@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from "bun:test";
+import { afterEach, beforeEach, describe, expect, it, spyOn } from "bun:test";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -93,6 +93,20 @@ describe("SettingsProcessor custom global dir support", () => {
 		);
 	}
 
+	async function writeTeamHookHandlers(): Promise<void> {
+		const hooksDir = join(customClaudeDir, "hooks");
+		await mkdir(hooksDir, { recursive: true });
+		await writeFile(join(hooksDir, "task-completed-handler.cjs"), "// stub\n", "utf-8");
+		await writeFile(join(hooksDir, "teammate-idle-handler.cjs"), "// stub\n", "utf-8");
+	}
+
+	function mockClaudeVersion(processor: SettingsProcessor, version: string | null): void {
+		spyOn(
+			processor as unknown as { detectClaudeCodeVersion(): string | null },
+			"detectClaudeCodeVersion",
+		).mockReturnValue(version);
+	}
+
 	it("writes fresh global hook commands to the active CLAUDE_CONFIG_DIR path", async () => {
 		await writeFile(
 			sourceFile,
@@ -167,7 +181,7 @@ describe("SettingsProcessor custom global dir support", () => {
 		expect(commands.some((command) => command.includes("session-state.cjs"))).toBe(true);
 	});
 
-	it("restore mode refreshes installed-settings tracking to the current source baseline", async () => {
+	it("restore mode refreshes installed-settings tracking to the current shipped baseline", async () => {
 		await writeHookSourceSettings();
 		await writeFile(destFile, JSON.stringify({ hooks: {} }, null, 2));
 		await writeFile(
@@ -217,11 +231,176 @@ describe("SettingsProcessor custom global dir support", () => {
 		);
 		expect(trackedHooks.some((command) => command.includes("session-state.cjs"))).toBe(true);
 		expect(trackedHooks.some((command) => command.includes("task-completed-handler.cjs"))).toBe(
-			true,
+			false,
 		);
 		expect(trackedHooks.some((command) => command.includes("teammate-idle-handler.cjs"))).toBe(
-			true,
+			false,
 		);
+	});
+
+	it("restores dynamic team hooks when stale installed-settings says they were previously installed", async () => {
+		await writeHookSourceSettings();
+		await writeTeamHookHandlers();
+		await writeFile(destFile, JSON.stringify({ hooks: {} }, null, 2));
+		await writeFile(
+			join(customClaudeDir, ".ck.json"),
+			JSON.stringify(
+				{
+					kits: {
+						engineer: {
+							installedSettings: {
+								hooks: [
+									"node $HOME/.claude/hooks/session-init.cjs",
+									"node $HOME/.claude/hooks/task-completed-handler.cjs",
+									"node $HOME/.claude/hooks/teammate-idle-handler.cjs",
+								],
+								mcpServers: [],
+							},
+						},
+					},
+				},
+				null,
+				2,
+			),
+		);
+
+		const processor = createProcessor();
+		mockClaudeVersion(processor, "2.1.172");
+		await processor.processSettingsJson(sourceFile, destFile);
+
+		const merged = JSON.parse(await readFile(destFile, "utf-8"));
+		expect(merged.hooks.TaskCompleted).toEqual([
+			{
+				hooks: [
+					{
+						type: "command",
+						command: `node "${toPosix(customClaudeDir)}/hooks/task-completed-handler.cjs"`,
+					},
+				],
+			},
+		]);
+		expect(merged.hooks.TeammateIdle).toEqual([
+			{
+				hooks: [
+					{
+						type: "command",
+						command: `node "${toPosix(customClaudeDir)}/hooks/teammate-idle-handler.cjs"`,
+					},
+				],
+			},
+		]);
+	});
+
+	it("does not preserve or inject dynamic team hooks when retired handler files are absent", async () => {
+		await writeHookSourceSettings();
+		await writeFile(
+			destFile,
+			JSON.stringify(
+				{
+					hooks: {
+						TaskCompleted: [
+							{
+								hooks: [
+									{
+										type: "command",
+										command: 'node "$HOME/.claude/hooks/task-completed-handler.cjs"',
+									},
+								],
+							},
+						],
+						TeammateIdle: [
+							{
+								hooks: [
+									{
+										type: "command",
+										command: 'node "$HOME/.claude/hooks/teammate-idle-handler.cjs"',
+									},
+								],
+							},
+						],
+					},
+				},
+				null,
+				2,
+			),
+		);
+		await writeFile(
+			join(customClaudeDir, ".ck.json"),
+			JSON.stringify(
+				{
+					kits: {
+						engineer: {
+							installedSettings: {
+								hooks: [
+									"node $HOME/.claude/hooks/task-completed-handler.cjs",
+									"node $HOME/.claude/hooks/teammate-idle-handler.cjs",
+								],
+								mcpServers: [],
+							},
+						},
+					},
+				},
+				null,
+				2,
+			),
+		);
+
+		const processor = createProcessor();
+		mockClaudeVersion(processor, "2.1.172");
+		await processor.processSettingsJson(sourceFile, destFile);
+
+		const merged = JSON.parse(await readFile(destFile, "utf-8"));
+		expect(merged.hooks.TaskCompleted).toBeUndefined();
+		expect(merged.hooks.TeammateIdle).toBeUndefined();
+
+		const ckJson = JSON.parse(await readFile(join(customClaudeDir, ".ck.json"), "utf-8")) as {
+			kits: { engineer: { installedSettings: { hooks: string[] } } };
+		};
+		const trackedHooks = ckJson.kits.engineer.installedSettings.hooks;
+		expect(trackedHooks.some((command) => command.includes("task-completed-handler.cjs"))).toBe(
+			false,
+		);
+		expect(trackedHooks.some((command) => command.includes("teammate-idle-handler.cjs"))).toBe(
+			false,
+		);
+	});
+
+	it("does not inject dynamic team hooks that are explicitly disabled in .ck.json", async () => {
+		await writeHookSourceSettings();
+		await writeTeamHookHandlers();
+		await writeFile(destFile, JSON.stringify({ hooks: {} }, null, 2));
+		await writeFile(
+			join(customClaudeDir, ".ck.json"),
+			JSON.stringify(
+				{
+					hooks: {
+						"task-completed-handler": false,
+						"teammate-idle-handler": false,
+					},
+					kits: {
+						engineer: {
+							installedSettings: {
+								hooks: [
+									"node $HOME/.claude/hooks/task-completed-handler.cjs",
+									"node $HOME/.claude/hooks/teammate-idle-handler.cjs",
+								],
+								mcpServers: [],
+							},
+						},
+					},
+				},
+				null,
+				2,
+			),
+		);
+
+		const processor = createProcessor();
+		mockClaudeVersion(processor, "2.1.172");
+		await processor.processSettingsJson(sourceFile, destFile);
+
+		const merged = JSON.parse(await readFile(destFile, "utf-8"));
+		expect(merged.hooks.TaskCompleted).toBeUndefined();
+		expect(merged.hooks.TeammateIdle).toBeUndefined();
 	});
 
 	it("restore mode does not re-add hooks explicitly disabled in .ck.json", async () => {
