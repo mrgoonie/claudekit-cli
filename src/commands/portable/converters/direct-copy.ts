@@ -37,19 +37,50 @@ function rewriteKiroPaths(content: string): string {
 		.replace(/\.claude\/hooks\//g, "Claude Code hooks/");
 }
 
-export function rewriteAntigravityPaths(content: string): string {
+function splitTrailingPunctuation(pathSuffix: string): { itemPath: string; punctuation: string } {
+	const match = pathSuffix.match(/^(.+?)([.,;:!?]+)?$/);
+	return {
+		itemPath: match?.[1] ?? pathSuffix,
+		punctuation: match?.[2] ?? "",
+	};
+}
+
+export function rewriteAntigravityCommandRefSuffix(suffix: string): string {
+	const { itemPath, punctuation } = splitTrailingPunctuation(suffix);
+	const extIdx = itemPath.lastIndexOf(".");
+	const ext = extIdx >= 0 ? itemPath.substring(extIdx) : "";
+	const nameWithoutExt = extIdx >= 0 ? itemPath.substring(0, extIdx) : itemPath;
+	return `${nameWithoutExt.replace(/[\\/]+/g, "-")}${ext}${punctuation}`;
+}
+
+export function rewriteAntigravityPaths(
+	content: string,
+	options: { global?: boolean } = {},
+): string {
+	const skillsBase = options.global ? "~/.gemini/config/skills/" : ".agents/skills/";
 	return content
-		.replace(/\.claude\/skills\//g, ".agents/skills/")
-		.replace(/\.claude\/agents\//g, ".agents/skills/")
+		.replace(/\.claude\/agents\/([a-zA-Z0-9_./-]+)/g, (_matched, suffix: string) => {
+			const { punctuation } = splitTrailingPunctuation(suffix);
+			return `.agents/agents.md${punctuation}`;
+		})
+		.replace(/\.claude\/commands\/([a-zA-Z0-9_./-]+)/g, (_matched, suffix: string) => {
+			return `.agents/workflows/${rewriteAntigravityCommandRefSuffix(suffix)}`;
+		})
+		.replace(/\.claude\/skills\//g, skillsBase)
 		.replace(/\.claude\/rules\//g, ".agents/rules/")
+		.replace(/\.claude\/agents\//g, ".agents/agents.md")
 		.replace(/\.claude\/commands\//g, ".agents/workflows/")
-		.replace(/\.claude\/hooks\//g, ".agents/hooks/");
+		.replace(/\.claude\/hooks\//g, "Claude Code hooks/");
 }
 
 /**
  * Return the file content, replacing .claude/ paths for non-Claude providers.
  */
-export function convertDirectCopy(item: PortableItem, provider?: ProviderType): ConversionResult {
+export function convertDirectCopy(
+	item: PortableItem,
+	provider?: ProviderType,
+	options: { global?: boolean } = {},
+): ConversionResult {
 	// Preserve source content byte-for-byte when available.
 	// This avoids gray-matter re-parsing malformed legacy frontmatter.
 	let content: string;
@@ -70,7 +101,7 @@ export function convertDirectCopy(item: PortableItem, provider?: ProviderType): 
 		if (provider === "kiro") {
 			content = rewriteKiroPaths(content);
 		} else if (provider === "antigravity") {
-			content = rewriteAntigravityPaths(content);
+			content = rewriteAntigravityPaths(content, options);
 		} else {
 			const targetDir = PROVIDER_CONFIG_DIR[provider];
 			if (targetDir) {

@@ -10,12 +10,20 @@
  *   - validateMutualExclusion guard
  */
 import { describe, expect, it } from "bun:test";
-import type { ReconcileBanner } from "../../portable/reconcile-types.js";
+import type {
+	ReconcileAction,
+	ReconcileBanner,
+	ReconcilePlan,
+} from "../../portable/reconcile-types.js";
+import type { PortableInstallResult } from "../../portable/types.js";
+import type { SkillInfo } from "../../skills/types.js";
 import type { MigrateOptions } from "../migrate-command.js";
 import {
+	appendFallbackSkillActionsToPlan,
 	appendMigrationWarningMessages,
 	renderBanners,
 	resolveMigrationMode,
+	shouldRunDeleteAction,
 	validateMutualExclusion,
 } from "../migrate-command.js";
 import { renderBannerLines } from "../migrate-ui-summary.js";
@@ -149,6 +157,157 @@ describe("appendMigrationWarningMessages", () => {
 		]);
 
 		expect(messages).toEqual(["Skipped unsupported Codex hook event Notification"]);
+	});
+});
+
+// ---------------------------------------------------------------------------
+// appendFallbackSkillActionsToPlan
+// ---------------------------------------------------------------------------
+
+describe("appendFallbackSkillActionsToPlan", () => {
+	const basePlan: ReconcilePlan = {
+		actions: [
+			{
+				action: "install",
+				global: false,
+				item: "reviewer",
+				provider: "antigravity",
+				reason: "New item, not previously installed",
+				targetPath: ".agents/agents.md",
+				type: "agent",
+			},
+		],
+		banners: [],
+		hasConflicts: false,
+		summary: {
+			conflict: 0,
+			delete: 0,
+			install: 1,
+			skip: 0,
+			update: 0,
+		},
+	};
+	const skills: SkillInfo[] = [
+		{
+			description: "Cook implementation",
+			name: "cook",
+			path: "/tmp/.claude/skills/cook",
+		},
+	];
+
+	it("adds directory skill actions so migrate plan matches actual writes", () => {
+		const plan = appendFallbackSkillActionsToPlan(basePlan, skills, ["antigravity"], false);
+
+		expect(plan.summary.install).toBe(2);
+		expect(plan.actions).toContainEqual(
+			expect.objectContaining({
+				action: "install",
+				global: false,
+				isDirectoryItem: true,
+				item: "cook",
+				provider: "antigravity",
+				targetPath: ".agents/skills/cook",
+				type: "skill",
+			}),
+		);
+	});
+
+	it("does not duplicate existing skill actions", () => {
+		const planWithSkill: ReconcilePlan = {
+			...basePlan,
+			actions: [
+				...basePlan.actions,
+				{
+					action: "install",
+					global: false,
+					isDirectoryItem: true,
+					item: "cook",
+					provider: "antigravity",
+					reason: "New item, not previously installed",
+					targetPath: ".agents/skills/cook",
+					type: "skill",
+				},
+			],
+			summary: { ...basePlan.summary, install: 2 },
+		};
+
+		const plan = appendFallbackSkillActionsToPlan(planWithSkill, skills, ["antigravity"], false);
+
+		expect(plan.summary.install).toBe(2);
+		expect(plan.actions.filter((action) => action.type === "skill")).toHaveLength(1);
+	});
+});
+
+// ---------------------------------------------------------------------------
+// shouldRunDeleteAction
+// ---------------------------------------------------------------------------
+
+describe("shouldRunDeleteAction", () => {
+	const pathMigrationDelete: ReconcileAction = {
+		action: "delete",
+		item: "reviewer",
+		type: "agent",
+		provider: "antigravity",
+		global: false,
+		targetPath: ".agent/skills/reviewer/SKILL.md",
+		reason: "Provider path migrated: .agent/skills -> .agents/agents.md",
+		reasonCode: "path-migrated-cleanup",
+	};
+
+	it("suppresses path-migration cleanup when replacement write failed", () => {
+		const failedResults: PortableInstallResult[] = [
+			{
+				provider: "antigravity",
+				providerDisplayName: "Antigravity",
+				success: false,
+				path: ".agents/agents.md",
+				portableType: "agent",
+				itemName: "reviewer",
+				error: "Permission denied",
+			},
+		];
+
+		expect(shouldRunDeleteAction(pathMigrationDelete, failedResults)).toBe(false);
+	});
+
+	it("allows path-migration cleanup after replacement write succeeds", () => {
+		const successfulResults: PortableInstallResult[] = [
+			{
+				provider: "antigravity",
+				providerDisplayName: "Antigravity",
+				success: true,
+				path: ".agents/agents.md",
+				portableType: "agent",
+				itemName: "reviewer",
+			},
+		];
+
+		expect(shouldRunDeleteAction(pathMigrationDelete, successfulResults)).toBe(true);
+	});
+
+	it("allows command prompt cleanup after replacement command is written as a skill", () => {
+		const codexPromptDelete: ReconcileAction = {
+			action: "delete",
+			global: false,
+			item: "local",
+			provider: "codex",
+			reason: "Legacy Codex prompt command path migrated to skills",
+			reasonCode: "path-migrated-cleanup",
+			targetPath: ".codex/prompts/local.md",
+			type: "command",
+		};
+		const successfulResults: PortableInstallResult[] = [
+			{
+				itemName: "SKILL",
+				path: ".agents/skills/source-command-local/SKILL.md",
+				portableType: "command",
+				provider: "codex",
+				providerDisplayName: "Codex",
+				success: true,
+			},
+		];
+
+		expect(shouldRunDeleteAction(codexPromptDelete, successfulResults)).toBe(true);
 	});
 });
 

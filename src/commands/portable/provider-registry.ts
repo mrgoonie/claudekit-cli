@@ -760,13 +760,11 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 		name: "antigravity",
 		displayName: "Antigravity",
 		subagents: "full",
-		// Antigravity 2.0 does not document a static custom-agent file directory.
-		// Preserve Claude agents as Antigravity skills so they are visible in the app.
 		agents: {
-			projectPath: ".agents/skills",
-			globalPath: join(home, ".gemini/config/skills"),
-			format: "skill-md",
-			writeStrategy: "per-file",
+			projectPath: ".agents/agents.md",
+			globalPath: null, // No verified global agents.md path; project-level .agents/agents.md is documented
+			format: "fm-strip",
+			writeStrategy: "merge-single",
 			fileExtension: ".md",
 		},
 		commands: {
@@ -809,6 +807,7 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 			hasBinaryInPath("antigravity") ||
 			hasAnyInstallSignal([
 				join(cwd, ".agents/rules"),
+				join(cwd, ".agents/agents.md"),
 				join(cwd, ".agents/skills"),
 				join(cwd, ".agents/workflows"),
 				join(cwd, ".agents/plugins"),
@@ -818,6 +817,7 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 				join(cwd, "GEMINI.md"),
 				join(home, ".gemini/config"),
 				join(home, ".gemini/config/skills"),
+				join(home, ".gemini/config/plugins"),
 				join(home, ".gemini/antigravity"), // Global antigravity config dir
 				join(home, ".gemini/antigravity/skills"),
 			]),

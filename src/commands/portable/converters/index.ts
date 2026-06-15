@@ -31,7 +31,7 @@ export function convertItem(
 	try {
 		switch (format) {
 			case "direct-copy":
-				return convertDirectCopy(item, provider);
+				return convertDirectCopy(item, provider, { global: options.global });
 			case "command-to-codex-skill":
 				return convertCommandToCodexSkill(item);
 			case "fm-to-fm":
@@ -45,7 +45,7 @@ export function convertItem(
 			case "md-to-toml":
 				return convertMdToToml(item);
 			case "skill-md":
-				return convertToSkillMd(item, provider);
+				return convertToSkillMd(item, provider, { global: options.global });
 			case "md-strip":
 				return convertMdStrip(item, provider, { global: options.global });
 			case "md-to-mdc":

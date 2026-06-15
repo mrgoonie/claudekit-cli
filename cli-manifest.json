@@ -1,6 +1,6 @@
 {
 	"version": "4.4.0-dev.13",
-	"generatedAt": "2026-06-15T16:50:39.245Z",
+	"generatedAt": "2026-06-15T17:47:28.348Z",
 	"commands": {
 		"agents": {
 			"name": "agents",
@@ -1342,7 +1342,7 @@
 			"sections": [
 				{
 					"title": "Gotchas",
-					"content": "  --install and --reconcile are mutually exclusive — pass only one\n  --reinstall-empty-dirs and --respect-deletions are mutually exclusive — pass only one\n  Default mode is smart-detected: no/stale registry → install, valid registry → reconcile\n  --respect-deletions disables the auto-reinstall heuristic for empty directories\n  --force overrides skip decisions per item; --reinstall-empty-dirs is a per-directory heuristic\n  Codex commands migrate as skills: project scope writes .agents/skills, global scope writes ~/.agents/skills\n  Kiro agents migrate as custom subagents; rules/config migrate as steering files; skills copy to .kiro/skills; commands/hooks are skipped"
+					"content": "  --install and --reconcile are mutually exclusive — pass only one\n  --reinstall-empty-dirs and --respect-deletions are mutually exclusive — pass only one\n  Default mode is smart-detected: no/stale registry → install, valid registry → reconcile\n  --respect-deletions disables the auto-reinstall heuristic for empty directories\n  --force overrides skip decisions per item; --reinstall-empty-dirs is a per-directory heuristic\n  Codex commands migrate as skills: project scope writes .agents/skills, global scope writes ~/.agents/skills\n  Antigravity 2.0 agents migrate to .agents/agents.md; skills remain .agents/skills/<name>/SKILL.md\n  Kiro agents migrate as custom subagents; rules/config migrate as steering files; skills copy to .kiro/skills; commands/hooks are skipped"
 				}
 			]
 		},

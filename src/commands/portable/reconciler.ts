@@ -49,7 +49,7 @@ const BUILT_IN_PROVIDER_PATH_MIGRATIONS = [
 		provider: "antigravity",
 		type: "agent",
 		from: ".agent/skills",
-		to: ".agents/skills",
+		to: ".agents/agents.md",
 	},
 	{
 		provider: "antigravity",
@@ -953,6 +953,7 @@ function detectPathMigrations(input: ReconcileInput): Array<{ deleteAction: Reco
 			(e) =>
 				e.provider === migration.provider &&
 				e.type === migration.type &&
+				e.installSource !== "manual" &&
 				pathContainsSegments(e.path, migration.from) &&
 				providerConfigIsActiveForEntry(activeProviderConfigs, e, { emptyMeansAll: true }),
 		);

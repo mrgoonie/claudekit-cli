@@ -808,9 +808,9 @@ describe("Antigravity 2.0 migration targets", () => {
 		addPortableInstallationMock.mockImplementation(async () => undefined);
 	});
 
-	test("installs agents as skills and commands/rules into .agents namespaces", async () => {
+	test("installs agents into agents.md and commands/rules into .agents namespaces", async () => {
 		const tempDir = await mkdtemp(join(process.cwd(), ".tmp-portable-antigravity-"));
-		const skillsDir = join(tempDir, ".agents", "skills");
+		const agentsFile = join(tempDir, ".agents", "agents.md");
 		const workflowsDir = join(tempDir, ".agents", "workflows");
 		const rulesDir = join(tempDir, ".agents", "rules");
 		const agentPathConfig = getPathConfig("antigravity", "agents");
@@ -821,7 +821,7 @@ describe("Antigravity 2.0 migration targets", () => {
 		const originalRulesPath = rulesPathConfig.projectPath;
 
 		try {
-			agentPathConfig.projectPath = skillsDir;
+			agentPathConfig.projectPath = agentsFile;
 			commandPathConfig.projectPath = workflowsDir;
 			rulesPathConfig.projectPath = rulesDir;
 
@@ -872,12 +872,13 @@ describe("Antigravity 2.0 migration targets", () => {
 			expect(commandResults[0].success).toBe(true);
 			expect(ruleResults[0].success).toBe(true);
 
-			const agentContent = await readFile(join(skillsDir, "reviewer", "SKILL.md"), "utf-8");
+			const agentContent = await readFile(agentsFile, "utf-8");
 			const commandContent = await readFile(join(workflowsDir, "release.md"), "utf-8");
 			const ruleContent = await readFile(join(rulesDir, "typescript.md"), "utf-8");
 
-			expect(agentContent).toContain("name: Reviewer");
-			expect(agentContent).toContain("# Reviewer");
+			expect(agentResults[0].path).toBe(agentsFile);
+			expect(agentContent).toContain("# Agents");
+			expect(agentContent).toContain("## Agent: Reviewer");
 			expect(agentContent).toContain(".agents/skills/cook/SKILL.md");
 			expect(commandContent).toContain(".agents/rules/release.md");
 			expect(commandContent).not.toContain(".agent/");

@@ -164,7 +164,6 @@ describe("Provider Registry", () => {
 			for (const p of agentProviders) {
 				expect(skillProviders).toContain(p);
 			}
-			// Antigravity agents are projected into skills because 2.0 exposes SKILL.md directories.
 			expect(skillProviders).toContain("antigravity");
 			expect(agentProviders).toContain("antigravity");
 		});
@@ -241,12 +240,12 @@ describe("Provider Registry", () => {
 			expect(config.agents?.charLimit).toBe(12000);
 		});
 
-		it("antigravity migrates Claude agents as Antigravity skills", () => {
+		it("antigravity migrates Claude agents into native agents.md", () => {
 			const config = providers.antigravity;
-			expect(config.agents?.projectPath).toBe(".agents/skills");
-			const agentsGlobal = config.agents?.globalPath?.replace(/\\/g, "/") ?? "";
-			expect(agentsGlobal).toContain(".gemini/config/skills");
-			expect(config.agents?.format).toBe("skill-md");
+			expect(config.agents?.projectPath).toBe(".agents/agents.md");
+			expect(config.agents?.globalPath).toBeNull();
+			expect(config.agents?.format).toBe("fm-strip");
+			expect(config.agents?.writeStrategy).toBe("merge-single");
 		});
 
 		it("antigravity uses correct paths for commands, skills, config, rules", () => {

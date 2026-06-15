@@ -1,6 +1,7 @@
 import { existsSync } from "node:fs";
-import { cp, mkdir, realpath, rename, rm } from "node:fs/promises";
+import { cp, mkdir, readFile, realpath, rename, rm, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
+import { rewriteAntigravityPaths } from "../portable/converters/direct-copy.js";
 import { addPortableInstallation } from "../portable/portable-registry.js";
 import { providers } from "../portable/provider-registry.js";
 import type { PortableInstallResult, ProviderType } from "../portable/types.js";
@@ -28,6 +29,23 @@ async function canonicalize(path: string): Promise<string> {
 		} catch {
 			return resolve(path);
 		}
+	}
+}
+
+async function rewriteInstalledSkillMd(
+	targetDir: string,
+	provider: ProviderType,
+	options: { global: boolean },
+): Promise<void> {
+	if (provider !== "antigravity") return;
+
+	const skillMdPath = join(targetDir, "SKILL.md");
+	if (!existsSync(skillMdPath)) return;
+
+	const content = await readFile(skillMdPath, "utf-8");
+	const rewritten = rewriteAntigravityPaths(content, { global: options.global });
+	if (rewritten !== content) {
+		await writeFile(skillMdPath, rewritten, "utf-8");
 	}
 }
 
@@ -149,6 +167,7 @@ export async function installSkillDirectories(
 				try {
 					await cp(skill.path, targetDir, { recursive: true, force: true });
 					copied = true;
+					await rewriteInstalledSkillMd(targetDir, provider, options);
 
 					await addPortableInstallation(
 						skill.name,

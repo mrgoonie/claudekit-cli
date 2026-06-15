@@ -593,6 +593,79 @@ async function executePlanDeleteAction(
 	}
 }
 
+function hasSuccessfulReplacementWriteForDelete(
+	action: {
+		item: string;
+		type: string;
+		provider: string;
+		targetPath: string;
+	},
+	results: PortableInstallResult[],
+): boolean {
+	return results.some(
+		(result) =>
+			result.success &&
+			!result.skipped &&
+			result.provider === action.provider &&
+			replacementTypeMatchesForDelete(action.type, result.portableType) &&
+			replacementItemMatchesForDelete(action, result) &&
+			result.path.length > 0 &&
+			resolve(result.path) !== resolve(action.targetPath),
+	);
+}
+
+function replacementTypeMatchesForDelete(
+	actionType: string,
+	resultType: PortableInstallResult["portableType"],
+): boolean {
+	return resultType === actionType || (actionType === "command" && resultType === "skill");
+}
+
+function replacementItemMatchesForDelete(
+	action: { item: string; type: string },
+	result: PortableInstallResult,
+): boolean {
+	if (result.itemName === action.item || result.itemName === undefined) return true;
+
+	const parts = result.path.replace(/\\/g, "/").split("/");
+	const leaf = parts.at(-1) ?? "";
+	const parent = parts.at(-2) ?? "";
+	const leafName = leaf.replace(/\.[^.]+$/, "");
+	return (
+		leafName === action.item ||
+		parent === action.item ||
+		(action.type === "command" && parent === `source-command-${action.item}`)
+	);
+}
+
+function shouldRunPlanDeleteAction(
+	action: { reasonCode?: string; item: string; type: string; provider: string; targetPath: string },
+	results: PortableInstallResult[],
+): boolean {
+	if (action.reasonCode !== "path-migrated-cleanup") return true;
+	return hasSuccessfulReplacementWriteForDelete(action, results);
+}
+
+function createSkippedPathMigrationCleanupResult(action: {
+	item: string;
+	type: PortableType;
+	provider: string;
+	targetPath: string;
+}): PortableInstallResult {
+	const provider = action.provider as ProviderTypeValue;
+	return {
+		operation: "delete",
+		portableType: action.type,
+		itemName: action.item,
+		provider,
+		providerDisplayName: providers[provider]?.displayName || action.provider,
+		success: true,
+		path: action.targetPath,
+		skipped: true,
+		skipReason: "Legacy path cleanup skipped because no successful replacement write was recorded",
+	};
+}
+
 function countEnabledTypes(include: MigrationIncludeOptions): number {
 	return MIGRATION_TYPES.filter((type) => include[type]).length;
 }
@@ -1958,6 +2031,16 @@ export function registerMigrationRoutes(app: Express, deps?: MigrationRouteDeps)
 				);
 
 				for (const deleteAction of deleteActions) {
+					if (!shouldRunPlanDeleteAction(deleteAction, allResults)) {
+						const skippedDelete = createSkippedPathMigrationCleanupResult({
+							item: deleteAction.item,
+							type: deleteAction.type as PortableType,
+							provider: deleteAction.provider,
+							targetPath: deleteAction.targetPath,
+						});
+						allResults.push(skippedDelete);
+						continue;
+					}
 					const deleteResult = await executePlanDeleteAction(deleteAction, {
 						preservePaths: writtenPaths,
 						removePortableInstallation: registryDeps.removePortableInstallation,

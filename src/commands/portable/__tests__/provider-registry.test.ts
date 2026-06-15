@@ -211,16 +211,16 @@ describe("provider-registry", () => {
 
 	describe("antigravity entries", () => {
 		it("antigravity 2.0 uses .agents workspace paths and ~/.gemini/config skills", () => {
-			expect(providers.antigravity.agents?.projectPath).toBe(".agents/skills");
-			expect(providers.antigravity.agents?.format).toBe("skill-md");
+			expect(providers.antigravity.agents?.projectPath).toBe(".agents/agents.md");
+			expect(providers.antigravity.agents?.globalPath).toBeNull();
+			expect(providers.antigravity.agents?.format).toBe("fm-strip");
+			expect(providers.antigravity.agents?.writeStrategy).toBe("merge-single");
 			expect(providers.antigravity.commands?.projectPath).toBe(".agents/workflows");
 			expect(providers.antigravity.skills?.projectPath).toBe(".agents/skills");
 			expect(providers.antigravity.rules?.projectPath).toBe(".agents/rules");
 
 			const skillsGlobal = providers.antigravity.skills?.globalPath?.replace(/\\/g, "/") ?? "";
-			const agentsGlobal = providers.antigravity.agents?.globalPath?.replace(/\\/g, "/") ?? "";
 			expect(skillsGlobal).toContain(".gemini/config/skills");
-			expect(agentsGlobal).toContain(".gemini/config/skills");
 		});
 	});
 
@@ -389,7 +389,7 @@ describe("provider-registry", () => {
 			expect(skillCollisions[0].providers).toContain("amp");
 		});
 
-		it("antigravity shares .agents/skills with codex+amp in project scope", () => {
+		it("antigravity shares .agents/skills with codex+amp for project skills only", () => {
 			const collisions = detectProviderPathCollisions(["codex", "amp", "antigravity"], {
 				global: false,
 			});

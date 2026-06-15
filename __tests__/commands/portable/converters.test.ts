@@ -127,18 +127,32 @@ describe("direct-copy converter", () => {
 			body: [
 				"Use .claude/skills/cook/SKILL.md.",
 				"Delegate to .claude/agents/reviewer.md.",
+				"Delegate to .claude/agents/team/frontend.md.",
 				"Follow .claude/rules/typescript.md.",
-				"Run .claude/commands/ship.md.",
+				"Run .claude/commands/docs/ship.md.",
+				"Check .claude/hooks/session-start.cjs.",
 			].join(" "),
 		});
 		const result = convertDirectCopy(item, "antigravity");
 
 		expect(result.content).toContain(".agents/skills/cook/SKILL.md");
-		expect(result.content).toContain(".agents/skills/reviewer.md");
+		expect(result.content).toContain(".agents/agents.md");
 		expect(result.content).toContain(".agents/rules/typescript.md");
-		expect(result.content).toContain(".agents/workflows/ship.md");
+		expect(result.content).toContain(".agents/workflows/docs-ship.md");
+		expect(result.content).toContain("Claude Code hooks/session-start.cjs");
 		expect(result.content).not.toContain(".claude/");
 		expect(result.content).not.toContain(".agent/");
+	});
+
+	it("rewrites global Antigravity skill refs without inventing a global agents path", () => {
+		const item = makeItem({
+			body: "Use .claude/skills/cook/SKILL.md and .claude/agents/reviewer.md.",
+		});
+		const result = convertDirectCopy(item, "antigravity", { global: true });
+
+		expect(result.content).toContain("~/.gemini/config/skills/cook/SKILL.md");
+		expect(result.content).toContain(".agents/agents.md");
+		expect(result.content).not.toContain("~/.gemini/config/skills/agent-reviewer");
 	});
 });
 
@@ -565,6 +579,18 @@ describe("skill-md converter", () => {
 		const result = convertToSkillMd(item);
 
 		expect(result.filename).toBe("my-skill/SKILL.md");
+	});
+
+	it("can rewrite Antigravity skill refs when used for SKILL.md-compatible providers", () => {
+		const item = makeItem({
+			type: "agent",
+			name: "reviewer",
+			body: "Read .claude/skills/cook/SKILL.md before reviewing.",
+		});
+		const result = convertToSkillMd(item, "antigravity", { global: true });
+
+		expect(result.filename).toBe("reviewer/SKILL.md");
+		expect(result.content).toContain("~/.gemini/config/skills/cook/SKILL.md");
 	});
 });
 

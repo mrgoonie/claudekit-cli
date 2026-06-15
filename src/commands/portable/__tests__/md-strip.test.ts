@@ -626,26 +626,39 @@ describe("convertMdStrip", () => {
 
 		it("should map CLAUDE paths to provider-specific targets", () => {
 			const item = makeItem(
-				"See .claude/commands/release.md and .claude/rules/style.md in CLAUDE.md",
+				"See .claude/agents/reviewer.md, .claude/commands/docs/release.md, and .claude/rules/style.md in CLAUDE.md",
 				"test",
 			);
 
 			const codex = convertMdStrip(item, "codex");
-			expect(codex.content).toContain(".agents/skills/source-command-release/SKILL.md");
+			expect(codex.content).toContain(".agents/skills/source-command-docs-release/SKILL.md");
 			expect(codex.content).toContain("AGENTS.md");
 
 			const opencode = convertMdStrip(item, "opencode");
-			expect(opencode.content).toContain(".opencode/commands/release.md");
+			expect(opencode.content).toContain(".opencode/commands/docs/release.md");
 			expect(opencode.content).toContain("AGENTS.md");
 
 			const droid = convertMdStrip(item, "droid");
-			expect(droid.content).toContain(".factory/commands/release.md");
+			expect(droid.content).toContain(".factory/commands/docs/release.md");
 			expect(droid.content).toContain("AGENTS.md");
 
 			const antigravity = convertMdStrip(item, "antigravity");
-			expect(antigravity.content).toContain(".agents/workflows/release.md");
+			expect(antigravity.content).toContain(".agents/agents.md");
+			expect(antigravity.content).toContain(".agents/workflows/docs-release.md");
 			expect(antigravity.content).toContain(".agents/rules/style.md");
 			expect(antigravity.content).toContain("GEMINI.md");
+		});
+
+		it("should map global Antigravity skill refs without inventing a global agents path", () => {
+			const item = makeItem(
+				"See .claude/agents/reviewer.md and .claude/skills/cook/SKILL.md.",
+				"test",
+			);
+			const result = convertMdStrip(item, "antigravity", { global: true });
+
+			expect(result.content).toContain(".agents/agents.md");
+			expect(result.content).toContain("~/.gemini/config/skills/cook/SKILL.md");
+			expect(result.content).not.toContain("~/.gemini/config/skills/agent-reviewer");
 		});
 
 		it("should map project-scoped Codex command refs to project skills", () => {

@@ -13,13 +13,18 @@ import { rewriteAntigravityPaths } from "./direct-copy.js";
 /**
  * Convert a Claude Code agent or command to OpenHands SKILL.md format
  */
-export function convertToSkillMd(item: PortableItem, provider?: ProviderType): ConversionResult {
+export function convertToSkillMd(
+	item: PortableItem,
+	provider?: ProviderType,
+	options: { global?: boolean } = {},
+): ConversionResult {
 	const fm: Record<string, unknown> = {
 		name: item.frontmatter.name || item.name,
 		description: item.description || "",
 	};
 
-	const itemBody = provider === "antigravity" ? rewriteAntigravityPaths(item.body) : item.body;
+	const itemBody =
+		provider === "antigravity" ? rewriteAntigravityPaths(item.body, options) : item.body;
 	const body = `# ${fm.name}\n\n${itemBody}`;
 	const content = matter.stringify(body, fm);
 

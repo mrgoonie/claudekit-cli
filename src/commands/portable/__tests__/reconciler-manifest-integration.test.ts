@@ -346,6 +346,18 @@ describe("No manifest fallback", () => {
 					targetChecksum: "def",
 					installSource: "kit",
 				},
+				{
+					item: "manual-antigravity-skill",
+					type: "skill",
+					provider: "antigravity",
+					global: false,
+					path: ".agent/skills/manual-antigravity-skill",
+					installedAt,
+					sourcePath: "manual",
+					sourceChecksum: "abc",
+					targetChecksum: "def",
+					installSource: "manual",
+				},
 			],
 		};
 
@@ -372,6 +384,9 @@ describe("No manifest fallback", () => {
 			".agent/workflows/release.md",
 			"/home/user/.gemini/antigravity/skills/global-skill",
 		]);
+		expect(migrationDeletes.some((action) => action.item === "manual-antigravity-skill")).toBe(
+			false,
+		);
 		expect(migrationDeletes.some((action) => action.targetPath.includes(".agents/skills"))).toBe(
 			false,
 		);
