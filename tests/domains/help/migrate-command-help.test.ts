@@ -13,5 +13,8 @@ describe("migrate command help", () => {
 				.flatMap((group) => group.options)
 				.find((option) => option.flags === "--dry-run")?.description,
 		).toContain("destinations");
+		expect(
+			(migrateCommandHelp.sections ?? []).map((section) => section.content).join("\n"),
+		).toContain("Kiro agents migrate as custom subagents");
 	});
 });

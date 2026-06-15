@@ -15,6 +15,28 @@ function createMockItem(overrides: Partial<PortableItem> = {}): PortableItem {
 }
 
 describe("md-to-kiro-steering", () => {
+	describe("portable type coverage", () => {
+		it("converts rules and config into Kiro steering files", () => {
+			const types = ["rules", "config"] as const;
+
+			for (const type of types) {
+				const result = convertMdToKiroSteering(
+					createMockItem({
+						type,
+						name: `${type}-context`,
+						body: `${type} context body.`,
+					}),
+					"kiro",
+				);
+
+				expect(result.filename).toBe(`${type}-context.md`);
+				expect(result.content).toStartWith("---\ninclusion:");
+				expect(result.content).toContain(`# ${type}-context`);
+				expect(result.content).toContain(`${type} context body.`);
+			}
+		});
+	});
+
 	describe("YAML frontmatter generation", () => {
 		it("adds YAML frontmatter with inclusion: always by default", () => {
 			const item = createMockItem();
@@ -24,12 +46,12 @@ describe("md-to-kiro-steering", () => {
 			expect(result.content).toContain("inclusion: always");
 		});
 
-		it("quotes fileMatch glob patterns in YAML", () => {
+		it("quotes fileMatchPattern glob patterns in YAML", () => {
 			const item = createMockItem({ name: "typescript-rules" });
 			const result = convertMdToKiroSteering(item, "kiro");
 
 			// Glob should be quoted to handle YAML special chars
-			expect(result.content).toContain('fileMatch: "**/*.{ts,tsx}"');
+			expect(result.content).toContain('fileMatchPattern: "**/*.{ts,tsx}"');
 		});
 	});
 
@@ -161,53 +183,6 @@ describe("md-to-kiro-steering", () => {
 			// Should not inject h1 when h3 exists as top-level
 			expect(result.content).not.toContain("# my-rule");
 			expect(result.content).toContain("### Existing H3 Section");
-		});
-	});
-
-	describe("agent metadata warnings", () => {
-		it("warns when agent has model field", () => {
-			const item = createMockItem({
-				type: "agent",
-				frontmatter: { model: "opus" },
-			});
-			const result = convertMdToKiroSteering(item, "kiro");
-
-			expect(result.warnings.some((w) => w.includes("Agent metadata not supported"))).toBe(true);
-			expect(result.warnings.some((w) => w.includes("model"))).toBe(true);
-		});
-
-		it("warns when agent has tools field", () => {
-			const item = createMockItem({
-				type: "agent",
-				frontmatter: { tools: "Read, Write, Bash" },
-			});
-			const result = convertMdToKiroSteering(item, "kiro");
-
-			expect(result.warnings.some((w) => w.includes("tools"))).toBe(true);
-		});
-
-		it("warns when agent has multiple unsupported fields", () => {
-			const item = createMockItem({
-				type: "agent",
-				frontmatter: { model: "opus", tools: "all", memory: "full" },
-			});
-			const result = convertMdToKiroSteering(item, "kiro");
-
-			const warning = result.warnings.find((w) => w.includes("not supported"));
-			expect(warning).toContain("model");
-			expect(warning).toContain("tools");
-			expect(warning).toContain("memory");
-		});
-
-		it("does NOT warn for rules without agent fields", () => {
-			const item = createMockItem({
-				type: "rules",
-				frontmatter: { name: "My Rule" },
-			});
-			const result = convertMdToKiroSteering(item, "kiro");
-
-			const agentWarnings = result.warnings.filter((w) => w.includes("Agent metadata"));
-			expect(agentWarnings).toHaveLength(0);
 		});
 	});
 

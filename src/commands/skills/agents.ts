@@ -126,6 +126,23 @@ export const agents: Record<AgentType, AgentConfig> = {
 		globalPath: join(home, ".kilocode/skills"),
 		detect: async () => existsSync(join(home, ".kilocode")),
 	},
+	kiro: {
+		name: "kiro",
+		displayName: "Kiro",
+		projectPath: ".kiro/skills",
+		globalPath: join(home, ".kiro/skills"),
+		detect: async () =>
+			hasAnyInstallSignal([
+				join(process.cwd(), ".kiro/skills"),
+				join(process.cwd(), ".kiro/steering"),
+				join(process.cwd(), ".kiro/agents"),
+				join(process.cwd(), ".kiro/settings/mcp.json"),
+				join(home, ".kiro/skills"),
+				join(home, ".kiro/steering"),
+				join(home, ".kiro/agents"),
+				join(home, ".kiro/settings/mcp.json"),
+			]),
+	},
 	roo: {
 		name: "roo",
 		displayName: "Roo Code",

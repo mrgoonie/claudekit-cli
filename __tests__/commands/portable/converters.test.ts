@@ -109,6 +109,18 @@ describe("direct-copy converter", () => {
 			await rm(dir, { recursive: true, force: true });
 		}
 	});
+
+	it("rewrites Claude paths to Kiro paths for direct-copy Kiro targets", () => {
+		const item = makeItem({
+			body: "Use .claude/skills/cook/SKILL.md, .claude/agents/reviewer.md, and .claude/rules/typescript.md.",
+		});
+		const result = convertDirectCopy(item, "kiro");
+
+		expect(result.content).toContain(".kiro/skills/cook/SKILL.md");
+		expect(result.content).toContain(".kiro/agents/reviewer.md");
+		expect(result.content).toContain(".kiro/steering/typescript.md");
+		expect(result.content).not.toContain(".claude/");
+	});
 });
 
 describe("fm-strip converter", () => {
@@ -274,6 +286,50 @@ describe("fm-to-fm converter", () => {
 			expect(result.content).toContain('description: "Cursor agent description"');
 			expect(result.content).toContain("alwaysApply: false");
 			expect(result.content).toContain("Do test things.");
+		});
+	});
+
+	describe("kiro", () => {
+		it("produces Kiro custom subagent markdown with mapped tools", () => {
+			const item = makeItem({
+				name: "code-reviewer",
+				description: "Review code for correctness.",
+				frontmatter: {
+					tools: "Read,Edit,Bash,WebFetch",
+					model: "claude-sonnet-4",
+				},
+				body: "You are a senior code reviewer.",
+			});
+			const result = convertFmToFm(item, "kiro");
+
+			expect(result.filename).toBe("code-reviewer.md");
+			expect(result.content).toContain('name: "code-reviewer"');
+			expect(result.content).toContain('description: "Review code for correctness."');
+			expect(result.content).toContain('tools: ["read","write","shell","web"]');
+			expect(result.content).toContain('model: "claude-sonnet-4"');
+			expect(result.content).toContain("You are a senior code reviewer.");
+		});
+
+		it("maps Claude MCP tool names to Kiro MCP tool selectors", () => {
+			const item = makeItem({
+				frontmatter: {
+					tools: "mcp__context7__resolve-library-id,Read",
+				},
+			});
+			const result = convertFmToFm(item, "kiro");
+
+			expect(result.content).toContain('tools: ["@context7/resolve-library-id","read"]');
+		});
+
+		it("rewrites Claude paths inside Kiro custom subagent prompts", () => {
+			const item = makeItem({
+				body: "Use .claude/agents/reviewer.md and .claude/rules/typescript.md.",
+			});
+			const result = convertFmToFm(item, "kiro");
+
+			expect(result.content).toContain(".kiro/agents/reviewer.md");
+			expect(result.content).toContain(".kiro/steering/typescript.md");
+			expect(result.content).not.toContain(".claude/");
 		});
 	});
 

@@ -1,8 +1,9 @@
 /**
  * FM-to-FM converter — transform frontmatter fields for target provider
- * Used by: GitHub Copilot (.agent.md), Cursor (.mdc), OpenCode (.md)
+ * Used by: GitHub Copilot (.agent.md), Cursor (.mdc), Kiro (.md), OpenCode (.md)
  */
 import type { ConversionResult, PortableItem, ProviderType } from "../types.js";
+import { stripClaudeRefs } from "./md-strip.js";
 
 /** Copilot built-in tool names mapped from Claude Code tool names */
 const COPILOT_TOOL_MAP: Record<string, string> = {
@@ -15,6 +16,21 @@ const COPILOT_TOOL_MAP: Record<string, string> = {
 	Bash: "run_in_terminal",
 	WebFetch: "fetch",
 	WebSearch: "fetch",
+};
+
+/** Kiro custom subagent tool categories mapped from Claude Code tool names. */
+const KIRO_TOOL_MAP: Record<string, string> = {
+	Read: "read",
+	Glob: "read",
+	Grep: "read",
+	LS: "read",
+	Edit: "write",
+	Write: "write",
+	MultiEdit: "write",
+	NotebookEdit: "write",
+	Bash: "shell",
+	WebFetch: "web",
+	WebSearch: "web",
 };
 
 /**
@@ -95,6 +111,83 @@ function convertForCursor(item: PortableItem): ConversionResult {
 		content,
 		filename: `${item.name}.mdc`,
 		warnings: [],
+	};
+}
+
+function mapKiroTools(toolsStr: string | undefined): { tools: string[]; warnings: string[] } {
+	const warnings: string[] = [];
+	if (!toolsStr || toolsStr.trim().length === 0) {
+		return {
+			tools: ["@builtin"],
+			warnings: ["No Claude tools declared; granting Kiro built-in tools by default"],
+		};
+	}
+
+	const tools = new Set<string>();
+	const unmapped: string[] = [];
+	for (const rawTool of toolsStr.split(",")) {
+		const tool = rawTool.trim();
+		if (!tool) continue;
+
+		const mapped = KIRO_TOOL_MAP[tool];
+		if (mapped) {
+			tools.add(mapped);
+			continue;
+		}
+
+		const mcpMatch = /^mcp__(.+?)__(.+)$/.exec(tool);
+		if (mcpMatch) {
+			tools.add(`@${mcpMatch[1]}/${mcpMatch[2]}`);
+			continue;
+		}
+
+		unmapped.push(tool);
+	}
+
+	if (unmapped.length > 0) {
+		warnings.push(`Claude tools not mapped to Kiro custom subagent tools: ${unmapped.join(", ")}`);
+	}
+
+	if (tools.size === 0) {
+		tools.add("@builtin");
+		warnings.push("No mapped Kiro tools remained; granting Kiro built-in tools by default");
+	}
+
+	return { tools: Array.from(tools), warnings };
+}
+
+function pushYamlString(lines: string[], key: string, value: unknown): void {
+	if (typeof value === "string" && value.trim().length > 0) {
+		lines.push(`${key}: ${JSON.stringify(value.trim())}`);
+	}
+}
+
+/**
+ * Convert for Kiro IDE custom subagent .md format.
+ * Ref: https://kiro.dev/docs/chat/subagents/
+ */
+function convertKiroAgent(item: PortableItem): ConversionResult {
+	const mappedTools = mapKiroTools(item.frontmatter.tools);
+	const stripped = stripClaudeRefs(item.body, { provider: "kiro" });
+	const warnings = [...mappedTools.warnings, ...stripped.warnings];
+	const name = item.name;
+	const description = item.description || `Custom subagent: ${name}`;
+
+	const fmLines = ["---"];
+	pushYamlString(fmLines, "name", name);
+	pushYamlString(fmLines, "description", description);
+	fmLines.push(`tools: ${JSON.stringify(mappedTools.tools)}`);
+	pushYamlString(
+		fmLines,
+		"model",
+		typeof item.frontmatter.model === "string" ? item.frontmatter.model : "",
+	);
+	fmLines.push("---");
+
+	return {
+		content: `${fmLines.join("\n")}\n\n${stripped.content}\n`,
+		filename: `${item.name}.md`,
+		warnings,
 	};
 }
 
@@ -223,6 +316,8 @@ export function convertFmToFm(item: PortableItem, provider: ProviderType): Conve
 			return convertForCopilot(item);
 		case "cursor":
 			return convertForCursor(item);
+		case "kiro":
+			return convertKiroAgent(item);
 		case "opencode":
 			// Route agents vs commands based on item type
 			if (item.type === "command") return convertOpenCodeCommand(item);

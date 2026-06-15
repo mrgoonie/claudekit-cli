@@ -174,6 +174,22 @@ description: OpenCode native Claude-compatible skill
 			expect(result.success).toBe(true);
 		});
 
+		it("should install skill to Kiro global skills directory", async () => {
+			const kiroSkillPath = join(home, ".kiro/skills/installer-test-skill");
+			rmSync(kiroSkillPath, { recursive: true, force: true });
+
+			try {
+				const result = await installSkillForAgent(testSkill, "kiro", { global: true });
+
+				expect(result.success).toBe(true);
+				expect(result.agent).toBe("kiro");
+				expect(result.path).toBe(kiroSkillPath);
+				expect(existsSync(join(kiroSkillPath, "SKILL.md"))).toBe(true);
+			} finally {
+				rmSync(kiroSkillPath, { recursive: true, force: true });
+			}
+		});
+
 		it("should return error for file at target path", async () => {
 			// Create a file where directory should be
 			const blockingPath = join(installBase, "blocking-skill");

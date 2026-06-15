@@ -148,6 +148,7 @@ export const migrateCommandHelp: CommandHelp = {
 				"  --respect-deletions disables the auto-reinstall heuristic for empty directories",
 				"  --force overrides skip decisions per item; --reinstall-empty-dirs is a per-directory heuristic",
 				"  Codex commands migrate as skills: project scope writes .agents/skills, global scope writes ~/.agents/skills",
+				"  Kiro agents migrate as custom subagents; rules/config migrate as steering files; skills copy to .kiro/skills; commands/hooks are skipped",
 			].join("\n"),
 		},
 	],
