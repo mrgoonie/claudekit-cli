@@ -689,6 +689,7 @@ Migrate Claude Code agents, commands, skills, config, rules, and hooks to other 
   --respect-deletions disables the auto-reinstall heuristic for empty directories
   --force overrides skip decisions per item; --reinstall-empty-dirs is a per-directory heuristic
   Codex commands migrate as skills: project scope writes .agents/skills, global scope writes ~/.agents/skills
+  Antigravity 2.0 agents migrate to .agents/agents.md; skills remain .agents/skills/<name>/SKILL.md
   Kiro agents migrate as custom subagents; rules/config migrate as steering files; skills copy to .kiro/skills; commands/hooks are skipped
 
 
@@ -1074,4 +1075,4 @@ Watch GitHub issues and auto-respond with AI analysis
 - `ck watch --interval 60000` — Poll every 60 seconds instead of default 30s
 
 
-<!-- generated: 2026-06-15T16:23:22.117Z -->
+<!-- generated: 2026-06-15T17:47:28.452Z -->

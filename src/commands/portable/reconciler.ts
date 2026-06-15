@@ -33,6 +33,36 @@ const BUILT_IN_PROVIDER_PATH_MIGRATIONS = [
 		from: ".codex/prompts",
 		to: ".agents/skills",
 	},
+	{
+		provider: "antigravity",
+		type: "command",
+		from: ".agent/workflows",
+		to: ".agents/workflows",
+	},
+	{
+		provider: "antigravity",
+		type: "skill",
+		from: ".agent/skills",
+		to: ".agents/skills",
+	},
+	{
+		provider: "antigravity",
+		type: "agent",
+		from: ".agent/skills",
+		to: ".agents/agents.md",
+	},
+	{
+		provider: "antigravity",
+		type: "skill",
+		from: ".gemini/antigravity/skills",
+		to: ".gemini/config/skills",
+	},
+	{
+		provider: "antigravity",
+		type: "rules",
+		from: ".agent/rules",
+		to: ".agents/rules",
+	},
 ] as const;
 
 function normalizePortablePath(value: string): string {
@@ -923,6 +953,7 @@ function detectPathMigrations(input: ReconcileInput): Array<{ deleteAction: Reco
 			(e) =>
 				e.provider === migration.provider &&
 				e.type === migration.type &&
+				e.installSource !== "manual" &&
 				pathContainsSegments(e.path, migration.from) &&
 				providerConfigIsActiveForEntry(activeProviderConfigs, e, { emptyMeansAll: true }),
 		);

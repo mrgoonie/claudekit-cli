@@ -68,6 +68,13 @@ describe("agents", () => {
 			expect(kiro.projectPath).toBe(".kiro/skills");
 			expect(kiro.globalPath).toBe(join(home, ".kiro/skills"));
 		});
+
+		it("should have antigravity agent with Antigravity 2.0 skill paths", () => {
+			const antigravity = agents.antigravity;
+			expect(antigravity.displayName).toBe("Antigravity");
+			expect(antigravity.projectPath).toBe(".agents/skills");
+			expect(antigravity.globalPath).toBe(join(home, ".gemini/config/skills"));
+		});
 	});
 
 	describe("detectInstalledAgents", () => {
@@ -130,6 +137,15 @@ describe("agents", () => {
 			);
 			expect(getInstallPath("my-skill", "kiro", { global: true })).toBe(
 				join(home, ".kiro/skills/my-skill"),
+			);
+		});
+
+		it("should return Antigravity 2.0 workspace and global skill paths", () => {
+			expect(getInstallPath("my-skill", "antigravity", { global: false })).toBe(
+				join(".agents/skills", "my-skill"),
+			);
+			expect(getInstallPath("my-skill", "antigravity", { global: true })).toBe(
+				join(home, ".gemini/config/skills/my-skill"),
 			);
 		});
 

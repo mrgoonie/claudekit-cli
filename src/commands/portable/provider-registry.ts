@@ -760,22 +760,26 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 		name: "antigravity",
 		displayName: "Antigravity",
 		subagents: "full",
-		// Antigravity has no separate "agents" concept — agents ARE skills (SKILL.md format).
-		// Claude Code agents are migrated to .agent/skills/ alongside native Antigravity skills.
-		agents: null,
+		agents: {
+			projectPath: ".agents/agents.md",
+			globalPath: null, // No verified global agents.md path; project-level .agents/agents.md is documented
+			format: "fm-strip",
+			writeStrategy: "merge-single",
+			fileExtension: ".md",
+		},
 		commands: {
-			projectPath: ".agent/workflows",
+			projectPath: ".agents/workflows",
 			globalPath: null, // No verified global workflows path; only project-level confirmed
 			format: "direct-copy",
 			writeStrategy: "per-file",
 			fileExtension: ".md",
-			nestedCommands: false, // Verified: Antigravity workflows are flat single-level files
+			nestedCommands: false, // Antigravity workflows are slash-command style markdown files
 		},
 		skills: {
 			// Skills use <name>/SKILL.md directory format; installSkillDirectories() copies whole dirs
-			// Global: ~/.gemini/antigravity/skills/ (confirmed: Codelabs docs)
-			projectPath: ".agent/skills",
-			globalPath: join(home, ".gemini/antigravity/skills"),
+			// Antigravity 2.0 defaults to .agents/skills and ~/.gemini/config/skills.
+			projectPath: ".agents/skills",
+			globalPath: join(home, ".gemini/config/skills"),
 			format: "direct-copy",
 			writeStrategy: "per-file",
 			fileExtension: ".md",
@@ -790,7 +794,7 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 			fileExtension: ".md",
 		},
 		rules: {
-			projectPath: ".agent/rules",
+			projectPath: ".agents/rules",
 			globalPath: null, // No verified global rules path separate from ~/.gemini/GEMINI.md
 			format: "md-strip",
 			writeStrategy: "per-file",
@@ -802,10 +806,18 @@ export const providers: Record<ProviderType, ProviderConfig> = {
 			hasBinaryInPath("agy") ||
 			hasBinaryInPath("antigravity") ||
 			hasAnyInstallSignal([
+				join(cwd, ".agents/rules"),
+				join(cwd, ".agents/agents.md"),
+				join(cwd, ".agents/skills"),
+				join(cwd, ".agents/workflows"),
+				join(cwd, ".agents/plugins"),
 				join(cwd, ".agent/rules"),
 				join(cwd, ".agent/skills"),
 				join(cwd, ".agent/workflows"),
 				join(cwd, "GEMINI.md"),
+				join(home, ".gemini/config"),
+				join(home, ".gemini/config/skills"),
+				join(home, ".gemini/config/plugins"),
 				join(home, ".gemini/antigravity"), // Global antigravity config dir
 				join(home, ".gemini/antigravity/skills"),
 			]),
@@ -999,8 +1011,8 @@ export interface ProviderPathCollision {
  * Detect path collisions across selected providers — identifies when multiple
  * providers map to the same target directory for the same portable type and scope.
  *
- * Critical for .agent/ vs .agents/ disambiguation (e.g., codex+amp both target
- * .agents/skills while antigravity targets .agent/skills).
+ * Critical for near-identical provider namespaces and shared targets (e.g.,
+ * codex+amp+antigravity project skills all target .agents/skills).
  */
 export function detectProviderPathCollisions(
 	selectedProviders: ProviderType[],

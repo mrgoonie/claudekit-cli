@@ -100,10 +100,19 @@ export const agents: Record<AgentType, AgentConfig> = {
 	antigravity: {
 		name: "antigravity",
 		displayName: "Antigravity",
-		projectPath: ".agent/skills",
-		globalPath: join(home, ".gemini/antigravity/skills"),
+		projectPath: ".agents/skills",
+		globalPath: join(home, ".gemini/config/skills"),
 		detect: async () =>
-			existsSync(join(process.cwd(), ".agent")) || existsSync(join(home, ".gemini/antigravity")),
+			hasAnyInstallSignal([
+				join(process.cwd(), ".agents/skills"),
+				join(process.cwd(), ".agents/rules"),
+				join(process.cwd(), ".agents/plugins"),
+				join(process.cwd(), ".agent/skills"),
+				join(process.cwd(), ".agent/rules"),
+				join(home, ".gemini/config/skills"),
+				join(home, ".gemini/config/plugins"),
+				join(home, ".gemini/antigravity/skills"),
+			]),
 	},
 	"github-copilot": {
 		name: "github-copilot",

@@ -2,7 +2,7 @@
  * Tests for skill installer
  */
 import { afterAll, beforeAll, describe, expect, it } from "bun:test";
-import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import {
@@ -187,6 +187,93 @@ description: OpenCode native Claude-compatible skill
 				expect(existsSync(join(kiroSkillPath, "SKILL.md"))).toBe(true);
 			} finally {
 				rmSync(kiroSkillPath, { recursive: true, force: true });
+			}
+		});
+
+		it("should install skill to Antigravity 2.0 global skills directory", async () => {
+			const antigravitySkillPath = join(home, ".gemini/config/skills/installer-test-skill");
+			rmSync(antigravitySkillPath, { recursive: true, force: true });
+
+			try {
+				const result = await installSkillForAgent(testSkill, "antigravity", { global: true });
+
+				expect(result.success).toBe(true);
+				expect(result.agent).toBe("antigravity");
+				expect(result.path).toBe(antigravitySkillPath);
+				expect(existsSync(join(antigravitySkillPath, "SKILL.md"))).toBe(true);
+			} finally {
+				rmSync(antigravitySkillPath, { recursive: true, force: true });
+			}
+		});
+
+		it("should rewrite Antigravity skill markdown references to 2.0 paths", async () => {
+			const sourcePath = join(testDir, "antigravity-ref-skill");
+			const targetPath = join(".agents/skills", "antigravity-ref-skill");
+			rmSync(sourcePath, { recursive: true, force: true });
+			rmSync(targetPath, { recursive: true, force: true });
+			mkdirSync(sourcePath, { recursive: true });
+			writeFileSync(
+				join(sourcePath, "SKILL.md"),
+				[
+					"---",
+					"name: antigravity-ref-skill",
+					"description: References Claude paths",
+					"---",
+					"",
+					"Use .claude/skills/cook/SKILL.md.",
+					"Ask .claude/agents/reviewer.md.",
+					"Run .claude/commands/docs/release.md.",
+					"Follow .claude/rules/style.md.",
+					"Check .claude/hooks/session-start.cjs.",
+				].join("\n"),
+			);
+			writeFileSync(join(sourcePath, "helper.js"), ".claude/agents/reviewer.md");
+
+			try {
+				const result = await installSkillForAgent(
+					{
+						name: "antigravity-ref-skill",
+						description: "References Claude paths",
+						path: sourcePath,
+					},
+					"antigravity",
+					{ global: false },
+				);
+
+				expect(result.success).toBe(true);
+				const content = readFileSync(join(targetPath, "SKILL.md"), "utf-8");
+				const helper = readFileSync(join(targetPath, "helper.js"), "utf-8");
+				expect(content).toContain(".agents/skills/cook/SKILL.md");
+				expect(content).toContain(".agents/agents.md");
+				expect(content).toContain(".agents/workflows/docs-release.md");
+				expect(content).toContain(".agents/rules/style.md");
+				expect(content).toContain("Claude Code hooks/session-start.cjs");
+				expect(content).not.toContain(".claude/");
+				expect(helper).toBe(".claude/agents/reviewer.md");
+			} finally {
+				rmSync(sourcePath, { recursive: true, force: true });
+				rmSync(targetPath, { recursive: true, force: true });
+			}
+		});
+
+		it("should remove Antigravity 1.x project skill path when installing to 2.0 path", async () => {
+			const legacyPath = join(".agent/skills", testSkill.name);
+			const antigravitySkillPath = join(".agents/skills", testSkill.name);
+			rmSync(legacyPath, { recursive: true, force: true });
+			rmSync(antigravitySkillPath, { recursive: true, force: true });
+			mkdirSync(legacyPath, { recursive: true });
+			writeFileSync(join(legacyPath, "SKILL.md"), "# Legacy Antigravity skill");
+
+			try {
+				const result = await installSkillForAgent(testSkill, "antigravity", { global: false });
+
+				expect(result.success).toBe(true);
+				expect(result.path).toBe(antigravitySkillPath);
+				expect(existsSync(join(antigravitySkillPath, "SKILL.md"))).toBe(true);
+				expect(existsSync(legacyPath)).toBe(false);
+			} finally {
+				rmSync(legacyPath, { recursive: true, force: true });
+				rmSync(antigravitySkillPath, { recursive: true, force: true });
 			}
 		});
 

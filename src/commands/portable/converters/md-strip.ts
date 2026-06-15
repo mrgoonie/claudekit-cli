@@ -6,6 +6,7 @@ import { homedir } from "node:os";
 import { providers } from "../provider-registry.js";
 import type { ConversionResult, PortableItem, ProviderType } from "../types.js";
 import { getCodexCommandSkillFilenameFromCommandPath } from "./codex-command-skill-path.js";
+import { rewriteAntigravityCommandRefSuffix } from "./direct-copy.js";
 
 /** Maximum content size for regex processing (500KB) */
 const MAX_CONTENT_SIZE = 512_000;
@@ -64,7 +65,9 @@ function getProviderPathTarget(
 		rewriteSuffix:
 			provider === "codex" && type === "commands"
 				? getCodexCommandSkillFilenameFromCommandPath
-				: undefined,
+				: provider === "antigravity" && type === "commands"
+					? rewriteAntigravityCommandRefSuffix
+					: undefined,
 	};
 }
 

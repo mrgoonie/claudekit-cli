@@ -2,9 +2,10 @@ import { existsSync } from "node:fs";
 /**
  * Skill installer - copies skills to target agent directories
  */
-import { cp, mkdir, rm, stat } from "node:fs/promises";
+import { cp, mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
+import { rewriteAntigravityPaths } from "../portable/converters/direct-copy.js";
 import { agents, getInstallPath, isSkillInstalled } from "./agents.js";
 import { addInstallation, readRegistry, writeRegistry } from "./skills-registry.js";
 import type { AgentType, InstallResult, SkillInfo } from "./types.js";
@@ -15,6 +16,10 @@ const LEGACY_SKILL_PATHS: Partial<Record<AgentType, { project: string; global: s
 	"gemini-cli": {
 		project: ".gemini/skills",
 		global: join(homedir(), ".gemini/skills"),
+	},
+	antigravity: {
+		project: ".agent/skills",
+		global: join(homedir(), ".gemini/antigravity/skills"),
 	},
 };
 
@@ -89,6 +94,23 @@ async function cleanupLegacySkillPath(
 	}
 }
 
+async function rewriteInstalledSkillMd(
+	targetPath: string,
+	agent: AgentType,
+	options: { global: boolean },
+): Promise<void> {
+	if (agent !== "antigravity") return;
+
+	const skillMdPath = join(targetPath, "SKILL.md");
+	if (!existsSync(skillMdPath)) return;
+
+	const content = await readFile(skillMdPath, "utf-8");
+	const rewritten = rewriteAntigravityPaths(content, { global: options.global });
+	if (rewritten !== content) {
+		await writeFile(skillMdPath, rewritten, "utf-8");
+	}
+}
+
 /**
  * Install a skill to a specific agent
  */
@@ -147,6 +169,7 @@ export async function installSkillForAgent(
 			recursive: true,
 			force: true, // Overwrite if exists
 		});
+		await rewriteInstalledSkillMd(targetPath, agent, options);
 
 		// Register installation in central registry
 		await addInstallation(skill.name, agent, options.global, targetPath, skill.path);
