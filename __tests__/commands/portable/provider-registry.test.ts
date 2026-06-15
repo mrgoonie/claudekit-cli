@@ -223,8 +223,8 @@ describe("Provider Registry", () => {
 			}
 		});
 
-		it("kiro has subagents: none (steering context, not delegation)", () => {
-			expect(providers.kiro.subagents).toBe("none");
+		it("kiro has subagents: full", () => {
+			expect(providers.kiro.subagents).toBe("full");
 		});
 	});
 
@@ -307,6 +307,25 @@ describe("Provider Registry", () => {
 			const config = providers.kilo;
 			expect(config.agents?.writeStrategy).toBe("yaml-merge");
 			expect(config.agents?.format).toBe("fm-to-yaml");
+		});
+
+		it("kiro supports workspace and global skills", () => {
+			const config = providers.kiro;
+			expect(config.skills?.projectPath).toBe(".kiro/skills");
+			const globalPath = config.skills?.globalPath?.replace(/\\/g, "/") ?? "";
+			expect(globalPath).toContain(".kiro/skills");
+		});
+
+		it("kiro supports custom subagents plus steering-backed rules and config but not commands or hooks", () => {
+			const config = providers.kiro;
+			expect(config.agents?.projectPath).toBe(".kiro/agents");
+			expect(config.rules?.projectPath).toBe(".kiro/steering");
+			expect(config.config?.projectPath).toBe(".kiro/steering/project.md");
+			expect(config.agents?.format).toBe("fm-to-fm");
+			expect(config.rules?.format).toBe("md-to-kiro-steering");
+			expect(config.config?.format).toBe("md-to-kiro-steering");
+			expect(config.commands).toBeNull();
+			expect(config.hooks).toBeNull();
 		});
 	});
 });

@@ -708,6 +708,100 @@ describe("nested command flattening", () => {
 	});
 });
 
+describe("Kiro migration targets", () => {
+	beforeEach(() => {
+		addPortableInstallationMock.mockClear();
+		addPortableInstallationMock.mockImplementation(async () => undefined);
+	});
+
+	test("installs agents as Kiro custom subagents and rules/config as Kiro steering files", async () => {
+		const tempDir = await mkdtemp(join(process.cwd(), ".tmp-portable-kiro-steering-"));
+		const agentsDir = join(tempDir, ".kiro", "agents");
+		const steeringDir = join(tempDir, ".kiro", "steering");
+		const configPath = join(steeringDir, "project.md");
+		const agentPathConfig = getPathConfig("kiro", "agents");
+		const rulesPathConfig = getPathConfig("kiro", "rules");
+		const configPathConfig = getPathConfig("kiro", "config");
+		const originalAgentPath = agentPathConfig.projectPath;
+		const originalRulesPath = rulesPathConfig.projectPath;
+		const originalConfigPath = configPathConfig.projectPath;
+
+		try {
+			agentPathConfig.projectPath = agentsDir;
+			rulesPathConfig.projectPath = steeringDir;
+			configPathConfig.projectPath = configPath;
+
+			const agentResults = await installPortableItems(
+				[
+					makePortableItem({
+						type: "agent",
+						name: "reviewer",
+						frontmatter: { name: "Reviewer", tools: "Read,Edit" },
+						body: "Review code changes.",
+					}),
+				],
+				["kiro"],
+				"agent",
+				{ global: false },
+			);
+
+			const ruleResults = await installPortableItems(
+				[
+					makePortableItem({
+						type: "rules",
+						name: "typescript-rules",
+						frontmatter: {},
+						body: "Prefer strict TypeScript.",
+					}),
+				],
+				["kiro"],
+				"rules",
+				{ global: false },
+			);
+
+			const configResults = await installPortableItems(
+				[
+					makePortableItem({
+						type: "config",
+						name: "project",
+						frontmatter: {},
+						body: "Project context for Kiro.",
+					}),
+				],
+				["kiro"],
+				"config",
+				{ global: false },
+			);
+
+			expect(agentResults[0].success).toBe(true);
+			expect(ruleResults[0].success).toBe(true);
+			expect(configResults[0].success).toBe(true);
+
+			const agentContent = await readFile(join(agentsDir, "reviewer.md"), "utf-8");
+			const ruleContent = await readFile(join(steeringDir, "typescript-rules.md"), "utf-8");
+			const configContent = await readFile(configPath, "utf-8");
+
+			expect(agentContent).toContain('name: "reviewer"');
+			expect(agentContent).toContain('description: "Sample portable item"');
+			expect(agentContent).toContain('tools: ["read","write"]');
+			expect(agentContent).toContain("Review code changes.");
+
+			expect(ruleContent).toContain("inclusion: fileMatch");
+			expect(ruleContent).toContain('fileMatchPattern: "**/*.{ts,tsx}"');
+			expect(ruleContent).toContain("Prefer strict TypeScript.");
+
+			expect(configContent).toContain("inclusion: always");
+			expect(configContent).toContain("# project");
+			expect(configContent).toContain("Project context for Kiro.");
+		} finally {
+			agentPathConfig.projectPath = originalAgentPath;
+			rulesPathConfig.projectPath = originalRulesPath;
+			configPathConfig.projectPath = originalConfigPath;
+			await rm(tempDir, { recursive: true, force: true });
+		}
+	});
+});
+
 describe("cross-kind section preservation (issue #415)", () => {
 	beforeEach(() => {
 		addPortableInstallationMock.mockClear();

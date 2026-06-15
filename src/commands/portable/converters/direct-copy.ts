@@ -29,6 +29,15 @@ const PROVIDER_CONFIG_DIR: Partial<Record<ProviderType, string>> = {
 	"github-copilot": ".github/",
 };
 
+function rewriteKiroPaths(content: string): string {
+	return content
+		.replace(/\.claude\/skills\//g, ".kiro/skills/")
+		.replace(/\.claude\/agents\//g, ".kiro/agents/")
+		.replace(/\.claude\/rules\//g, ".kiro/steering/")
+		.replace(/\.claude\/commands\//g, "Claude Code commands/")
+		.replace(/\.claude\/hooks\//g, "Claude Code hooks/");
+}
+
 /**
  * Return the file content, replacing .claude/ paths for non-Claude providers.
  */
@@ -50,9 +59,13 @@ export function convertDirectCopy(item: PortableItem, provider?: ProviderType): 
 
 	// Replace .claude/ paths with provider-specific config dir
 	if (provider && provider !== "claude-code") {
-		const targetDir = PROVIDER_CONFIG_DIR[provider];
-		if (targetDir) {
-			content = content.replace(/\.claude\//g, targetDir);
+		if (provider === "kiro") {
+			content = rewriteKiroPaths(content);
+		} else {
+			const targetDir = PROVIDER_CONFIG_DIR[provider];
+			if (targetDir) {
+				content = content.replace(/\.claude\//g, targetDir);
+			}
 		}
 	}
 	if (provider === "codex" && item.type === "hooks") {

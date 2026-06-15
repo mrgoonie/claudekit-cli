@@ -1,6 +1,6 @@
 /**
  * md-to-kiro-steering converter
- * Converts Claude Code config/rules/agents to Kiro steering format with YAML frontmatter.
+ * Converts Claude Code config/rules to Kiro steering format with YAML frontmatter.
  * Used by: Kiro IDE
  */
 import type { ConversionResult, PortableItem, ProviderType } from "../types.js";
@@ -9,7 +9,7 @@ import { stripClaudeRefs } from "./md-strip.js";
 /** Kiro steering inclusion modes */
 type KiroInclusionMode = "always" | "fileMatch" | "manual" | "auto";
 
-/** Language/framework to fileMatch glob mapping */
+/** Language/framework to fileMatchPattern glob mapping */
 const LANGUAGE_GLOB_MAP: Record<string, string> = {
 	typescript: "**/*.{ts,tsx}",
 	javascript: "**/*.{js,jsx,mjs,cjs}",
@@ -31,9 +31,6 @@ const LANGUAGE_GLOB_MAP: Record<string, string> = {
 	vue: "**/*.vue",
 	svelte: "**/*.svelte",
 };
-
-/** Agent frontmatter fields that have no Kiro equivalent */
-const UNSUPPORTED_AGENT_FIELDS = ["model", "tools", "memory", "argumentHint"];
 
 /**
  * Detect if item name suggests a language/framework-specific rule.
@@ -62,16 +59,16 @@ function detectLanguageGlob(itemName: string): string | null {
 }
 
 /**
- * Determine inclusion mode and optional fileMatch pattern
+ * Determine inclusion mode and optional fileMatchPattern glob
  */
 function determineInclusionMode(item: PortableItem): {
 	mode: KiroInclusionMode;
-	fileMatch?: string;
+	fileMatchPattern?: string;
 } {
-	// Language-specific rules use fileMatch
+	// Language-specific rules use fileMatch inclusion with a fileMatchPattern field.
 	const languageGlob = detectLanguageGlob(item.name);
 	if (languageGlob) {
-		return { mode: "fileMatch", fileMatch: languageGlob };
+		return { mode: "fileMatch", fileMatchPattern: languageGlob };
 	}
 
 	// Check description for language hints
@@ -84,7 +81,7 @@ function determineInclusionMode(item: PortableItem): {
 			fmDescription.startsWith(`${lang} `) ||
 			fmDescription.endsWith(` ${lang}`)
 		) {
-			return { mode: "fileMatch", fileMatch: LANGUAGE_GLOB_MAP[lang] };
+			return { mode: "fileMatch", fileMatchPattern: LANGUAGE_GLOB_MAP[lang] };
 		}
 	}
 
@@ -96,31 +93,15 @@ function determineInclusionMode(item: PortableItem): {
  * Build YAML frontmatter for Kiro steering file.
  * Note: Globs are quoted to handle YAML special characters.
  */
-function buildSteeringFrontmatter(mode: KiroInclusionMode, fileMatch?: string): string {
+function buildSteeringFrontmatter(mode: KiroInclusionMode, fileMatchPattern?: string): string {
 	const lines = ["---"];
 	lines.push(`inclusion: ${mode}`);
-	if (mode === "fileMatch" && fileMatch) {
+	if (mode === "fileMatch" && fileMatchPattern) {
 		// Quote glob to handle YAML special chars (*, {, })
-		lines.push(`fileMatch: "${fileMatch}"`);
+		lines.push(`fileMatchPattern: "${fileMatchPattern}"`);
 	}
 	lines.push("---");
 	return lines.join("\n");
-}
-
-/**
- * Check for unsupported agent frontmatter fields
- */
-function checkUnsupportedFields(item: PortableItem): string[] {
-	const warnings: string[] = [];
-	const presentFields = UNSUPPORTED_AGENT_FIELDS.filter(
-		(field) => item.frontmatter[field] !== undefined,
-	);
-
-	if (presentFields.length > 0) {
-		warnings.push(`Agent metadata not supported by Kiro (dropped): ${presentFields.join(", ")}`);
-	}
-
-	return warnings;
 }
 
 /**
@@ -140,20 +121,15 @@ export function convertMdToKiroSteering(
 ): ConversionResult {
 	const warnings: string[] = [];
 
-	// Check for unsupported agent fields
-	if (item.type === "agent") {
-		warnings.push(...checkUnsupportedFields(item));
-	}
-
 	// Strip Claude-specific references
 	const stripped = stripClaudeRefs(item.body, { provider });
 	warnings.push(...stripped.warnings);
 
 	// Determine inclusion mode
-	const { mode, fileMatch } = determineInclusionMode(item);
+	const { mode, fileMatchPattern } = determineInclusionMode(item);
 
 	// Build frontmatter
-	const frontmatter = buildSteeringFrontmatter(mode, fileMatch);
+	const frontmatter = buildSteeringFrontmatter(mode, fileMatchPattern);
 
 	// Compose content — skip heading injection if body already has one
 	const heading = item.frontmatter.name || item.name;
@@ -167,8 +143,8 @@ export function convertMdToKiroSteering(
 	}
 
 	// Add info about inclusion mode
-	if (mode === "fileMatch" && fileMatch) {
-		warnings.push(`Using fileMatch mode with pattern: ${fileMatch}`);
+	if (mode === "fileMatch" && fileMatchPattern) {
+		warnings.push(`Using fileMatch mode with pattern: ${fileMatchPattern}`);
 	}
 
 	return {

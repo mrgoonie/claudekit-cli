@@ -15,6 +15,7 @@ export const AgentType = z.enum([
 	"github-copilot",
 	"amp",
 	"kilo",
+	"kiro",
 	"roo",
 	"windsurf",
 	"cline",

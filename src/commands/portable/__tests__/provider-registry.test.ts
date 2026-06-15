@@ -140,8 +140,15 @@ describe("provider-registry", () => {
 			expect(providers.kiro.config?.projectPath).toBe(".kiro/steering/project.md");
 		});
 
+		it("kiro config globalPath is ~/.kiro/steering/project.md", () => {
+			const globalPath = providers.kiro.config?.globalPath?.replace(/\\/g, "/") ?? "";
+			expect(globalPath).toContain(".kiro/steering/project.md");
+		});
+
 		it("kiro rules use per-file to .kiro/steering", () => {
 			expect(providers.kiro.rules?.projectPath).toBe(".kiro/steering");
+			const globalPath = providers.kiro.rules?.globalPath?.replace(/\\/g, "/") ?? "";
+			expect(globalPath).toContain(".kiro/steering");
 			expect(providers.kiro.rules?.writeStrategy).toBe("per-file");
 		});
 
@@ -153,6 +160,11 @@ describe("provider-registry", () => {
 			expect(providers.kiro.skills?.projectPath).toBe(".kiro/skills");
 		});
 
+		it("kiro skills globalPath is ~/.kiro/skills", () => {
+			const globalPath = providers.kiro.skills?.globalPath?.replace(/\\/g, "/") ?? "";
+			expect(globalPath).toContain(".kiro/skills");
+		});
+
 		it("kiro does not support hooks", () => {
 			expect(providers.kiro.hooks).toBeNull();
 		});
@@ -161,13 +173,39 @@ describe("provider-registry", () => {
 			expect(providers.kiro.commands).toBeNull();
 		});
 
-		it("kiro has no subagent support (uses steering for context, not delegation)", () => {
-			expect(providers.kiro.subagents).toBe("none");
+		it("kiro has full subagent support", () => {
+			expect(providers.kiro.subagents).toBe("full");
 		});
 
-		it("kiro agents map to steering directory", () => {
-			expect(providers.kiro.agents?.projectPath).toBe(".kiro/steering");
-			expect(providers.kiro.agents?.format).toBe("md-to-kiro-steering");
+		it("kiro agents map to custom subagent directory", () => {
+			expect(providers.kiro.agents?.projectPath).toBe(".kiro/agents");
+			const globalPath = providers.kiro.agents?.globalPath?.replace(/\\/g, "/") ?? "";
+			expect(globalPath).toContain(".kiro/agents");
+			expect(providers.kiro.agents?.format).toBe("fm-to-fm");
+		});
+
+		it("getPortableBasePath exposes Kiro workspace and global paths for all supported types", () => {
+			expect(getPortableBasePath("kiro", "agents", { global: false })).toBe(".kiro/agents");
+			expect(getPortableBasePath("kiro", "rules", { global: false })).toBe(".kiro/steering");
+			expect(getPortableBasePath("kiro", "config", { global: false })).toBe(
+				".kiro/steering/project.md",
+			);
+			expect(getPortableBasePath("kiro", "skills", { global: false })).toBe(".kiro/skills");
+			expect(getPortableBasePath("kiro", "commands", { global: false })).toBeNull();
+			expect(getPortableBasePath("kiro", "hooks", { global: false })).toBeNull();
+
+			expect(
+				getPortableBasePath("kiro", "agents", { global: true })?.replace(/\\/g, "/"),
+			).toContain(".kiro/agents");
+			expect(getPortableBasePath("kiro", "rules", { global: true })?.replace(/\\/g, "/")).toContain(
+				".kiro/steering",
+			);
+			expect(
+				getPortableBasePath("kiro", "config", { global: true })?.replace(/\\/g, "/"),
+			).toContain(".kiro/steering/project.md");
+			expect(
+				getPortableBasePath("kiro", "skills", { global: true })?.replace(/\\/g, "/"),
+			).toContain(".kiro/skills");
 		});
 	});
 

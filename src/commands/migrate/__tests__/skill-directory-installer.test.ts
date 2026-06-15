@@ -205,6 +205,33 @@ describe("installSkillDirectories", () => {
 		);
 	});
 
+	it("kiro: installs skill to path derived from registry (.kiro/skills/<name>)", async () => {
+		const customPath = join(testDir, ".kiro", "skills");
+		const skill = makeSkill("my-skill", join(sourceDir, "my-skill"));
+
+		const origKiroSkills = originalProviders.kiro.skills;
+		if (origKiroSkills) {
+			originalProviders.kiro.skills = { ...origKiroSkills, projectPath: customPath };
+		}
+
+		const results = await installSkillDirectories([skill], ["kiro"], { global: false });
+
+		originalProviders.kiro.skills = origKiroSkills;
+
+		expect(results).toHaveLength(1);
+		expect(results[0].success).toBe(true);
+		expect(results[0].path).toBe(join(customPath, "my-skill"));
+		expect(existsSync(join(customPath, "my-skill", "SKILL.md"))).toBe(true);
+		expect(addPortableInstallationMock).toHaveBeenCalledWith(
+			"my-skill",
+			"skill",
+			"kiro",
+			false,
+			join(customPath, "my-skill"),
+			expect.any(String),
+		);
+	});
+
 	// Regression: #817 — symlinked target basePath must not clobber the source.
 	// Setup: user has ~/.agents/skills -> ~/.claude/skills (single source of truth).
 	// Before the fix, resolve()-only comparison would proceed with rename+copy and
@@ -268,6 +295,35 @@ describe("installSkillDirectories", () => {
 			"my-skill",
 			"skill",
 			"windsurf",
+			true,
+			join(globalCustomPath, "my-skill"),
+			expect.any(String),
+		);
+	});
+
+	it("kiro global: installs skill to global path derived from registry", async () => {
+		const globalCustomPath = join(testDir, ".kiro-global", "skills");
+		const skill = makeSkill("my-skill", join(sourceDir, "my-skill"));
+
+		const origKiroSkills = originalProviders.kiro.skills;
+		if (origKiroSkills) {
+			originalProviders.kiro.skills = {
+				...origKiroSkills,
+				globalPath: globalCustomPath,
+			};
+		}
+
+		const results = await installSkillDirectories([skill], ["kiro"], { global: true });
+
+		originalProviders.kiro.skills = origKiroSkills;
+
+		expect(results).toHaveLength(1);
+		expect(results[0].success).toBe(true);
+		expect(results[0].path).toBe(join(globalCustomPath, "my-skill"));
+		expect(addPortableInstallationMock).toHaveBeenCalledWith(
+			"my-skill",
+			"skill",
+			"kiro",
 			true,
 			join(globalCustomPath, "my-skill"),
 			expect.any(String),
