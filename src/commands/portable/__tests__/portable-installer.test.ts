@@ -802,6 +802,96 @@ describe("Kiro migration targets", () => {
 	});
 });
 
+describe("Antigravity 2.0 migration targets", () => {
+	beforeEach(() => {
+		addPortableInstallationMock.mockClear();
+		addPortableInstallationMock.mockImplementation(async () => undefined);
+	});
+
+	test("installs agents as skills and commands/rules into .agents namespaces", async () => {
+		const tempDir = await mkdtemp(join(process.cwd(), ".tmp-portable-antigravity-"));
+		const skillsDir = join(tempDir, ".agents", "skills");
+		const workflowsDir = join(tempDir, ".agents", "workflows");
+		const rulesDir = join(tempDir, ".agents", "rules");
+		const agentPathConfig = getPathConfig("antigravity", "agents");
+		const commandPathConfig = getPathConfig("antigravity", "commands");
+		const rulesPathConfig = getPathConfig("antigravity", "rules");
+		const originalAgentPath = agentPathConfig.projectPath;
+		const originalCommandPath = commandPathConfig.projectPath;
+		const originalRulesPath = rulesPathConfig.projectPath;
+
+		try {
+			agentPathConfig.projectPath = skillsDir;
+			commandPathConfig.projectPath = workflowsDir;
+			rulesPathConfig.projectPath = rulesDir;
+
+			const agentResults = await installPortableItems(
+				[
+					makePortableItem({
+						type: "agent",
+						name: "reviewer",
+						frontmatter: { name: "Reviewer", description: "Review code", tools: "Read" },
+						description: "Review code",
+						body: "Use .claude/skills/cook/SKILL.md while reviewing.",
+					}),
+				],
+				["antigravity"],
+				"agent",
+				{ global: false },
+			);
+
+			const commandResults = await installPortableItems(
+				[
+					makePortableItem({
+						type: "command",
+						name: "release",
+						frontmatter: { description: "Prepare release" },
+						body: "Follow .claude/rules/release.md before shipping.",
+					}),
+				],
+				["antigravity"],
+				"command",
+				{ global: false },
+			);
+
+			const ruleResults = await installPortableItems(
+				[
+					makePortableItem({
+						type: "rules",
+						name: "typescript",
+						frontmatter: {},
+						body: "Prefer strict TypeScript and check .claude/commands/release.md.",
+					}),
+				],
+				["antigravity"],
+				"rules",
+				{ global: false },
+			);
+
+			expect(agentResults[0].success).toBe(true);
+			expect(commandResults[0].success).toBe(true);
+			expect(ruleResults[0].success).toBe(true);
+
+			const agentContent = await readFile(join(skillsDir, "reviewer", "SKILL.md"), "utf-8");
+			const commandContent = await readFile(join(workflowsDir, "release.md"), "utf-8");
+			const ruleContent = await readFile(join(rulesDir, "typescript.md"), "utf-8");
+
+			expect(agentContent).toContain("name: Reviewer");
+			expect(agentContent).toContain("# Reviewer");
+			expect(agentContent).toContain(".agents/skills/cook/SKILL.md");
+			expect(commandContent).toContain(".agents/rules/release.md");
+			expect(commandContent).not.toContain(".agent/");
+			expect(ruleContent).toContain(".agents/workflows/release.md");
+			expect(ruleContent).not.toContain(".agent/");
+		} finally {
+			agentPathConfig.projectPath = originalAgentPath;
+			commandPathConfig.projectPath = originalCommandPath;
+			rulesPathConfig.projectPath = originalRulesPath;
+			await rm(tempDir, { recursive: true, force: true });
+		}
+	});
+});
+
 describe("cross-kind section preservation (issue #415)", () => {
 	beforeEach(() => {
 		addPortableInstallationMock.mockClear();

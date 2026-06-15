@@ -45,7 +45,7 @@ export function convertItem(
 			case "md-to-toml":
 				return convertMdToToml(item);
 			case "skill-md":
-				return convertToSkillMd(item);
+				return convertToSkillMd(item, provider);
 			case "md-strip":
 				return convertMdStrip(item, provider, { global: options.global });
 			case "md-to-mdc":

@@ -16,6 +16,10 @@ const LEGACY_SKILL_PATHS: Partial<Record<AgentType, { project: string; global: s
 		project: ".gemini/skills",
 		global: join(homedir(), ".gemini/skills"),
 	},
+	antigravity: {
+		project: ".agent/skills",
+		global: join(homedir(), ".gemini/antigravity/skills"),
+	},
 };
 
 /**

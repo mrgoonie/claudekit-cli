@@ -268,4 +268,112 @@ describe("No manifest fallback", () => {
 		// Should complete without errors
 		expect(plan.summary.delete).toBe(0);
 	});
+
+	test("uses built-in Antigravity 2.0 path migrations without manifest", () => {
+		const installedAt = "2024-01-01T00:00:00.000Z";
+		const registry: PortableRegistryV3 = {
+			version: "3.0",
+			installations: [
+				{
+					item: "project-skill",
+					type: "skill",
+					provider: "antigravity",
+					global: false,
+					path: ".agent/skills/project-skill",
+					installedAt,
+					sourcePath: "skills/project-skill/SKILL.md",
+					sourceChecksum: "abc",
+					targetChecksum: "def",
+					installSource: "kit",
+				},
+				{
+					item: "reviewer",
+					type: "agent",
+					provider: "antigravity",
+					global: false,
+					path: ".agent/skills/reviewer/SKILL.md",
+					installedAt,
+					sourcePath: "agents/reviewer.md",
+					sourceChecksum: "abc",
+					targetChecksum: "def",
+					installSource: "kit",
+				},
+				{
+					item: "global-skill",
+					type: "skill",
+					provider: "antigravity",
+					global: true,
+					path: "/home/user/.gemini/antigravity/skills/global-skill",
+					installedAt,
+					sourcePath: "skills/global-skill/SKILL.md",
+					sourceChecksum: "abc",
+					targetChecksum: "def",
+					installSource: "kit",
+				},
+				{
+					item: "release",
+					type: "command",
+					provider: "antigravity",
+					global: false,
+					path: ".agent/workflows/release.md",
+					installedAt,
+					sourcePath: "commands/release.md",
+					sourceChecksum: "abc",
+					targetChecksum: "def",
+					installSource: "kit",
+				},
+				{
+					item: "style",
+					type: "rules",
+					provider: "antigravity",
+					global: false,
+					path: ".agent/rules/style.md",
+					installedAt,
+					sourcePath: "rules/style.md",
+					sourceChecksum: "abc",
+					targetChecksum: "def",
+					installSource: "kit",
+				},
+				{
+					item: "new-path",
+					type: "skill",
+					provider: "antigravity",
+					global: false,
+					path: ".agents/skills/new-path",
+					installedAt,
+					sourcePath: "skills/new-path/SKILL.md",
+					sourceChecksum: "abc",
+					targetChecksum: "def",
+					installSource: "kit",
+				},
+			],
+		};
+
+		const input: ReconcileInput = {
+			sourceItems: [],
+			registry,
+			targetStates: new Map(),
+			manifest: null,
+			providerConfigs: [],
+		};
+
+		const plan = reconcile(input);
+		const migrationDeletes = plan.actions.filter(
+			(action) =>
+				action.action === "delete" &&
+				action.provider === "antigravity" &&
+				action.reasonCode === "path-migrated-cleanup",
+		);
+
+		expect(migrationDeletes.map((action) => action.targetPath).sort()).toEqual([
+			".agent/rules/style.md",
+			".agent/skills/project-skill",
+			".agent/skills/reviewer/SKILL.md",
+			".agent/workflows/release.md",
+			"/home/user/.gemini/antigravity/skills/global-skill",
+		]);
+		expect(migrationDeletes.some((action) => action.targetPath.includes(".agents/skills"))).toBe(
+			false,
+		);
+	});
 });

@@ -190,6 +190,22 @@ description: OpenCode native Claude-compatible skill
 			}
 		});
 
+		it("should install skill to Antigravity 2.0 global skills directory", async () => {
+			const antigravitySkillPath = join(home, ".gemini/config/skills/installer-test-skill");
+			rmSync(antigravitySkillPath, { recursive: true, force: true });
+
+			try {
+				const result = await installSkillForAgent(testSkill, "antigravity", { global: true });
+
+				expect(result.success).toBe(true);
+				expect(result.agent).toBe("antigravity");
+				expect(result.path).toBe(antigravitySkillPath);
+				expect(existsSync(join(antigravitySkillPath, "SKILL.md"))).toBe(true);
+			} finally {
+				rmSync(antigravitySkillPath, { recursive: true, force: true });
+			}
+		});
+
 		it("should return error for file at target path", async () => {
 			// Create a file where directory should be
 			const blockingPath = join(installBase, "blocking-skill");

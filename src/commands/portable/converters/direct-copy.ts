@@ -16,7 +16,6 @@ const PROVIDER_CONFIG_DIR: Partial<Record<ProviderType, string>> = {
 	opencode: ".opencode/",
 	droid: ".factory/",
 	windsurf: ".windsurf/",
-	antigravity: ".agent/",
 	cursor: ".cursor/",
 	roo: ".roo/",
 	kilo: ".kilocode/",
@@ -36,6 +35,15 @@ function rewriteKiroPaths(content: string): string {
 		.replace(/\.claude\/rules\//g, ".kiro/steering/")
 		.replace(/\.claude\/commands\//g, "Claude Code commands/")
 		.replace(/\.claude\/hooks\//g, "Claude Code hooks/");
+}
+
+export function rewriteAntigravityPaths(content: string): string {
+	return content
+		.replace(/\.claude\/skills\//g, ".agents/skills/")
+		.replace(/\.claude\/agents\//g, ".agents/skills/")
+		.replace(/\.claude\/rules\//g, ".agents/rules/")
+		.replace(/\.claude\/commands\//g, ".agents/workflows/")
+		.replace(/\.claude\/hooks\//g, ".agents/hooks/");
 }
 
 /**
@@ -61,6 +69,8 @@ export function convertDirectCopy(item: PortableItem, provider?: ProviderType): 
 	if (provider && provider !== "claude-code") {
 		if (provider === "kiro") {
 			content = rewriteKiroPaths(content);
+		} else if (provider === "antigravity") {
+			content = rewriteAntigravityPaths(content);
 		} else {
 			const targetDir = PROVIDER_CONFIG_DIR[provider];
 			if (targetDir) {

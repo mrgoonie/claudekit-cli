@@ -641,6 +641,11 @@ describe("convertMdStrip", () => {
 			const droid = convertMdStrip(item, "droid");
 			expect(droid.content).toContain(".factory/commands/release.md");
 			expect(droid.content).toContain("AGENTS.md");
+
+			const antigravity = convertMdStrip(item, "antigravity");
+			expect(antigravity.content).toContain(".agents/workflows/release.md");
+			expect(antigravity.content).toContain(".agents/rules/style.md");
+			expect(antigravity.content).toContain("GEMINI.md");
 		});
 
 		it("should map project-scoped Codex command refs to project skills", () => {

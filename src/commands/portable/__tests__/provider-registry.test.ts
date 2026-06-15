@@ -209,6 +209,21 @@ describe("provider-registry", () => {
 		});
 	});
 
+	describe("antigravity entries", () => {
+		it("antigravity 2.0 uses .agents workspace paths and ~/.gemini/config skills", () => {
+			expect(providers.antigravity.agents?.projectPath).toBe(".agents/skills");
+			expect(providers.antigravity.agents?.format).toBe("skill-md");
+			expect(providers.antigravity.commands?.projectPath).toBe(".agents/workflows");
+			expect(providers.antigravity.skills?.projectPath).toBe(".agents/skills");
+			expect(providers.antigravity.rules?.projectPath).toBe(".agents/rules");
+
+			const skillsGlobal = providers.antigravity.skills?.globalPath?.replace(/\\/g, "/") ?? "";
+			const agentsGlobal = providers.antigravity.agents?.globalPath?.replace(/\\/g, "/") ?? "";
+			expect(skillsGlobal).toContain(".gemini/config/skills");
+			expect(agentsGlobal).toContain(".gemini/config/skills");
+		});
+	});
+
 	describe("hooks entries", () => {
 		const PROVIDERS_WITH_HOOKS: ProviderType[] = ["claude-code", "droid", "codex", "gemini-cli"];
 
@@ -374,14 +389,16 @@ describe("provider-registry", () => {
 			expect(skillCollisions[0].providers).toContain("amp");
 		});
 
-		it("antigravity uses different path (.agent/skills) — no collision with codex+amp", () => {
+		it("antigravity shares .agents/skills with codex+amp in project scope", () => {
 			const collisions = detectProviderPathCollisions(["codex", "amp", "antigravity"], {
 				global: false,
 			});
 			const skillCollisions = collisions.filter((c) => c.portableType === "skills");
-			// codex+amp collide on .agents/skills, but antigravity uses .agent/skills (no collision)
 			expect(skillCollisions).toHaveLength(1);
-			expect(skillCollisions[0].providers).not.toContain("antigravity");
+			expect(skillCollisions[0].path).toBe(".agents/skills");
+			expect(skillCollisions[0].providers).toContain("codex");
+			expect(skillCollisions[0].providers).toContain("amp");
+			expect(skillCollisions[0].providers).toContain("antigravity");
 		});
 
 		it("returns empty array when no providers collide", () => {

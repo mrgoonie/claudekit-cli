@@ -47,9 +47,8 @@ describe("Provider Registry", () => {
 		it("returns providers with non-null agents config", () => {
 			const withAgents = getProvidersSupporting("agents");
 
-			// 15 of 16 providers support agents (antigravity has agents=null)
-			expect(withAgents).toHaveLength(15);
-			expect(withAgents).not.toContain("antigravity");
+			expect(withAgents).toHaveLength(16);
+			expect(withAgents).toContain("antigravity");
 
 			// Verify each has non-null agents config
 			for (const provider of withAgents) {
@@ -165,9 +164,9 @@ describe("Provider Registry", () => {
 			for (const p of agentProviders) {
 				expect(skillProviders).toContain(p);
 			}
-			// Antigravity supports skills but not agents (agents ARE skills in Antigravity)
+			// Antigravity agents are projected into skills because 2.0 exposes SKILL.md directories.
 			expect(skillProviders).toContain("antigravity");
-			expect(agentProviders).not.toContain("antigravity");
+			expect(agentProviders).toContain("antigravity");
 		});
 
 		it("skills paths align with agents for providers", () => {
@@ -242,25 +241,28 @@ describe("Provider Registry", () => {
 			expect(config.agents?.charLimit).toBe(12000);
 		});
 
-		it("antigravity has no agents (agents are skills in Antigravity)", () => {
+		it("antigravity migrates Claude agents as Antigravity skills", () => {
 			const config = providers.antigravity;
-			expect(config.agents).toBeNull();
+			expect(config.agents?.projectPath).toBe(".agents/skills");
+			const agentsGlobal = config.agents?.globalPath?.replace(/\\/g, "/") ?? "";
+			expect(agentsGlobal).toContain(".gemini/config/skills");
+			expect(config.agents?.format).toBe("skill-md");
 		});
 
 		it("antigravity uses correct paths for commands, skills, config, rules", () => {
 			const config = providers.antigravity;
 			// Commands (workflows): project only, no verified global path
 			expect(config.commands).not.toBeNull();
-			expect(config.commands?.projectPath).toBe(".agent/workflows");
+			expect(config.commands?.projectPath).toBe(".agents/workflows");
 			expect(config.commands?.globalPath).toBeNull();
 
-			// Skills: project .agent/skills/, global ~/.gemini/antigravity/skills
-			expect(config.skills?.projectPath).toBe(".agent/skills");
+			// Skills: project .agents/skills/, global ~/.gemini/config/skills
+			expect(config.skills?.projectPath).toBe(".agents/skills");
 			const skillsGlobal = config.skills?.globalPath?.replace(/\\/g, "/") ?? "";
-			expect(skillsGlobal).toContain(".gemini/antigravity/skills");
+			expect(skillsGlobal).toContain(".gemini/config/skills");
 
-			// Rules: project .agent/rules/, no verified global path
-			expect(config.rules?.projectPath).toBe(".agent/rules");
+			// Rules: project .agents/rules/, no verified global path
+			expect(config.rules?.projectPath).toBe(".agents/rules");
 			expect(config.rules?.globalPath).toBeNull();
 
 			// Config: GEMINI.md → ~/.gemini/GEMINI.md (shared with Gemini CLI)

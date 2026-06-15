@@ -121,6 +121,25 @@ describe("direct-copy converter", () => {
 		expect(result.content).toContain(".kiro/steering/typescript.md");
 		expect(result.content).not.toContain(".claude/");
 	});
+
+	it("rewrites Claude paths to Antigravity 2.0 .agents paths", () => {
+		const item = makeItem({
+			body: [
+				"Use .claude/skills/cook/SKILL.md.",
+				"Delegate to .claude/agents/reviewer.md.",
+				"Follow .claude/rules/typescript.md.",
+				"Run .claude/commands/ship.md.",
+			].join(" "),
+		});
+		const result = convertDirectCopy(item, "antigravity");
+
+		expect(result.content).toContain(".agents/skills/cook/SKILL.md");
+		expect(result.content).toContain(".agents/skills/reviewer.md");
+		expect(result.content).toContain(".agents/rules/typescript.md");
+		expect(result.content).toContain(".agents/workflows/ship.md");
+		expect(result.content).not.toContain(".claude/");
+		expect(result.content).not.toContain(".agent/");
+	});
 });
 
 describe("fm-strip converter", () => {

@@ -93,6 +93,39 @@ describe("skill-registry", () => {
 			expect(registry.version).toBe("1.0");
 			expect(registry.installations).toEqual([]);
 		});
+
+		it("should migrate Antigravity 1.x skill registry paths to Antigravity 2.0 paths", async () => {
+			await writeRegistry({
+				version: "1.0",
+				installations: [
+					{
+						skill: "project-antigravity",
+						agent: "antigravity",
+						global: false,
+						path: join(".agent/skills", "project-antigravity"),
+						installedAt: new Date().toISOString(),
+						sourcePath: "/src/project-antigravity",
+					},
+					{
+						skill: "global-antigravity",
+						agent: "antigravity",
+						global: true,
+						path: join(home, ".gemini/antigravity/skills/global-antigravity"),
+						installedAt: new Date().toISOString(),
+						sourcePath: "/src/global-antigravity",
+					},
+				],
+			});
+
+			const registry = await readRegistry();
+			const project = registry.installations.find((i) => i.skill === "project-antigravity");
+			const global = registry.installations.find((i) => i.skill === "global-antigravity");
+
+			expect(project?.path.replace(/\\/g, "/")).toBe(".agents/skills/project-antigravity");
+			expect(global?.path.replace(/\\/g, "/")).toContain(
+				".gemini/config/skills/global-antigravity",
+			);
+		});
 	});
 
 	describe("writeRegistry", () => {
