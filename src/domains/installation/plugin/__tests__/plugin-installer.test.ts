@@ -97,4 +97,35 @@ describe("PluginInstaller result handling", () => {
 		const broken = fakeRunner({ ok: false, stdout: "", stderr: "boom", code: 1 });
 		expect(await new PluginInstaller(broken.runner).verifyInstalled()).toBe(false);
 	});
+
+	test("verifyInstalled false when ck is disabled even if ANOTHER plugin is enabled", async () => {
+		// status must come from ck's own block, not a different plugin's enabled line
+		const multi = fakeRunner({
+			ok: true,
+			stdout: "  ck@claudekit\n    Status: disabled\n  foo@bar\n    Status: enabled",
+			stderr: "",
+			code: 0,
+		});
+		expect(await new PluginInstaller(multi.runner).verifyInstalled()).toBe(false);
+	});
+
+	test("verifyInstalled true when ck enabled and a later plugin is disabled", async () => {
+		const multi = fakeRunner({
+			ok: true,
+			stdout: "  ck@claudekit\n    Status: enabled\n  foo@bar\n    Status: disabled",
+			stderr: "",
+			code: 0,
+		});
+		expect(await new PluginInstaller(multi.runner).verifyInstalled()).toBe(true);
+	});
+
+	test("verifyInstalled does not match a different plugin named my-ck@", async () => {
+		const lookalike = fakeRunner({
+			ok: true,
+			stdout: "  my-ck@somewhere\n    Status: enabled",
+			stderr: "",
+			code: 0,
+		});
+		expect(await new PluginInstaller(lookalike.runner).verifyInstalled()).toBe(false);
+	});
 });

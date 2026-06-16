@@ -96,7 +96,13 @@ export function detectPluginState(claudeDir: string): PluginState {
 	// Cache payload: resolves version; flags an orphaned cache when not registered.
 	const cacheRoot = join(claudeDir, "plugins", "cache");
 	if (existsSync(cacheRoot)) {
-		for (const marketplace of safeReaddir(cacheRoot)) {
+		// Prefer the marketplace recorded in settings (the registered one) over readdir
+		// order, so version resolution does not pick a stale cache under another marketplace.
+		const all = safeReaddir(cacheRoot);
+		const marketplaces = state.marketplace
+			? [state.marketplace, ...all.filter((m) => m !== state.marketplace)]
+			: all;
+		for (const marketplace of marketplaces) {
 			const ckDir = join(cacheRoot, marketplace, CK_PLUGIN_NAME);
 			if (existsSync(ckDir) && isDir(ckDir)) {
 				state.marketplace = state.marketplace ?? marketplace;

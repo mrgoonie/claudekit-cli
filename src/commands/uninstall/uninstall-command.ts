@@ -294,6 +294,12 @@ export async function uninstallCommand(options: UninstallCommandOptions): Promis
 					forceOverwrite: validOptions.forceOverwrite,
 					kit: kitToRemove,
 				});
+				if (
+					(scope === "global" || scope === "all") &&
+					(kitToRemove === "engineer" || !kitToRemove)
+				) {
+					log.info("A ClaudeKit Engineer plugin install (if present) would also be deregistered.");
+				}
 				prompts.outro("Dry-run complete. No changes were made.");
 				return;
 			}
@@ -323,7 +329,7 @@ export async function uninstallCommand(options: UninstallCommandOptions): Promis
 			});
 
 			// 14.5: also remove the engineer plugin (#691) — non-fatal, no-op if not a plugin install
-			if (kitToRemove === "engineer" || !kitToRemove) {
+			if ((scope === "global" || scope === "all") && (kitToRemove === "engineer" || !kitToRemove)) {
 				try {
 					const pluginResult = await uninstallEnginePlugin();
 					if (pluginResult.uninstalled) {

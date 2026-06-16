@@ -123,13 +123,27 @@ export class PluginInstaller {
 		return this.run(["plugin", "list"], this.opts(15_000));
 	}
 
-	/** Verify the plugin resolves post-install: present in `plugin list` and enabled. */
+	/**
+	 * Verify the plugin resolves post-install: the `ck@` entry is present in
+	 * `plugin list` AND its own status line says enabled. Status is read from
+	 * the ck entry's block only (not the whole output), so a different enabled
+	 * plugin cannot make a disabled ck look enabled. The `ck@` match is
+	 * token-anchored so a plugin named e.g. `my-ck@...` does not match.
+	 */
 	async verifyInstalled(): Promise<boolean> {
 		const r = await this.list();
 		if (!r.ok) return false;
-		const out = r.stdout;
-		const present = new RegExp(`\\b${CK_PLUGIN_NAME}@`).test(out);
-		const enabled = /enabled/i.test(out);
-		return present && enabled;
+		const lines = r.stdout.split("\n");
+		const ckEntry = new RegExp(`(?:^|\\s)${CK_PLUGIN_NAME}@`);
+		const anyEntry = /(?:^|\s)\S+@\S/;
+		const idx = lines.findIndex((line) => ckEntry.test(line));
+		if (idx === -1) return false;
+		// Scan ck's block until the next plugin entry; first enable/disable token wins.
+		for (let i = idx; i < lines.length; i++) {
+			if (i > idx && anyEntry.test(lines[i]) && !ckEntry.test(lines[i])) break;
+			if (/\bdisabled\b/i.test(lines[i])) return false;
+			if (/\benabled\b/i.test(lines[i])) return true;
+		}
+		return false;
 	}
 }

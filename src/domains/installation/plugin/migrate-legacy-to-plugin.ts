@@ -1,8 +1,10 @@
 import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import {
+	ENGINEER_KIT_KEY,
 	type InstallMode,
 	detectInstallMode,
+	detectPluginState,
 } from "@/domains/installation/plugin/install-mode-detector.js";
 import { PluginInstaller } from "@/domains/installation/plugin/plugin-installer.js";
 import { PathResolver } from "@/shared/path-resolver.js";
@@ -56,9 +58,10 @@ export async function migrateLegacyToPlugin(opts: MigrateOptions): Promise<Migra
 
 	const before = detectInstallMode(claudeDir);
 
-	// Already plugin-only (no legacy copy left): nothing to do.
+	// Already plugin-only (no legacy copy left): nothing to do. "verified" reflects
+	// the detector's enable state, not an unconditional true.
 	if (before.mode === "plugin") {
-		return base("noop-already-plugin", before.mode, true);
+		return base("noop-already-plugin", before.mode, before.plugin.enabled);
 	}
 
 	// Older Claude Code without plugin support: caller should fall back to legacy copy.
@@ -66,9 +69,22 @@ export async function migrateLegacyToPlugin(opts: MigrateOptions): Promise<Migra
 		return base("skipped-cc-unsupported", before.mode, false);
 	}
 
-	// Non-destructive: register marketplace + install + verify.
-	await installer.marketplaceAdd(opts.pluginSourceDir);
-	await installer.install("user");
+	// Non-destructive: register marketplace + install + verify. Surface command
+	// failures early (before the destructive step) instead of relying on verify alone.
+	const added = await installer.marketplaceAdd(opts.pluginSourceDir);
+	if (!added.ok) {
+		return {
+			...base("install-failed", before.mode, false),
+			error: `marketplace add failed: ${added.stderr.trim()}`,
+		};
+	}
+	const installed = await installer.install("user");
+	if (!installed.ok) {
+		return {
+			...base("install-failed", before.mode, false),
+			error: `plugin install failed: ${installed.stderr.trim()}`,
+		};
+	}
 	const verified = await installer.verifyInstalled();
 	if (!verified) {
 		// Nothing destructive happened yet, so there is nothing to roll back.
@@ -87,10 +103,12 @@ export async function migrateLegacyToPlugin(opts: MigrateOptions): Promise<Migra
 		removedPaths = removeLegacy(claudeDir, backupDir);
 	}
 
+	// Record the version that is now installed (post-install), not the pre-install one.
+	const installedVersion = detectPluginState(claudeDir).version;
 	const receiptPath = writeReceipt(claudeDir, {
 		fromMode: before.mode,
 		toMode: "plugin",
-		pluginVersion: before.plugin.version,
+		pluginVersion: installedVersion,
 		backupDir,
 		removedPaths,
 		timestamp: ts,
@@ -162,12 +180,16 @@ function collectTrackedFiles(meta: unknown): TrackedFile[] {
 			}
 		}
 	};
+	// Engineer-scoped ONLY: this migration must never touch other kits' files.
 	if (isRecord(meta.kits)) {
-		for (const kit of Object.values(meta.kits)) {
-			if (isRecord(kit)) push(kit.files);
-		}
+		// Multi-kit format: only the engineer kit's tracked files.
+		const engineer = (meta.kits as Record<string, unknown>)[ENGINEER_KIT_KEY];
+		if (isRecord(engineer)) push(engineer.files);
+	} else {
+		// Legacy single-kit format (no kits{}): root files belong to the only installed
+		// kit, and migration is gated to the engineer kit by the caller.
+		push(meta.files);
 	}
-	push(meta.files);
 	return out;
 }
 

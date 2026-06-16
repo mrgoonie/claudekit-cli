@@ -183,4 +183,35 @@ describe("defaultLegacyRemover", () => {
 		expect(existsSync(join(claudeDir, "skills", "mine", "SKILL.md"))).toBe(true); // user preserved
 		expect(existsSync(join(backupDir, "skills", "cook", "SKILL.md"))).toBe(true); // backed up
 	});
+
+	test("multi-kit: removes ONLY engineer kit files, never another kit's files", async () => {
+		await mkdir(join(claudeDir, "skills", "engskill"), { recursive: true });
+		await mkdir(join(claudeDir, "skills", "mktskill"), { recursive: true });
+		await writeFile(join(claudeDir, "skills", "engskill", "SKILL.md"), "eng", "utf-8");
+		await writeFile(join(claudeDir, "skills", "mktskill", "SKILL.md"), "mkt", "utf-8");
+		await writeFile(
+			join(claudeDir, "metadata.json"),
+			JSON.stringify({
+				kits: {
+					engineer: {
+						version: "2.19.0",
+						installedAt: "x",
+						files: [{ path: "skills/engskill/SKILL.md", ownership: "ck" }],
+					},
+					marketing: {
+						version: "1.0.0",
+						installedAt: "x",
+						files: [{ path: "skills/mktskill/SKILL.md", ownership: "ck" }],
+					},
+				},
+			}),
+			"utf-8",
+		);
+
+		const removed = defaultLegacyRemover(claudeDir, backupDir);
+
+		expect(removed).toEqual(["skills/engskill/SKILL.md"]); // engineer only
+		expect(existsSync(join(claudeDir, "skills", "engskill", "SKILL.md"))).toBe(false);
+		expect(existsSync(join(claudeDir, "skills", "mktskill", "SKILL.md"))).toBe(true); // marketing untouched
+	});
 });
