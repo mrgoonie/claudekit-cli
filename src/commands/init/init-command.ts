@@ -21,6 +21,7 @@ import {
 	handleMerge,
 	handleMigration,
 	handleOpenCode,
+	handlePluginInstall,
 	handlePostInstall,
 	handleSelection,
 	handleSync,
@@ -98,6 +99,9 @@ async function installAdditionalKit(baseCtx: InitContext, kitType: KitType): Pro
 	// Phase 7: File merge
 	ctx = await handleMerge(ctx);
 	if (ctx.cancelled) return ctx;
+
+	// Phase 7.5: Install engineer kit as a plugin (global installs) — additive, non-fatal
+	ctx = await handlePluginInstall(ctx);
 
 	// Phase 8: Post-installation
 	ctx = await handlePostInstall(ctx);
@@ -245,6 +249,11 @@ async function executeInit(options: UpdateCommandOptions, prompts: PromptsManage
 	if (!isSyncMode) {
 		ctx = await handleMerge(ctx);
 		if (ctx.cancelled) return;
+	}
+
+	// Phase 7.5: Install engineer kit as a plugin (global installs) — additive, non-fatal
+	if (!isSyncMode) {
+		ctx = await handlePluginInstall(ctx);
 	}
 
 	// Phase 8: Post-installation tasks (skip in sync mode)

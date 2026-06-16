@@ -10,6 +10,7 @@ export { handleMigration } from "./migration-handler.js";
 export { handleOpenCode } from "./opencode-handler.js";
 export { resolveOptions } from "./options-resolver.js";
 export { handlePostInstall } from "./post-install-handler.js";
+export { handlePluginInstall } from "./plugin-install-handler.js";
 export { handleSelection } from "./selection-handler.js";
 export { executeSyncMerge, handleSync } from "./sync-handler.js";
 export { handleTransforms } from "./transform-handler.js";
