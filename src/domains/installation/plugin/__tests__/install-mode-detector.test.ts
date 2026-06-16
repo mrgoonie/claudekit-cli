@@ -81,11 +81,31 @@ describe("install-mode-detector", () => {
 		expect(plugin.enabled).toBe(false);
 	});
 
-	test("plugin: cache present resolves version, even without settings entry", async () => {
+	test("plugin: orphaned cache (no settings entry) is staleCache, NOT installed", async () => {
+		// uninstall removes the enabledPlugins registration but leaves the cached payload
+		await makePluginCache("claudekit", "87a174162601");
+		const plugin = detectPluginState(claudeDir);
+		expect(plugin.installed).toBe(false);
+		expect(plugin.staleCache).toBe(true);
+		expect(plugin.marketplace).toBe("claudekit");
+		expect(plugin.version).toBe("87a174162601");
+	});
+
+	test("legacy + orphaned plugin cache classifies as legacy (matches claude plugin list)", async () => {
+		await writeMetadata({ kits: { engineer: { version: "2.19.0", installedAt: "x" } } });
+		await makePluginCache("claudekit", "87a174162601");
+		const report = detectInstallMode(claudeDir);
+		expect(report.mode).toBe("legacy");
+		expect(report.plugin.installed).toBe(false);
+		expect(report.plugin.staleCache).toBe(true);
+	});
+
+	test("registered plugin with cache is installed, not stale", async () => {
+		await writeSettings({ "ck@claudekit": true });
 		await makePluginCache("claudekit", "87a174162601");
 		const plugin = detectPluginState(claudeDir);
 		expect(plugin.installed).toBe(true);
-		expect(plugin.marketplace).toBe("claudekit");
+		expect(plugin.staleCache).toBe(false);
 		expect(plugin.version).toBe("87a174162601");
 	});
 
@@ -111,6 +131,7 @@ describe("install-mode-detector", () => {
 			enabled: installed,
 			version: null,
 			marketplace: null,
+			staleCache: false,
 		});
 		const L = (installed: boolean) => ({ installed, version: null });
 		expect(classifyInstallMode(P(false), L(false))).toBe("fresh");

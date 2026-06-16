@@ -23,7 +23,7 @@ export const ENGINEER_KIT_KEY = "engineer";
 export type InstallMode = "fresh" | "legacy" | "plugin" | "mixed";
 
 export interface PluginState {
-	/** Plugin payload exists in the plugin cache, or is referenced in settings. */
+	/** Registered in settings.json enabledPlugins (authoritative; matches `claude plugin list`). */
 	installed: boolean;
 	/** settings.json enabledPlugins marks the plugin enabled. */
 	enabled: boolean;
@@ -31,6 +31,8 @@ export interface PluginState {
 	version: string | null;
 	/** Marketplace the plugin was installed from, or null. */
 	marketplace: string | null;
+	/** Cache payload on disk but NOT registered — an orphaned cache left by uninstall. */
+	staleCache: boolean;
 }
 
 export interface LegacyState {
@@ -62,17 +64,22 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 /**
  * Detect Claude Code plugin install state for the `ck` plugin.
  *
- * Two independent signals are combined:
- *  1. settings.json `enabledPlugins` keys of the form `ck@<marketplace>` (enable state)
- *  2. the plugin cache directory `plugins/cache/<marketplace>/ck/<version>/` (payload presence)
- *
- * A plugin can be installed-but-disabled (cache present, enabledPlugins false/absent),
- * so installed is the OR of both signals while enabled requires the settings flag.
+ * `installed` is authoritative from settings.json `enabledPlugins` (this is what
+ * `claude plugin list` reflects). The plugin cache directory
+ * `plugins/cache/<marketplace>/ck/<version>/` resolves the version, and when it
+ * exists WITHOUT a registration it is reported as an orphaned `staleCache`
+ * (uninstall removes the registration but leaves the cached payload on disk).
  */
 export function detectPluginState(claudeDir: string): PluginState {
-	const state: PluginState = { installed: false, enabled: false, version: null, marketplace: null };
+	const state: PluginState = {
+		installed: false,
+		enabled: false,
+		version: null,
+		marketplace: null,
+		staleCache: false,
+	};
 
-	// Signal 1: settings.json enabledPlugins (key = "<plugin>@<marketplace>")
+	// Authoritative signal: settings.json enabledPlugins (key = "<plugin>@<marketplace>")
 	const settings = readJsonSafe(join(claudeDir, "settings.json"));
 	if (isRecord(settings) && isRecord(settings.enabledPlugins)) {
 		for (const [key, value] of Object.entries(settings.enabledPlugins)) {
@@ -86,13 +93,12 @@ export function detectPluginState(claudeDir: string): PluginState {
 		}
 	}
 
-	// Signal 2: plugin cache payload (plugins/cache/<marketplace>/ck/<version>/)
+	// Cache payload: resolves version; flags an orphaned cache when not registered.
 	const cacheRoot = join(claudeDir, "plugins", "cache");
 	if (existsSync(cacheRoot)) {
 		for (const marketplace of safeReaddir(cacheRoot)) {
 			const ckDir = join(cacheRoot, marketplace, CK_PLUGIN_NAME);
 			if (existsSync(ckDir) && isDir(ckDir)) {
-				state.installed = true;
 				state.marketplace = state.marketplace ?? marketplace;
 				const versions = safeReaddir(ckDir).filter((v) => isDir(join(ckDir, v)));
 				if (versions.length > 0 && state.version === null) {
@@ -101,6 +107,7 @@ export function detectPluginState(claudeDir: string): PluginState {
 						.map((v) => ({ v, mtime: statMtime(join(ckDir, v)) }))
 						.sort((a, b) => b.mtime - a.mtime)[0].v;
 				}
+				if (!state.installed) state.staleCache = true;
 				break;
 			}
 		}
