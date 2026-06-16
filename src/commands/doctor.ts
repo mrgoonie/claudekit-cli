@@ -8,6 +8,7 @@ import {
 	GitHubReachabilityChecker,
 	NetworkChecker,
 	PlatformChecker,
+	PluginInstallModeChecker,
 	ReportGenerator,
 	SystemChecker,
 } from "@/domains/health-checks/index.js";
@@ -136,6 +137,7 @@ function createDoctorRunner(options: CheckRunnerOptions): CheckRunner {
 	const runner = new CheckRunner(options);
 	runner.registerChecker(new SystemChecker());
 	runner.registerChecker(new ClaudekitChecker());
+	runner.registerChecker(new PluginInstallModeChecker());
 	runner.registerChecker(new AuthChecker());
 	runner.registerChecker(new PlatformChecker());
 	runner.registerChecker(new NetworkChecker());
