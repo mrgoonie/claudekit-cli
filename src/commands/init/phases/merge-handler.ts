@@ -95,6 +95,7 @@ export async function handleMerge(ctx: InitContext): Promise<InitContext> {
 
 	merger.setGlobalFlag(ctx.options.global);
 	merger.setForceOverwriteSettings(ctx.options.forceOverwriteSettings);
+	merger.setPreserveDeletedSkills(!ctx.options.forceOverwrite && !ctx.options.fresh);
 	merger.setRestoreCkHooks(ctx.options.restoreCkHooks);
 	merger.setProjectDir(ctx.resolvedDir);
 	merger.setKitName(ctx.kit.name);
@@ -220,6 +221,7 @@ export async function handleMerge(ctx: InitContext): Promise<InitContext> {
 		releaseTag: installedVersion,
 		mode: ctx.options.global ? "global" : "local",
 		kitType: ctx.kitType,
+		ignoredSkills: merger.getIgnoredSkillDirectories(),
 	});
 
 	return {

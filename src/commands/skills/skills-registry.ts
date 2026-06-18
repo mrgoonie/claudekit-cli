@@ -5,7 +5,7 @@
 import { existsSync } from "node:fs";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
-import { dirname, join, sep } from "node:path";
+import { dirname, join } from "node:path";
 import { z } from "zod";
 import type { AgentType } from "./types.js";
 
@@ -55,18 +55,53 @@ function getCliVersion(): string {
 
 /** Legacy path segments to migrate in registry entries (old -> new)
  * Keep in sync with LEGACY_SKILL_PATHS in skills-installer.ts */
-const REGISTRY_PATH_MIGRATIONS: Array<{ agent: string; oldSegment: string; newSegment: string }> = [
+const REGISTRY_PATH_MIGRATIONS: Array<{ agent: string; oldPath: string; newPath: string }> = [
 	{
 		agent: "gemini-cli",
-		oldSegment: `${sep}.gemini${sep}skills${sep}`,
-		newSegment: `${sep}.agents${sep}skills${sep}`,
+		oldPath: ".gemini/skills",
+		newPath: ".agents/skills",
 	},
 	{
-		agent: "gemini-cli",
-		oldSegment: `${sep}.gemini${sep}skills`,
-		newSegment: `${sep}.agents${sep}skills`,
+		agent: "antigravity",
+		oldPath: ".agent/skills",
+		newPath: ".agents/skills",
+	},
+	{
+		agent: "antigravity",
+		oldPath: ".gemini/antigravity/skills",
+		newPath: ".gemini/config/skills",
 	},
 ];
+
+function migratePathBySegments(pathValue: string, oldPath: string, newPath: string): string | null {
+	const usesBackslash = pathValue.includes("\\") && !pathValue.includes("/");
+	const separator = usesBackslash ? "\\" : "/";
+	const normalized = pathValue.replace(/\\/g, "/");
+	const oldSegments = oldPath.split("/").filter(Boolean);
+	const newSegments = newPath.split("/").filter(Boolean);
+	const segments = normalized.split("/").filter((segment, index) => index > 0 || segment !== "");
+
+	for (let i = 0; i <= segments.length - oldSegments.length; i++) {
+		let matches = true;
+		for (let j = 0; j < oldSegments.length; j++) {
+			if (segments[i + j] !== oldSegments[j]) {
+				matches = false;
+				break;
+			}
+		}
+		if (!matches) continue;
+
+		const migratedSegments = [
+			...segments.slice(0, i),
+			...newSegments,
+			...segments.slice(i + oldSegments.length),
+		];
+		const prefix = normalized.startsWith("/") ? separator : "";
+		return `${prefix}${migratedSegments.join(separator)}`;
+	}
+
+	return null;
+}
 
 /**
  * Migrate legacy paths in registry entries (e.g., .gemini/skills -> .agents/skills)
@@ -76,8 +111,12 @@ function migrateRegistryPaths(registry: SkillRegistry): boolean {
 	let changed = false;
 	for (const entry of registry.installations) {
 		for (const migration of REGISTRY_PATH_MIGRATIONS) {
-			if (entry.agent === migration.agent && entry.path.includes(migration.oldSegment)) {
-				entry.path = entry.path.replace(migration.oldSegment, migration.newSegment);
+			const migratedPath =
+				entry.agent === migration.agent
+					? migratePathBySegments(entry.path, migration.oldPath, migration.newPath)
+					: null;
+			if (migratedPath) {
+				entry.path = migratedPath;
 				changed = true;
 				break; // Only apply first matching migration per entry
 			}

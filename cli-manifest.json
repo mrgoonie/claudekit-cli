@@ -1,6 +1,6 @@
 {
-	"version": "4.3.1-dev.20",
-	"generatedAt": "2026-05-27T13:56:54.428Z",
+	"version": "4.4.0-dev.16",
+	"generatedAt": "2026-06-18T06:33:00.519Z",
 	"commands": {
 		"agents": {
 			"name": "agents",
@@ -1214,7 +1214,7 @@
 		},
 		"migrate": {
 			"name": "migrate",
-			"description": "Migrate Claude Code agents, commands, skills, config, rules, and hooks to other providers",
+			"description": "Migrate Claude Code agents, commands, skills, config, rules, and hooks to other providers (e.g. Codex). Set updatePipeline.autoMigrateAfterUpdate to keep targets in sync with Claude Code on each `ck update`.",
 			"usage": "ck migrate [options]",
 			"examples": [
 				{
@@ -1342,7 +1342,7 @@
 			"sections": [
 				{
 					"title": "Gotchas",
-					"content": "  --install and --reconcile are mutually exclusive — pass only one\n  --reinstall-empty-dirs and --respect-deletions are mutually exclusive — pass only one\n  Default mode is smart-detected: no/stale registry → install, valid registry → reconcile\n  --respect-deletions disables the auto-reinstall heuristic for empty directories\n  --force overrides skip decisions per item; --reinstall-empty-dirs is a per-directory heuristic\n  Codex commands migrate as skills: project scope writes .agents/skills, global scope writes ~/.agents/skills"
+					"content": "  --install and --reconcile are mutually exclusive — pass only one\n  --reinstall-empty-dirs and --respect-deletions are mutually exclusive — pass only one\n  Default mode is smart-detected: no/stale registry → install, valid registry → reconcile\n  --respect-deletions disables the auto-reinstall heuristic for empty directories\n  --force overrides skip decisions per item; --reinstall-empty-dirs is a per-directory heuristic\n  Codex commands migrate as skills: project scope writes .agents/skills, global scope writes ~/.agents/skills\n  Antigravity 2.0 agents migrate to .agents/agents.md; skills remain .agents/skills/<name>/SKILL.md\n  Kiro agents migrate as custom subagents; rules/config migrate as steering files; skills copy to .kiro/skills; commands/hooks are skipped"
 				}
 			]
 		},
@@ -1867,7 +1867,7 @@
 						},
 						{
 							"flags": "-a, --agent <agent>",
-							"description": "Target agent(s) - can be specified multiple times. Valid: claude-code, cursor, codex, opencode, goose, gemini-cli, antigravity, github-copilot, amp, kilo, roo, windsurf, cline, openhands"
+							"description": "Target agent(s) - can be specified multiple times. Valid: claude-code, cursor, codex, opencode, goose, gemini-cli, antigravity, github-copilot, amp, kilo, kiro, roo, windsurf, cline, openhands"
 						},
 						{
 							"flags": "-g, --global",
@@ -1925,7 +1925,7 @@
 			"sections": [
 				{
 					"title": "Supported Agents",
-					"content": "  claude-code     Claude Code CLI\n  cursor          Cursor IDE\n  codex           Codex CLI\n  opencode        OpenCode\n  goose           Goose AI\n  gemini-cli      Gemini CLI\n  antigravity     Antigravity Agent\n  github-copilot  GitHub Copilot\n  amp             Amp\n  kilo            Kilo Code\n  roo             Roo Code\n  windsurf        Windsurf IDE\n  cline           Cline\n  openhands       OpenHands"
+					"content": "  claude-code     Claude Code CLI\n  cursor          Cursor IDE\n  codex           Codex CLI\n  opencode        OpenCode\n  goose           Goose AI\n  gemini-cli      Gemini CLI\n  antigravity     Antigravity Agent\n  github-copilot  GitHub Copilot\n  amp             Amp\n  kilo            Kilo Code\n  kiro            Kiro\n  roo             Roo Code\n  windsurf        Windsurf IDE\n  cline           Cline\n  openhands       OpenHands"
 				},
 				{
 					"title": "Notes",

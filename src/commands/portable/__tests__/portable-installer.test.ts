@@ -708,6 +708,191 @@ describe("nested command flattening", () => {
 	});
 });
 
+describe("Kiro migration targets", () => {
+	beforeEach(() => {
+		addPortableInstallationMock.mockClear();
+		addPortableInstallationMock.mockImplementation(async () => undefined);
+	});
+
+	test("installs agents as Kiro custom subagents and rules/config as Kiro steering files", async () => {
+		const tempDir = await mkdtemp(join(process.cwd(), ".tmp-portable-kiro-steering-"));
+		const agentsDir = join(tempDir, ".kiro", "agents");
+		const steeringDir = join(tempDir, ".kiro", "steering");
+		const configPath = join(steeringDir, "project.md");
+		const agentPathConfig = getPathConfig("kiro", "agents");
+		const rulesPathConfig = getPathConfig("kiro", "rules");
+		const configPathConfig = getPathConfig("kiro", "config");
+		const originalAgentPath = agentPathConfig.projectPath;
+		const originalRulesPath = rulesPathConfig.projectPath;
+		const originalConfigPath = configPathConfig.projectPath;
+
+		try {
+			agentPathConfig.projectPath = agentsDir;
+			rulesPathConfig.projectPath = steeringDir;
+			configPathConfig.projectPath = configPath;
+
+			const agentResults = await installPortableItems(
+				[
+					makePortableItem({
+						type: "agent",
+						name: "reviewer",
+						frontmatter: { name: "Reviewer", tools: "Read,Edit" },
+						body: "Review code changes.",
+					}),
+				],
+				["kiro"],
+				"agent",
+				{ global: false },
+			);
+
+			const ruleResults = await installPortableItems(
+				[
+					makePortableItem({
+						type: "rules",
+						name: "typescript-rules",
+						frontmatter: {},
+						body: "Prefer strict TypeScript.",
+					}),
+				],
+				["kiro"],
+				"rules",
+				{ global: false },
+			);
+
+			const configResults = await installPortableItems(
+				[
+					makePortableItem({
+						type: "config",
+						name: "project",
+						frontmatter: {},
+						body: "Project context for Kiro.",
+					}),
+				],
+				["kiro"],
+				"config",
+				{ global: false },
+			);
+
+			expect(agentResults[0].success).toBe(true);
+			expect(ruleResults[0].success).toBe(true);
+			expect(configResults[0].success).toBe(true);
+
+			const agentContent = await readFile(join(agentsDir, "reviewer.md"), "utf-8");
+			const ruleContent = await readFile(join(steeringDir, "typescript-rules.md"), "utf-8");
+			const configContent = await readFile(configPath, "utf-8");
+
+			expect(agentContent).toContain('name: "reviewer"');
+			expect(agentContent).toContain('description: "Sample portable item"');
+			expect(agentContent).toContain('tools: ["read","write"]');
+			expect(agentContent).toContain("Review code changes.");
+
+			expect(ruleContent).toContain("inclusion: fileMatch");
+			expect(ruleContent).toContain('fileMatchPattern: "**/*.{ts,tsx}"');
+			expect(ruleContent).toContain("Prefer strict TypeScript.");
+
+			expect(configContent).toContain("inclusion: always");
+			expect(configContent).toContain("# project");
+			expect(configContent).toContain("Project context for Kiro.");
+		} finally {
+			agentPathConfig.projectPath = originalAgentPath;
+			rulesPathConfig.projectPath = originalRulesPath;
+			configPathConfig.projectPath = originalConfigPath;
+			await rm(tempDir, { recursive: true, force: true });
+		}
+	});
+});
+
+describe("Antigravity 2.0 migration targets", () => {
+	beforeEach(() => {
+		addPortableInstallationMock.mockClear();
+		addPortableInstallationMock.mockImplementation(async () => undefined);
+	});
+
+	test("installs agents into agents.md and commands/rules into .agents namespaces", async () => {
+		const tempDir = await mkdtemp(join(process.cwd(), ".tmp-portable-antigravity-"));
+		const agentsFile = join(tempDir, ".agents", "agents.md");
+		const workflowsDir = join(tempDir, ".agents", "workflows");
+		const rulesDir = join(tempDir, ".agents", "rules");
+		const agentPathConfig = getPathConfig("antigravity", "agents");
+		const commandPathConfig = getPathConfig("antigravity", "commands");
+		const rulesPathConfig = getPathConfig("antigravity", "rules");
+		const originalAgentPath = agentPathConfig.projectPath;
+		const originalCommandPath = commandPathConfig.projectPath;
+		const originalRulesPath = rulesPathConfig.projectPath;
+
+		try {
+			agentPathConfig.projectPath = agentsFile;
+			commandPathConfig.projectPath = workflowsDir;
+			rulesPathConfig.projectPath = rulesDir;
+
+			const agentResults = await installPortableItems(
+				[
+					makePortableItem({
+						type: "agent",
+						name: "reviewer",
+						frontmatter: { name: "Reviewer", description: "Review code", tools: "Read" },
+						description: "Review code",
+						body: "Use .claude/skills/cook/SKILL.md while reviewing.",
+					}),
+				],
+				["antigravity"],
+				"agent",
+				{ global: false },
+			);
+
+			const commandResults = await installPortableItems(
+				[
+					makePortableItem({
+						type: "command",
+						name: "release",
+						frontmatter: { description: "Prepare release" },
+						body: "Follow .claude/rules/release.md before shipping.",
+					}),
+				],
+				["antigravity"],
+				"command",
+				{ global: false },
+			);
+
+			const ruleResults = await installPortableItems(
+				[
+					makePortableItem({
+						type: "rules",
+						name: "typescript",
+						frontmatter: {},
+						body: "Prefer strict TypeScript and check .claude/commands/release.md.",
+					}),
+				],
+				["antigravity"],
+				"rules",
+				{ global: false },
+			);
+
+			expect(agentResults[0].success).toBe(true);
+			expect(commandResults[0].success).toBe(true);
+			expect(ruleResults[0].success).toBe(true);
+
+			const agentContent = await readFile(agentsFile, "utf-8");
+			const commandContent = await readFile(join(workflowsDir, "release.md"), "utf-8");
+			const ruleContent = await readFile(join(rulesDir, "typescript.md"), "utf-8");
+
+			expect(agentResults[0].path).toBe(agentsFile);
+			expect(agentContent).toContain("# Agents");
+			expect(agentContent).toContain("## Agent: Reviewer");
+			expect(agentContent).toContain(".agents/skills/cook/SKILL.md");
+			expect(commandContent).toContain(".agents/rules/release.md");
+			expect(commandContent).not.toContain(".agent/");
+			expect(ruleContent).toContain(".agents/workflows/release.md");
+			expect(ruleContent).not.toContain(".agent/");
+		} finally {
+			agentPathConfig.projectPath = originalAgentPath;
+			commandPathConfig.projectPath = originalCommandPath;
+			rulesPathConfig.projectPath = originalRulesPath;
+			await rm(tempDir, { recursive: true, force: true });
+		}
+	});
+});
+
 describe("cross-kind section preservation (issue #415)", () => {
 	beforeEach(() => {
 		addPortableInstallationMock.mockClear();

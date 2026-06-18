@@ -84,32 +84,62 @@ export class CheckRunner {
 	 * Adds timing information to each check result for verbose mode
 	 */
 	private async executeCheckersInParallel(checkers: Checker[]): Promise<CheckResult[]> {
-		const resultsArrays = await Promise.all(
-			checkers.map(async (checker) => {
-				logger.verbose(`Starting checker: ${checker.group}`);
+		const runChecker = async (checker: Checker): Promise<CheckResult[]> => {
+			logger.verbose(`Starting checker: ${checker.group}`);
 
-				// Timing wrapper for verbose mode
-				const startTime = Date.now();
-				const results = await checker.run();
-				const totalDuration = Date.now() - startTime;
+			// Timing wrapper for verbose mode
+			const startTime = Date.now();
+			const results = await checker.run();
+			const totalDuration = Date.now() - startTime;
 
-				// Distribute duration across checks (approximate per-check timing)
-				const perCheckDuration =
-					results.length > 0 ? Math.round(totalDuration / results.length) : totalDuration;
+			// Distribute duration across checks (approximate per-check timing)
+			const perCheckDuration =
+				results.length > 0 ? Math.round(totalDuration / results.length) : totalDuration;
 
-				// Add duration to each result
-				for (const result of results) {
-					result.duration = perCheckDuration;
-				}
+			// Add duration to each result
+			for (const result of results) {
+				result.duration = perCheckDuration;
+			}
 
-				logger.verbose(`Completed checker: ${checker.group}`, {
-					checkCount: results.length,
-					duration: totalDuration,
-				});
-				return results;
-			}),
+			logger.verbose(`Completed checker: ${checker.group}`, {
+				checkCount: results.length,
+				duration: totalDuration,
+			});
+			return results;
+		};
+
+		// The "network" group probes DNS/TCP/TLS/HTTP with short, wall-clock
+		// timeouts. Other groups run synchronous child-process calls that freeze
+		// the single thread for hundreds of ms to seconds — `gh auth status`
+		// (validates over the network) in the "auth" group, `npm view <pkg>
+		// version` and per-file `node --check` in the "claudekit" group. Running
+		// every checker in one Promise.all let those freezes starve the network
+		// probes: their timers fire the instant the loop resumes, reporting false
+		// "unreachable"/timeout on a perfectly healthy connection. Run the network
+		// group first against a free event loop so its timing stays honest, then
+		// run the remaining (loop-blocking) checkers together.
+		const indexedCheckers = checkers.map((checker, index) => ({ checker, index }));
+		const networkCheckers = indexedCheckers.filter(({ checker }) => checker.group === "network");
+		const otherCheckers = indexedCheckers.filter(({ checker }) => checker.group !== "network");
+
+		const networkResults = networkCheckers.length
+			? await Promise.all(
+					networkCheckers.map(async ({ checker, index }) => ({
+						index,
+						results: await runChecker(checker),
+					})),
+				)
+			: [];
+		const otherResults = await Promise.all(
+			otherCheckers.map(async ({ checker, index }) => ({
+				index,
+				results: await runChecker(checker),
+			})),
 		);
-		return resultsArrays.flat();
+
+		return [...networkResults, ...otherResults]
+			.sort((a, b) => a.index - b.index)
+			.flatMap(({ results }) => results);
 	}
 
 	/**

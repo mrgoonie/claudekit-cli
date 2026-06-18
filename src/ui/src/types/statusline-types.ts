@@ -78,7 +78,7 @@ export const DEFAULT_STATUSLINE_THEME: StatuslineTheme = {
 	muted: "dim",
 	separator: "dim",
 	quotaLow: "green",
-	quotaHigh: "yellow",
+	quotaHigh: "red",
 };
 
 // UI-local copy synced from src/types/statusline-section-defaults.ts — keep in sync

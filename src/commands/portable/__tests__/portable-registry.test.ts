@@ -8,15 +8,19 @@ import { existsSync } from "node:fs";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
-import {
-	type PortableRegistryV3,
+import type { PortableRegistryV3 } from "../portable-registry.js";
+
+// Load an isolated module instance so Bun's global module mocks in sibling tests cannot
+// replace addPortableInstallation with a no-op during full-suite CI runs.
+const portableRegistryTestModule = "../portable-registry.js?portable-registry-test";
+const {
 	addPortableInstallation,
 	readPortableRegistry,
 	removeInstallationsByFilter,
 	removePortableInstallation,
 	updateAppliedManifestVersion,
 	writePortableRegistry,
-} from "../portable-registry.js";
+} = (await import(portableRegistryTestModule)) as typeof import("../portable-registry.js");
 
 const originalCkTestHome = process.env.CK_TEST_HOME;
 let testHome: string | null = null;

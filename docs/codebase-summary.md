@@ -488,7 +488,7 @@ Business logic by domain with facade pattern.
 **config/** - Config management (generator, manager, validator), merger with conflict resolution and diff calculation
 **github/** - GitHub API client (Octokit wrapper), auth (GitHub CLI only), npm registry
 **health-checks/** - Doctor command: 11 parallel checkers (system, auth, GitHub, ClaudeKit, platform, network, etc.) + auto-healer
-**installation/** - Download (streaming), extract (ZIP/TAR with security validation), merge (selective, multi-kit aware), package manager detection
+**installation/** - Download (streaming), extract (ZIP/TAR with security validation), merge (selective, multi-kit aware, preserves ignored/deleted skills), package manager detection
 **skills/** - Detection (config, dependencies, scripts), customization scanning (hashing), migration executor (backup/rollback)
 **ui/** - Interactive prompts (kit/version selection, confirmations), ownership display (3-state model)
 **versioning/** - Version checking (CLI/kit) with caching (7-day TTL), stable-by-default CLI updates, selection UI, beta/prerelease filtering
@@ -552,6 +552,7 @@ installation/
 - `setMultiKitContext(claudeDir, installingKit)`: Enable cross-kit file checking
 - Tracks shared files and skipped count statistics
 - Prevents overwriting newer versions from other kits
+- Preserves skill directories intentionally deleted by the user and records them as per-kit ignored skills; `--force-overwrite` reinstalls them
 - Passes multi-kit context to SelectiveMerger for intelligent decisions
 
 `file-merger.ts` (ENHANCED):
@@ -582,7 +583,7 @@ Facades: version-checker, selector. Submodules: checking (cli/kit checkers, noti
 Cross-domain services with focused submodules.
 
 #### file-operations/ - File System Operations
-Facade: manifest-writer. Ownership-checker. Manifest/ submodule: reader (multi-kit aware, `findFileInInstalledKits()`), tracker, updater. Supports multi-kit + legacy format metadata.
+Facade: manifest-writer. Ownership-checker. Manifest/ submodule: reader (multi-kit aware, `findFileInInstalledKits()`), tracker, updater. Supports multi-kit + legacy format metadata, including per-kit `ignoredSkills` roots for update-time skill opt-outs.
 
 #### package-installer/ - Package Installation (17 files + gemini-mcp/)
 Dependency installer (Node, Python, system). Gemini MCP linker for AI tooling. Process executor for system commands. Detection of installed package managers.

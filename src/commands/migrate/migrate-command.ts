@@ -69,6 +69,7 @@ import {
 import type {
 	ReconcileAction,
 	ReconcileBanner,
+	ReconcilePlan,
 	ReconcileProviderInput,
 	SourceItemState,
 	TargetFileState,
@@ -215,6 +216,59 @@ export function appendMigrationWarningMessages(
 			target.push(warning.message);
 		}
 	}
+}
+
+export function appendFallbackSkillActionsToPlan(
+	plan: ReconcilePlan,
+	skills: SkillInfo[],
+	selectedProviders: ProviderType[],
+	installGlobally: boolean,
+): ReconcilePlan {
+	if (skills.length === 0) return plan;
+
+	const existingSkillKeys = new Set(
+		plan.actions
+			.filter((action) => action.type === "skill")
+			.map((action) => `${action.provider}\0${String(action.global)}\0${action.item}`),
+	);
+	const fallbackActions: ReconcileAction[] = [];
+
+	for (const provider of selectedProviders.filter((entry) =>
+		getProvidersSupporting("skills").includes(entry),
+	)) {
+		const global = resolvePortableTypeGlobal(provider, "skill", installGlobally);
+		const basePath = getPortableBasePath(provider, "skills", { global });
+		if (!basePath) continue;
+
+		for (const skill of skills) {
+			const key = `${provider}\0${String(global)}\0${skill.name}`;
+			if (existingSkillKeys.has(key)) continue;
+			existingSkillKeys.add(key);
+			fallbackActions.push({
+				action: "install",
+				global,
+				isDirectoryItem: true,
+				item: skill.name,
+				provider,
+				reason: "New item, not previously installed",
+				reasonCode: "new-item",
+				reasonCopy: "New - not previously installed",
+				targetPath: join(basePath, skill.name),
+				type: "skill",
+			});
+		}
+	}
+
+	if (fallbackActions.length === 0) return plan;
+
+	return {
+		...plan,
+		actions: [...plan.actions, ...fallbackActions],
+		summary: {
+			...plan.summary,
+			install: plan.summary.install + fallbackActions.length,
+		},
+	};
 }
 
 /**
@@ -450,6 +504,65 @@ async function executeDeleteAction(
 			error: error instanceof Error ? error.message : "Delete action failed",
 		};
 	}
+}
+
+function hasSuccessfulReplacementWrite(
+	action: ReconcileAction,
+	results: PortableInstallResult[],
+): boolean {
+	return results.some(
+		(result) =>
+			result.success &&
+			!result.skipped &&
+			result.provider === action.provider &&
+			replacementTypeMatches(action.type, result.portableType) &&
+			replacementItemMatches(action, result) &&
+			result.path.length > 0 &&
+			resolve(result.path) !== resolve(action.targetPath),
+	);
+}
+
+function replacementTypeMatches(
+	actionType: ReconcileAction["type"],
+	resultType: PortableInstallResult["portableType"],
+): boolean {
+	return resultType === actionType || (actionType === "command" && resultType === "skill");
+}
+
+function replacementItemMatches(action: ReconcileAction, result: PortableInstallResult): boolean {
+	if (result.itemName === action.item || result.itemName === undefined) return true;
+
+	const parts = result.path.replace(/\\/g, "/").split("/");
+	const leaf = parts.at(-1) ?? "";
+	const parent = parts.at(-2) ?? "";
+	const leafName = leaf.replace(/\.[^.]+$/, "");
+	return (
+		leafName === action.item ||
+		parent === action.item ||
+		(action.type === "command" && parent === `source-command-${action.item}`)
+	);
+}
+
+export function shouldRunDeleteAction(
+	action: ReconcileAction,
+	results: PortableInstallResult[],
+): boolean {
+	if (action.reasonCode !== "path-migrated-cleanup") return true;
+	return hasSuccessfulReplacementWrite(action, results);
+}
+
+function createSkippedPathMigrationCleanupResult(action: ReconcileAction): PortableInstallResult {
+	return {
+		operation: "delete",
+		portableType: action.type,
+		itemName: action.item,
+		provider: action.provider as ProviderType,
+		providerDisplayName: providers[action.provider as ProviderType]?.displayName || action.provider,
+		success: true,
+		path: action.targetPath,
+		skipped: true,
+		skipReason: "Legacy path cleanup skipped because no successful replacement write was recorded",
+	};
 }
 
 /**
@@ -887,15 +1000,20 @@ export async function migrateCommand(options: MigrateOptions): Promise<void> {
 			? false
 			: (options.reinstallEmptyDirs ?? true);
 
-		const plan = reconcile({
-			sourceItems: sourceStates,
-			registry,
-			targetStates,
-			providerConfigs,
-			force: options.force,
-			typeDirectoryStates,
-			respectDeletions: !reinstallEmptyDirs,
-		});
+		const plan = appendFallbackSkillActionsToPlan(
+			reconcile({
+				sourceItems: sourceStates,
+				registry,
+				targetStates,
+				providerConfigs,
+				force: options.force,
+				typeDirectoryStates,
+				respectDeletions: !reinstallEmptyDirs,
+			}),
+			effectiveSkills,
+			selectedProviders,
+			installGlobally,
+		);
 
 		reconcileSpinner.stop("Plan computed");
 
@@ -909,16 +1027,7 @@ export async function migrateCommand(options: MigrateOptions): Promise<void> {
 
 		// Dry-run: show plan and exit
 		if (options.dryRun) {
-			displayMigrationSummary(
-				plan,
-				buildDryRunFallbackResults(
-					effectiveSkills,
-					selectedProviders,
-					installGlobally,
-					plan.actions,
-				),
-				{ color: useColor, dryRun: true },
-			);
+			displayMigrationSummary(plan, [], { color: useColor, dryRun: true });
 			return;
 		}
 
@@ -1062,27 +1171,6 @@ export async function migrateCommand(options: MigrateOptions): Promise<void> {
 				const item = hookByName.get(action.item);
 				if (!item || !getProvidersSupporting("hooks").includes(provider)) continue;
 				writeTasks.push({ item, provider, type: "hooks", global: action.global });
-			}
-		}
-
-		// Skills are directory-based and not fully represented in current reconcile source states.
-		// Preserve existing migration behavior until skills become first-class reconcile actions.
-		const plannedSkillActions = plannedExecActions.filter(
-			(action) => action.type === "skill",
-		).length;
-		if (effectiveSkills.length > 0 && plannedSkillActions === 0) {
-			const skillProviders = selectedProviders.filter((pv) =>
-				getProvidersSupporting("skills").includes(pv),
-			);
-			for (const provider of skillProviders) {
-				for (const skill of effectiveSkills) {
-					writeTasks.push({
-						item: skill,
-						provider,
-						type: "skill",
-						global: resolvePortableTypeGlobal(provider, "skill", installGlobally),
-					});
-				}
 			}
 		}
 
@@ -1258,6 +1346,11 @@ export async function migrateCommand(options: MigrateOptions): Promise<void> {
 		await processMetadataDeletions(skillSource, installGlobally);
 
 		for (const deleteAction of plannedDeleteActions) {
+			if (!shouldRunDeleteAction(deleteAction, allResults)) {
+				allResults.push(createSkippedPathMigrationCleanupResult(deleteAction));
+				progressSink.tick("Cleanup");
+				continue;
+			}
 			allResults.push(
 				await executeDeleteAction(deleteAction, {
 					preservePaths: writtenPaths,
@@ -1573,39 +1666,4 @@ function progressLabelForType(type: string): string {
 		default:
 			return "Migrating";
 	}
-}
-
-function buildDryRunFallbackResults(
-	skills: SkillInfo[],
-	selectedProviders: ProviderType[],
-	installGlobally: boolean,
-	plannedActions: ReconcileAction[],
-): PortableInstallResult[] {
-	const plannedSkillActions = plannedActions.filter((action) => action.type === "skill").length;
-	if (skills.length === 0 || plannedSkillActions > 0) {
-		return [];
-	}
-
-	const results: PortableInstallResult[] = [];
-	for (const provider of selectedProviders.filter((entry) =>
-		getProvidersSupporting("skills").includes(entry),
-	)) {
-		const basePath = getPortableBasePath(provider, "skills", {
-			global: resolvePortableTypeGlobal(provider, "skill", installGlobally),
-		});
-		if (!basePath) continue;
-		for (const skill of skills) {
-			results.push({
-				itemName: skill.name,
-				operation: "apply",
-				path: join(basePath, skill.name),
-				portableType: "skill",
-				provider,
-				providerDisplayName: providers[provider].displayName,
-				success: true,
-			});
-		}
-	}
-
-	return results;
 }

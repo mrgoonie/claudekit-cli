@@ -455,3 +455,267 @@ describe("rewriteCommandPath — commandSubstitutions (GH-730 N1 fix)", () => {
 		expect(result).toBe(`node "${wrapperPath}"`);
 	});
 });
+
+// ---- GH-883 unit tests: $CLAUDE_PROJECT_DIR variable forms ----------
+
+const PROJECT_DIR = "/Users/testuser/my-project";
+const PROJECT_DIR_WITH_SPACE = "/Users/test user/proj";
+
+describe("rewriteCommandPath — Phase 1 substitution: $CLAUDE_PROJECT_DIR forms", () => {
+	// Shared setup: hook at .claude/hooks/simplify-gate.cjs, wrapper at .codex/hooks/abc-simplify-gate.cjs
+	const relHook = ".claude/hooks/simplify-gate.cjs";
+	const originalAbsPath = `${PROJECT_DIR}/${relHook}`;
+	const wrapperAbsPath = `${PROJECT_DIR}/.codex/hooks/abc123-simplify-gate.cjs`;
+
+	function makeSubs() {
+		return new Map([[originalAbsPath, wrapperAbsPath]]);
+	}
+
+	it("form 1 — fully quoted $CLAUDE_PROJECT_DIR/<rel> → wrapper (quoted)", () => {
+		const cmd = `node "$CLAUDE_PROJECT_DIR/${relHook}"`;
+		const result = rewriteCommandPath(cmd, {
+			sourceDir: `${PROJECT_DIR}/.claude/hooks`,
+			targetDir: `${PROJECT_DIR}/.codex/hooks`,
+			commandSubstitutions: makeSubs(),
+			projectDir: PROJECT_DIR,
+		});
+		expect(result).toBe(`node "${wrapperAbsPath}"`);
+		expect(result).not.toContain("$CLAUDE_PROJECT_DIR");
+	});
+
+	it("form 2 — var-only quoted $CLAUDE_PROJECT_DIR/<rel> (Claude Code standard) → wrapper (quoted)", () => {
+		const cmd = `node "$CLAUDE_PROJECT_DIR"/${relHook}`;
+		const result = rewriteCommandPath(cmd, {
+			sourceDir: `${PROJECT_DIR}/.claude/hooks`,
+			targetDir: `${PROJECT_DIR}/.codex/hooks`,
+			commandSubstitutions: makeSubs(),
+			projectDir: PROJECT_DIR,
+		});
+		expect(result).toBe(`node "${wrapperAbsPath}"`);
+		expect(result).not.toContain("$CLAUDE_PROJECT_DIR");
+	});
+
+	it("form 3a — braced quoted ${CLAUDE_PROJECT_DIR}/<rel> → wrapper (quoted)", () => {
+		const cmd = `node "\${CLAUDE_PROJECT_DIR}"/${relHook}`;
+		const result = rewriteCommandPath(cmd, {
+			sourceDir: `${PROJECT_DIR}/.claude/hooks`,
+			targetDir: `${PROJECT_DIR}/.codex/hooks`,
+			commandSubstitutions: makeSubs(),
+			projectDir: PROJECT_DIR,
+		});
+		expect(result).toBe(`node "${wrapperAbsPath}"`);
+		expect(result).not.toContain("CLAUDE_PROJECT_DIR");
+	});
+
+	it("form 3b — bare braced ${CLAUDE_PROJECT_DIR}/<rel> → wrapper (unquoted)", () => {
+		const cmd = `node \${CLAUDE_PROJECT_DIR}/${relHook}`;
+		const result = rewriteCommandPath(cmd, {
+			sourceDir: `${PROJECT_DIR}/.claude/hooks`,
+			targetDir: `${PROJECT_DIR}/.codex/hooks`,
+			commandSubstitutions: makeSubs(),
+			projectDir: PROJECT_DIR,
+		});
+		expect(result).toBe(`node ${wrapperAbsPath}`);
+		expect(result).not.toContain("CLAUDE_PROJECT_DIR");
+	});
+
+	it("form 4 — bare $CLAUDE_PROJECT_DIR/<rel> → wrapper (unquoted)", () => {
+		const cmd = `node $CLAUDE_PROJECT_DIR/${relHook}`;
+		const result = rewriteCommandPath(cmd, {
+			sourceDir: `${PROJECT_DIR}/.claude/hooks`,
+			targetDir: `${PROJECT_DIR}/.codex/hooks`,
+			commandSubstitutions: makeSubs(),
+			projectDir: PROJECT_DIR,
+		});
+		expect(result).toBe(`node ${wrapperAbsPath}`);
+		expect(result).not.toContain("$CLAUDE_PROJECT_DIR");
+	});
+
+	it("form 5 — Windows %CLAUDE_PROJECT_DIR%/<rel> bare → wrapper (quoted)", () => {
+		const cmd = `node %CLAUDE_PROJECT_DIR%/${relHook}`;
+		const result = rewriteCommandPath(cmd, {
+			sourceDir: `${PROJECT_DIR}/.claude/hooks`,
+			targetDir: `${PROJECT_DIR}/.codex/hooks`,
+			commandSubstitutions: makeSubs(),
+			projectDir: PROJECT_DIR,
+		});
+		expect(result).toBe(`node "${wrapperAbsPath}"`);
+		expect(result).not.toContain("CLAUDE_PROJECT_DIR");
+	});
+
+	it("form 2 end-to-end: balanced quotes, no doubling", () => {
+		// Claude Code's standard emission: `node "$CLAUDE_PROJECT_DIR"/.claude/hooks/simplify-gate.cjs`
+		const cmd = `node "$CLAUDE_PROJECT_DIR"/${relHook}`;
+		const result = rewriteCommandPath(cmd, {
+			sourceDir: `${PROJECT_DIR}/.claude/hooks`,
+			targetDir: `${PROJECT_DIR}/.codex/hooks`,
+			commandSubstitutions: makeSubs(),
+			projectDir: PROJECT_DIR,
+		});
+		// Must be exactly `node "<wrapperAbsPath>"` — one opening, one closing quote
+		expect(result).toBe(`node "${wrapperAbsPath}"`);
+		// No doubled quotes
+		expect(result).not.toContain('""');
+	});
+});
+
+describe("rewriteCommandPath — Phase 2 fallback: residual $CLAUDE_PROJECT_DIR token resolution", () => {
+	// Non-wrappable hook: no substitution map entry, falls through to fallback.
+	const srcDir = `${PROJECT_DIR}/.claude/hooks`;
+	const tgtDir = `${PROJECT_DIR}/.codex/hooks`;
+
+	it('form 1 fallback — bash "$CLAUDE_PROJECT_DIR/.codex/hooks/runner.sh" → absolute path, no residual token', () => {
+		// After dir rewrite, command still has $CLAUDE_PROJECT_DIR — must be resolved.
+		const cmd = `bash "$CLAUDE_PROJECT_DIR/.codex/hooks/runner.sh"`;
+		const result = rewriteCommandPath(cmd, {
+			sourceDir: srcDir,
+			targetDir: tgtDir,
+			projectDir: PROJECT_DIR,
+		});
+		expect(result).toBe(`bash "${PROJECT_DIR}/.codex/hooks/runner.sh"`);
+		expect(result).not.toContain("CLAUDE_PROJECT_DIR");
+	});
+
+	it("form 1 fallback — closing quote consumed, no doubled quote (H1 trap)", () => {
+		const cmd = `bash "$CLAUDE_PROJECT_DIR/.codex/hooks/runner.sh"`;
+		const result = rewriteCommandPath(cmd, {
+			sourceDir: srcDir,
+			targetDir: tgtDir,
+			projectDir: PROJECT_DIR,
+		});
+		// Must not have doubled closing quote
+		expect(result).not.toContain('""');
+		// Must end with exactly one closing quote after the path
+		expect(result).toMatch(/runner\.sh"$/);
+	});
+
+	it('form 2 fallback — bash "$CLAUDE_PROJECT_DIR"/.codex/hooks/runner.sh → absolute path', () => {
+		const cmd = `bash "$CLAUDE_PROJECT_DIR"/.codex/hooks/runner.sh`;
+		const result = rewriteCommandPath(cmd, {
+			sourceDir: srcDir,
+			targetDir: tgtDir,
+			projectDir: PROJECT_DIR,
+		});
+		expect(result).toBe(`bash "${PROJECT_DIR}/.codex/hooks/runner.sh"`);
+		expect(result).not.toContain("CLAUDE_PROJECT_DIR");
+	});
+
+	it('form 3a fallback — bash "${CLAUDE_PROJECT_DIR}"/.codex/hooks/runner.sh → absolute path', () => {
+		const cmd = `bash "\${CLAUDE_PROJECT_DIR}"/.codex/hooks/runner.sh`;
+		const result = rewriteCommandPath(cmd, {
+			sourceDir: srcDir,
+			targetDir: tgtDir,
+			projectDir: PROJECT_DIR,
+		});
+		expect(result).toBe(`bash "${PROJECT_DIR}/.codex/hooks/runner.sh"`);
+		expect(result).not.toContain("CLAUDE_PROJECT_DIR");
+	});
+
+	it("form 3b fallback — bash ${CLAUDE_PROJECT_DIR}/.codex/hooks/runner.sh → absolute path (quoted output)", () => {
+		const cmd = "bash ${CLAUDE_PROJECT_DIR}/.codex/hooks/runner.sh";
+		const result = rewriteCommandPath(cmd, {
+			sourceDir: srcDir,
+			targetDir: tgtDir,
+			projectDir: PROJECT_DIR,
+		});
+		expect(result).toBe(`bash "${PROJECT_DIR}/.codex/hooks/runner.sh"`);
+		expect(result).not.toContain("CLAUDE_PROJECT_DIR");
+	});
+
+	it("Windows bare fallback — bash %CLAUDE_PROJECT_DIR%/.codex/hooks/runner.sh → absolute path (quoted)", () => {
+		const cmd = "bash %CLAUDE_PROJECT_DIR%/.codex/hooks/runner.sh";
+		const result = rewriteCommandPath(cmd, {
+			sourceDir: srcDir,
+			targetDir: tgtDir,
+			projectDir: PROJECT_DIR,
+		});
+		expect(result).toBe(`bash "${PROJECT_DIR}/.codex/hooks/runner.sh"`);
+		expect(result).not.toContain("CLAUDE_PROJECT_DIR");
+	});
+
+	it('Windows quoted bare fallback — bash "%CLAUDE_PROJECT_DIR%/.codex/hooks/runner.sh" → absolute path', () => {
+		const cmd = `bash "%CLAUDE_PROJECT_DIR%/.codex/hooks/runner.sh"`;
+		const result = rewriteCommandPath(cmd, {
+			sourceDir: srcDir,
+			targetDir: tgtDir,
+			projectDir: PROJECT_DIR,
+		});
+		expect(result).toBe(`bash "${PROJECT_DIR}/.codex/hooks/runner.sh"`);
+		expect(result).not.toContain("CLAUDE_PROJECT_DIR");
+	});
+
+	it('bare-var no-suffix form 6 — cd "$CLAUDE_PROJECT_DIR" && node x.cjs → absolute path', () => {
+		const cmd = `cd "$CLAUDE_PROJECT_DIR" && node x.cjs`;
+		const result = rewriteCommandPath(cmd, {
+			sourceDir: srcDir,
+			targetDir: tgtDir,
+			projectDir: PROJECT_DIR,
+		});
+		expect(result).toBe(`cd "${PROJECT_DIR}" && node x.cjs`);
+		expect(result).not.toContain("CLAUDE_PROJECT_DIR");
+	});
+
+	it("negative — echo $CLAUDE_PROJECT_DIRS is NOT rewritten (superset var name)", () => {
+		const cmd = "echo $CLAUDE_PROJECT_DIRS";
+		const result = rewriteCommandPath(cmd, {
+			sourceDir: srcDir,
+			targetDir: tgtDir,
+			projectDir: PROJECT_DIR,
+		});
+		expect(result).toBe("echo $CLAUDE_PROJECT_DIRS");
+		expect(result).toContain("$CLAUDE_PROJECT_DIRS");
+	});
+
+	it("path with spaces — quotes preserved and balanced", () => {
+		const cmd = `bash "$CLAUDE_PROJECT_DIR"/.claude/hooks/runner.sh`;
+		const result = rewriteCommandPath(cmd, {
+			sourceDir: `${PROJECT_DIR_WITH_SPACE}/.claude/hooks`,
+			targetDir: `${PROJECT_DIR_WITH_SPACE}/.codex/hooks`,
+			projectDir: PROJECT_DIR_WITH_SPACE,
+		});
+		expect(result).toBe(`bash "${PROJECT_DIR_WITH_SPACE}/.claude/hooks/runner.sh"`);
+		expect(result).not.toContain("CLAUDE_PROJECT_DIR");
+		expect(result).not.toContain('""');
+	});
+
+	it("combined $HOME and $CLAUDE_PROJECT_DIR — both rewritten", () => {
+		// A runner command that references the global node-hook-runner (home) AND a project hook
+		const cmd = `bash "$HOME/.claude/hooks/node-hook-runner.sh" "$CLAUDE_PROJECT_DIR"/.claude/hooks/simplify-gate.cjs`;
+		const result = rewriteCommandPath(cmd, {
+			sourceDir: `${PROJECT_DIR}/.claude/hooks`,
+			targetDir: `${PROJECT_DIR}/.codex/hooks`,
+			projectDir: PROJECT_DIR,
+		});
+		// $HOME form stays as-is (no home substitution map, dir rewrite covers it only if src matches)
+		// $CLAUDE_PROJECT_DIR form must be resolved
+		expect(result).not.toContain("$CLAUDE_PROJECT_DIR");
+	});
+
+	it("projectDir undefined — output identical to pre-change behavior (global-scope regression)", () => {
+		const cmd = `node "$HOME/.claude/hooks/session-init.cjs"`;
+		const result = rewriteCommandPath(cmd, {
+			sourceDir: "$HOME/.claude/hooks",
+			targetDir: "$HOME/.codex/hooks",
+		});
+		// No projectDir — existing dir-rewrite behavior unchanged
+		expect(result).toBe(`node "$HOME/.codex/hooks/session-init.cjs"`);
+		expect(result).not.toContain("CLAUDE_PROJECT_DIR");
+	});
+
+	it("shell metacharacter after path — semicolon is NOT swallowed into quoted path", () => {
+		// Probe: `node $CLAUDE_PROJECT_DIR/x.cjs;echo hi` must not produce
+		// `node "/proj/x.cjs;echo" hi`. The `;` must remain outside the quoted token.
+		const cmd = "node $CLAUDE_PROJECT_DIR/.claude/hooks/x.cjs;echo hi";
+		const result = rewriteCommandPath(cmd, {
+			sourceDir: `${PROJECT_DIR}/.claude/hooks`,
+			targetDir: `${PROJECT_DIR}/.codex/hooks`,
+			projectDir: PROJECT_DIR,
+		});
+		// The path token must be resolved to the quoted absolute path WITHOUT the `;echo hi` suffix
+		expect(result).toBe(`node "${PROJECT_DIR}/.claude/hooks/x.cjs";echo hi`);
+		// The resolved path must not contain the semicolon
+		expect(result).not.toContain('x.cjs;echo"');
+		// The original env var token must be gone
+		expect(result).not.toContain("CLAUDE_PROJECT_DIR");
+	});
+});

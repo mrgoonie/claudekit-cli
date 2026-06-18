@@ -9,7 +9,7 @@ import type { CommandHelp } from "../help-types.js";
 export const migrateCommandHelp: CommandHelp = {
 	name: "migrate",
 	description:
-		"Migrate Claude Code agents, commands, skills, config, rules, and hooks to other providers",
+		"Migrate Claude Code agents, commands, skills, config, rules, and hooks to other providers (e.g. Codex). Set updatePipeline.autoMigrateAfterUpdate to keep targets in sync with Claude Code on each `ck update`.",
 	usage: "ck migrate [options]",
 	examples: [
 		{
@@ -148,6 +148,8 @@ export const migrateCommandHelp: CommandHelp = {
 				"  --respect-deletions disables the auto-reinstall heuristic for empty directories",
 				"  --force overrides skip decisions per item; --reinstall-empty-dirs is a per-directory heuristic",
 				"  Codex commands migrate as skills: project scope writes .agents/skills, global scope writes ~/.agents/skills",
+				"  Antigravity 2.0 agents migrate to .agents/agents.md; skills remain .agents/skills/<name>/SKILL.md",
+				"  Kiro agents migrate as custom subagents; rules/config migrate as steering files; skills copy to .kiro/skills; commands/hooks are skipped",
 			].join("\n"),
 		},
 	],

@@ -11,7 +11,7 @@ import type { ConversionResult, PortableItem, ProviderType } from "../types.js";
 import { stripClaudeRefs } from "./md-strip.js";
 
 /** Providers whose agent body should be rewritten via stripClaudeRefs */
-const PROVIDERS_WITH_BODY_REWRITING: ProviderType[] = ["gemini-cli"];
+const PROVIDERS_WITH_BODY_REWRITING: ProviderType[] = ["gemini-cli", "antigravity"];
 
 /**
  * Strip frontmatter and return body as plain markdown.
@@ -23,7 +23,7 @@ export function convertFmStrip(item: PortableItem, provider: ProviderType): Conv
 	const heading = item.frontmatter.name || item.name;
 
 	// Determine if this provider merges into a single file
-	const isMergeProvider = ["goose", "gemini-cli", "amp"].includes(provider);
+	const isMergeProvider = ["goose", "gemini-cli", "amp", "antigravity"].includes(provider);
 
 	// Rewrite body for providers that need Claude-specific refs stripped
 	let body = item.body;

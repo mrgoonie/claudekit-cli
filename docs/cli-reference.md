@@ -643,7 +643,7 @@ Initialize or update ClaudeKit project (with interactive version selection)
 
 ## ck migrate
 
-Migrate Claude Code agents, commands, skills, config, rules, and hooks to other providers
+Migrate Claude Code agents, commands, skills, config, rules, and hooks to other providers (e.g. Codex). Set updatePipeline.autoMigrateAfterUpdate to keep targets in sync with Claude Code on each `ck update`.
 
 **Usage:** `ck migrate [options]`
 
@@ -689,6 +689,8 @@ Migrate Claude Code agents, commands, skills, config, rules, and hooks to other 
   --respect-deletions disables the auto-reinstall heuristic for empty directories
   --force overrides skip decisions per item; --reinstall-empty-dirs is a per-directory heuristic
   Codex commands migrate as skills: project scope writes .agents/skills, global scope writes ~/.agents/skills
+  Antigravity 2.0 agents migrate to .agents/agents.md; skills remain .agents/skills/<name>/SKILL.md
+  Kiro agents migrate as custom subagents; rules/config migrate as steering files; skills copy to .kiro/skills; commands/hooks are skipped
 
 
 ## ck new
@@ -931,7 +933,7 @@ Install, uninstall, and manage ClaudeKit skills across coding agents
 | `-u, --uninstall` | Uninstall skill(s) from agent(s) | — |
 | `--sync` | Sync registry with filesystem (clean orphaned entries) | — |
 | `-n, --name <skill>` | Skill name to install or uninstall | — |
-| `-a, --agent <agent>` | Target agent(s) - can be specified multiple times. Valid: claude-code, cursor, codex, opencode, goose, gemini-cli, antigravity, github-copilot, amp, kilo, roo, windsurf, cline, openhands | — |
+| `-a, --agent <agent>` | Target agent(s) - can be specified multiple times. Valid: claude-code, cursor, codex, opencode, goose, gemini-cli, antigravity, github-copilot, amp, kilo, kiro, roo, windsurf, cline, openhands | — |
 | `-g, --global` | Install to user's home directory (available across projects) | — |
 | `--all` | Install to all supported agents | — |
 | `-y, --yes` | Non-interactive mode (skip confirmations) | — |
@@ -960,6 +962,7 @@ Install, uninstall, and manage ClaudeKit skills across coding agents
   github-copilot  GitHub Copilot
   amp             Amp
   kilo            Kilo Code
+  kiro            Kiro
   roo             Roo Code
   windsurf        Windsurf IDE
   cline           Cline
@@ -1072,4 +1075,4 @@ Watch GitHub issues and auto-respond with AI analysis
 - `ck watch --interval 60000` — Poll every 60 seconds instead of default 30s
 
 
-<!-- generated: 2026-05-27T02:11:15.512Z -->
+<!-- generated: 2026-06-15T17:47:28.452Z -->

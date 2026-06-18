@@ -105,6 +105,7 @@ export class ManifestWriter {
 		version: string,
 		scope: "local" | "global",
 		kitType?: KitType,
+		ignoredSkills?: string[],
 	): Promise<void> {
 		return writeManifest(
 			claudeDir,
@@ -114,6 +115,7 @@ export class ManifestWriter {
 			kitType,
 			this.getTrackedFiles(),
 			this.getUserConfigFiles(),
+			ignoredSkills,
 		);
 	}
 

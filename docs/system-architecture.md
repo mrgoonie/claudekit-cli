@@ -167,7 +167,7 @@ Octokit wrapper for releases and auth (GitHub CLI only). Asset selection: offici
 Parallel checkers for system (Node, npm, Python, git, gh), auth (token scopes, rate limit), GitHub API, ClaudeKit (installs, versions, skills), platform, network. Includes auto-healer for common issues.
 
 ### installation/ - Download, Extract, Merge
-File downloader with streaming. ZIP/TAR extraction with security validation (path traversal, archive bombs, 500MB limit). Selective merger with multi-kit awareness: detects shared files, prevents overwriting newer versions.
+File downloader with streaming. ZIP/TAR extraction with security validation (path traversal, archive bombs, 500MB limit). Selective merger with multi-kit awareness: detects shared files, prevents overwriting newer versions, and preserves user-deleted skill directories as per-kit ignored skills unless `--force-overwrite` is used.
 
 ### skills/ - Skills Management
 Detection (config, dependencies, scripts), customization scanning with hash comparison, migration executor with backup and rollback. agentskills.io integration with metadata version/author support.
@@ -208,7 +208,7 @@ Metadata schemas, release manifest parsing, legacy version migration support.
 ## Services Layer
 
 ### file-operations/ - File System
-Manifest reader/writer with multi-kit support. Manifest tracker for file ownership. Ownership checker.
+Manifest reader/writer with multi-kit support. Manifest tracker for file ownership and ignored skill roots. Ownership checker.
 
 ### package-installer/ - Package Installation
 Dependency installer (Node, Python, system). Gemini MCP linker for AI tooling. Process executor. Package manager detection (npm/yarn/pnpm/bun).

@@ -2,7 +2,7 @@
  * Skills Command Help
  *
  * Help definition for the 'skills' command.
- * Handles cross-agent skill distribution for 14 coding agents.
+ * Handles cross-agent skill distribution for 15 coding agents.
  */
 
 import type { CommandHelp } from "../help-types.js";
@@ -53,7 +53,7 @@ export const skillsCommandHelp: CommandHelp = {
 				{
 					flags: "-a, --agent <agent>",
 					description:
-						"Target agent(s) - can be specified multiple times. Valid: claude-code, cursor, codex, opencode, goose, gemini-cli, antigravity, github-copilot, amp, kilo, roo, windsurf, cline, openhands",
+						"Target agent(s) - can be specified multiple times. Valid: claude-code, cursor, codex, opencode, goose, gemini-cli, antigravity, github-copilot, amp, kilo, kiro, roo, windsurf, cline, openhands",
 				},
 				{
 					flags: "-g, --global",
@@ -121,6 +121,7 @@ export const skillsCommandHelp: CommandHelp = {
   github-copilot  GitHub Copilot
   amp             Amp
   kilo            Kilo Code
+  kiro            Kiro
   roo             Roo Code
   windsurf        Windsurf IDE
   cline           Cline

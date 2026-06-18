@@ -43,7 +43,7 @@ export function setupTestPaths(): TestPaths {
 		} catch (_error) {
 			// Ignore cleanup errors
 		}
-		process.env.CK_TEST_HOME = undefined;
+		Reflect.deleteProperty(process.env, "CK_TEST_HOME");
 	};
 
 	return {

@@ -66,6 +66,10 @@ export class FileMerger {
 		this.copyExecutor.setForceOverwriteSettings(force);
 	}
 
+	setPreserveDeletedSkills(preserve: boolean): void {
+		this.copyExecutor.setPreserveDeletedSkills(preserve);
+	}
+
 	/**
 	 * Restore CK-owned hook registrations during update self-heal.
 	 */
@@ -186,5 +190,9 @@ export class FileMerger {
 	 */
 	getFileConflicts(): FileConflictInfo[] {
 		return this.copyExecutor.getFileConflicts();
+	}
+
+	getIgnoredSkillDirectories(): string[] {
+		return this.copyExecutor.getIgnoredSkillDirectories();
 	}
 }

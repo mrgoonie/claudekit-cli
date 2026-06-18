@@ -61,7 +61,7 @@ export default {
 		[
 			"@semantic-release/git",
 			{
-				assets: ["package.json", "CHANGELOG.md"],
+				assets: ["package.json", "CHANGELOG.md", "cli-manifest.json", "docs/cli-reference.md"],
 				message: "chore(release): ${nextRelease.version} [skip ci]\n\n${nextRelease.notes}",
 			},
 		],

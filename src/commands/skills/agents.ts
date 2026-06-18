@@ -100,10 +100,19 @@ export const agents: Record<AgentType, AgentConfig> = {
 	antigravity: {
 		name: "antigravity",
 		displayName: "Antigravity",
-		projectPath: ".agent/skills",
-		globalPath: join(home, ".gemini/antigravity/skills"),
+		projectPath: ".agents/skills",
+		globalPath: join(home, ".gemini/config/skills"),
 		detect: async () =>
-			existsSync(join(process.cwd(), ".agent")) || existsSync(join(home, ".gemini/antigravity")),
+			hasAnyInstallSignal([
+				join(process.cwd(), ".agents/skills"),
+				join(process.cwd(), ".agents/rules"),
+				join(process.cwd(), ".agents/plugins"),
+				join(process.cwd(), ".agent/skills"),
+				join(process.cwd(), ".agent/rules"),
+				join(home, ".gemini/config/skills"),
+				join(home, ".gemini/config/plugins"),
+				join(home, ".gemini/antigravity/skills"),
+			]),
 	},
 	"github-copilot": {
 		name: "github-copilot",
@@ -125,6 +134,23 @@ export const agents: Record<AgentType, AgentConfig> = {
 		projectPath: ".kilocode/skills",
 		globalPath: join(home, ".kilocode/skills"),
 		detect: async () => existsSync(join(home, ".kilocode")),
+	},
+	kiro: {
+		name: "kiro",
+		displayName: "Kiro",
+		projectPath: ".kiro/skills",
+		globalPath: join(home, ".kiro/skills"),
+		detect: async () =>
+			hasAnyInstallSignal([
+				join(process.cwd(), ".kiro/skills"),
+				join(process.cwd(), ".kiro/steering"),
+				join(process.cwd(), ".kiro/agents"),
+				join(process.cwd(), ".kiro/settings/mcp.json"),
+				join(home, ".kiro/skills"),
+				join(home, ".kiro/steering"),
+				join(home, ".kiro/agents"),
+				join(home, ".kiro/settings/mcp.json"),
+			]),
 	},
 	roo: {
 		name: "roo",

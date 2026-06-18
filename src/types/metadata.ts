@@ -49,6 +49,8 @@ export const KitMetadataSchema = z.object({
 	installedAt: z.string(),
 	// Enhanced file ownership tracking (pip RECORD pattern)
 	files: z.array(TrackedFileSchema).optional(),
+	// Skill roots intentionally removed by the user and skipped on future updates.
+	ignoredSkills: z.array(z.string()).optional(),
 	// Sync feature fields
 	lastUpdateCheck: z.string().optional(), // ISO timestamp of last update check
 	dismissedVersion: z.string().optional(), // Version user dismissed (don't nag)

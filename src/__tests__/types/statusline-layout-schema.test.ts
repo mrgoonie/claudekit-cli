@@ -1,5 +1,11 @@
 import { describe, expect, it } from "bun:test";
-import { CkConfigSchema, StatuslineLayoutSchema } from "@/types/ck-config.js";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+import {
+	CkConfigSchema,
+	StatuslineLayoutSchema,
+	StatuslineThemeSchema,
+} from "@/types/ck-config.js";
 
 describe("StatuslineLayoutSchema", () => {
 	describe("lines validation", () => {
@@ -146,5 +152,33 @@ describe("CkConfigSchema statuslineLayout", () => {
 			},
 		});
 		expect(result.success).toBe(false);
+	});
+});
+
+describe("StatuslineThemeSchema JSON schema parity", () => {
+	it("JSON schema theme properties match Zod StatuslineThemeSchema shape exactly", () => {
+		// Load JSON schema at runtime so drift is caught on every test run
+		const schemaPath = join(import.meta.dir, "../../schemas/ck-config.schema.json");
+		const rawSchema = JSON.parse(readFileSync(schemaPath, "utf-8"));
+		const jsonSchemaThemeKeys = Object.keys(
+			rawSchema.properties.statuslineLayout.properties.theme.properties,
+		).sort();
+
+		const zodThemeKeys = Object.keys(StatuslineThemeSchema.shape).sort();
+
+		expect(jsonSchemaThemeKeys).toEqual(zodThemeKeys);
+	});
+
+	it("round-trips quotaLow and quotaHigh through CkConfigSchema", () => {
+		const result = CkConfigSchema.safeParse({
+			statuslineLayout: {
+				theme: { quotaLow: "green", quotaHigh: "yellow" },
+			},
+		});
+		expect(result.success).toBe(true);
+		if (result.success) {
+			expect(result.data.statuslineLayout?.theme?.quotaLow).toBe("green");
+			expect(result.data.statuslineLayout?.theme?.quotaHigh).toBe("yellow");
+		}
 	});
 });

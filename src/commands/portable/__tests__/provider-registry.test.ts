@@ -140,8 +140,15 @@ describe("provider-registry", () => {
 			expect(providers.kiro.config?.projectPath).toBe(".kiro/steering/project.md");
 		});
 
+		it("kiro config globalPath is ~/.kiro/steering/project.md", () => {
+			const globalPath = providers.kiro.config?.globalPath?.replace(/\\/g, "/") ?? "";
+			expect(globalPath).toContain(".kiro/steering/project.md");
+		});
+
 		it("kiro rules use per-file to .kiro/steering", () => {
 			expect(providers.kiro.rules?.projectPath).toBe(".kiro/steering");
+			const globalPath = providers.kiro.rules?.globalPath?.replace(/\\/g, "/") ?? "";
+			expect(globalPath).toContain(".kiro/steering");
 			expect(providers.kiro.rules?.writeStrategy).toBe("per-file");
 		});
 
@@ -153,6 +160,11 @@ describe("provider-registry", () => {
 			expect(providers.kiro.skills?.projectPath).toBe(".kiro/skills");
 		});
 
+		it("kiro skills globalPath is ~/.kiro/skills", () => {
+			const globalPath = providers.kiro.skills?.globalPath?.replace(/\\/g, "/") ?? "";
+			expect(globalPath).toContain(".kiro/skills");
+		});
+
 		it("kiro does not support hooks", () => {
 			expect(providers.kiro.hooks).toBeNull();
 		});
@@ -161,13 +173,54 @@ describe("provider-registry", () => {
 			expect(providers.kiro.commands).toBeNull();
 		});
 
-		it("kiro has no subagent support (uses steering for context, not delegation)", () => {
-			expect(providers.kiro.subagents).toBe("none");
+		it("kiro has full subagent support", () => {
+			expect(providers.kiro.subagents).toBe("full");
 		});
 
-		it("kiro agents map to steering directory", () => {
-			expect(providers.kiro.agents?.projectPath).toBe(".kiro/steering");
-			expect(providers.kiro.agents?.format).toBe("md-to-kiro-steering");
+		it("kiro agents map to custom subagent directory", () => {
+			expect(providers.kiro.agents?.projectPath).toBe(".kiro/agents");
+			const globalPath = providers.kiro.agents?.globalPath?.replace(/\\/g, "/") ?? "";
+			expect(globalPath).toContain(".kiro/agents");
+			expect(providers.kiro.agents?.format).toBe("fm-to-fm");
+		});
+
+		it("getPortableBasePath exposes Kiro workspace and global paths for all supported types", () => {
+			expect(getPortableBasePath("kiro", "agents", { global: false })).toBe(".kiro/agents");
+			expect(getPortableBasePath("kiro", "rules", { global: false })).toBe(".kiro/steering");
+			expect(getPortableBasePath("kiro", "config", { global: false })).toBe(
+				".kiro/steering/project.md",
+			);
+			expect(getPortableBasePath("kiro", "skills", { global: false })).toBe(".kiro/skills");
+			expect(getPortableBasePath("kiro", "commands", { global: false })).toBeNull();
+			expect(getPortableBasePath("kiro", "hooks", { global: false })).toBeNull();
+
+			expect(
+				getPortableBasePath("kiro", "agents", { global: true })?.replace(/\\/g, "/"),
+			).toContain(".kiro/agents");
+			expect(getPortableBasePath("kiro", "rules", { global: true })?.replace(/\\/g, "/")).toContain(
+				".kiro/steering",
+			);
+			expect(
+				getPortableBasePath("kiro", "config", { global: true })?.replace(/\\/g, "/"),
+			).toContain(".kiro/steering/project.md");
+			expect(
+				getPortableBasePath("kiro", "skills", { global: true })?.replace(/\\/g, "/"),
+			).toContain(".kiro/skills");
+		});
+	});
+
+	describe("antigravity entries", () => {
+		it("antigravity 2.0 uses .agents workspace paths and ~/.gemini/config skills", () => {
+			expect(providers.antigravity.agents?.projectPath).toBe(".agents/agents.md");
+			expect(providers.antigravity.agents?.globalPath).toBeNull();
+			expect(providers.antigravity.agents?.format).toBe("fm-strip");
+			expect(providers.antigravity.agents?.writeStrategy).toBe("merge-single");
+			expect(providers.antigravity.commands?.projectPath).toBe(".agents/workflows");
+			expect(providers.antigravity.skills?.projectPath).toBe(".agents/skills");
+			expect(providers.antigravity.rules?.projectPath).toBe(".agents/rules");
+
+			const skillsGlobal = providers.antigravity.skills?.globalPath?.replace(/\\/g, "/") ?? "";
+			expect(skillsGlobal).toContain(".gemini/config/skills");
 		});
 	});
 
@@ -336,14 +389,16 @@ describe("provider-registry", () => {
 			expect(skillCollisions[0].providers).toContain("amp");
 		});
 
-		it("antigravity uses different path (.agent/skills) — no collision with codex+amp", () => {
+		it("antigravity shares .agents/skills with codex+amp for project skills only", () => {
 			const collisions = detectProviderPathCollisions(["codex", "amp", "antigravity"], {
 				global: false,
 			});
 			const skillCollisions = collisions.filter((c) => c.portableType === "skills");
-			// codex+amp collide on .agents/skills, but antigravity uses .agent/skills (no collision)
 			expect(skillCollisions).toHaveLength(1);
-			expect(skillCollisions[0].providers).not.toContain("antigravity");
+			expect(skillCollisions[0].path).toBe(".agents/skills");
+			expect(skillCollisions[0].providers).toContain("codex");
+			expect(skillCollisions[0].providers).toContain("amp");
+			expect(skillCollisions[0].providers).toContain("antigravity");
 		});
 
 		it("returns empty array when no providers collide", () => {

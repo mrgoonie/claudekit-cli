@@ -205,6 +205,83 @@ describe("installSkillDirectories", () => {
 		);
 	});
 
+	it("kiro: installs skill to path derived from registry (.kiro/skills/<name>)", async () => {
+		const customPath = join(testDir, ".kiro", "skills");
+		const skill = makeSkill("my-skill", join(sourceDir, "my-skill"));
+
+		const origKiroSkills = originalProviders.kiro.skills;
+		if (origKiroSkills) {
+			originalProviders.kiro.skills = { ...origKiroSkills, projectPath: customPath };
+		}
+
+		const results = await installSkillDirectories([skill], ["kiro"], { global: false });
+
+		originalProviders.kiro.skills = origKiroSkills;
+
+		expect(results).toHaveLength(1);
+		expect(results[0].success).toBe(true);
+		expect(results[0].path).toBe(join(customPath, "my-skill"));
+		expect(existsSync(join(customPath, "my-skill", "SKILL.md"))).toBe(true);
+		expect(addPortableInstallationMock).toHaveBeenCalledWith(
+			"my-skill",
+			"skill",
+			"kiro",
+			false,
+			join(customPath, "my-skill"),
+			expect.any(String),
+		);
+	});
+
+	it("antigravity: rewrites only SKILL.md references to 2.0 paths during migrate", async () => {
+		const customPath = join(testDir, ".agents", "skills");
+		const sourcePath = join(testDir, "antigravity-source", "ag-skill");
+		rmSync(sourcePath, { recursive: true, force: true });
+		mkdirSync(sourcePath, { recursive: true });
+		writeFileSync(
+			join(sourcePath, "SKILL.md"),
+			[
+				"# AG Skill",
+				"",
+				"Use .claude/skills/cook/SKILL.md.",
+				"Ask .claude/agents/reviewer.md.",
+				"Run .claude/commands/docs/release.md.",
+				"Follow .claude/rules/style.md.",
+				"Check .claude/hooks/session-start.cjs.",
+			].join("\n"),
+		);
+		writeFileSync(join(sourcePath, "helper.js"), ".claude/agents/reviewer.md");
+
+		const skill = makeSkill("ag-skill", sourcePath);
+		const origAntigravitySkills = originalProviders.antigravity.skills;
+		if (origAntigravitySkills) {
+			originalProviders.antigravity.skills = {
+				...origAntigravitySkills,
+				projectPath: customPath,
+			};
+		}
+
+		try {
+			const results = await installSkillDirectories([skill], ["antigravity"], { global: false });
+
+			expect(results).toHaveLength(1);
+			expect(results[0].success).toBe(true);
+			expect(results[0].path).toBe(join(customPath, "ag-skill"));
+
+			const content = readFileSync(join(customPath, "ag-skill", "SKILL.md"), "utf-8");
+			const helper = readFileSync(join(customPath, "ag-skill", "helper.js"), "utf-8");
+			expect(content).toContain(".agents/skills/cook/SKILL.md");
+			expect(content).toContain(".agents/agents.md");
+			expect(content).toContain(".agents/workflows/docs-release.md");
+			expect(content).toContain(".agents/rules/style.md");
+			expect(content).toContain("Claude Code hooks/session-start.cjs");
+			expect(content).not.toContain(".claude/");
+			expect(helper).toBe(".claude/agents/reviewer.md");
+		} finally {
+			originalProviders.antigravity.skills = origAntigravitySkills;
+			rmSync(sourcePath, { recursive: true, force: true });
+		}
+	});
+
 	// Regression: #817 — symlinked target basePath must not clobber the source.
 	// Setup: user has ~/.agents/skills -> ~/.claude/skills (single source of truth).
 	// Before the fix, resolve()-only comparison would proceed with rename+copy and
@@ -268,6 +345,35 @@ describe("installSkillDirectories", () => {
 			"my-skill",
 			"skill",
 			"windsurf",
+			true,
+			join(globalCustomPath, "my-skill"),
+			expect.any(String),
+		);
+	});
+
+	it("kiro global: installs skill to global path derived from registry", async () => {
+		const globalCustomPath = join(testDir, ".kiro-global", "skills");
+		const skill = makeSkill("my-skill", join(sourceDir, "my-skill"));
+
+		const origKiroSkills = originalProviders.kiro.skills;
+		if (origKiroSkills) {
+			originalProviders.kiro.skills = {
+				...origKiroSkills,
+				globalPath: globalCustomPath,
+			};
+		}
+
+		const results = await installSkillDirectories([skill], ["kiro"], { global: true });
+
+		originalProviders.kiro.skills = origKiroSkills;
+
+		expect(results).toHaveLength(1);
+		expect(results[0].success).toBe(true);
+		expect(results[0].path).toBe(join(globalCustomPath, "my-skill"));
+		expect(addPortableInstallationMock).toHaveBeenCalledWith(
+			"my-skill",
+			"skill",
+			"kiro",
 			true,
 			join(globalCustomPath, "my-skill"),
 			expect.any(String),

@@ -27,8 +27,8 @@ describe("agents", () => {
 	});
 
 	describe("agents registry", () => {
-		it("should have 14 agents defined", () => {
-			expect(Object.keys(agents).length).toBe(14);
+		it("should have 15 agents defined", () => {
+			expect(Object.keys(agents).length).toBe(15);
 		});
 
 		it("should have required fields for each agent", () => {
@@ -60,6 +60,20 @@ describe("agents", () => {
 			expect(opencode.displayName).toBe("OpenCode");
 			expect(opencode.projectPath).toBe(".claude/skills");
 			expect(opencode.globalPath).toBe(join(home, ".claude/skills"));
+		});
+
+		it("should have kiro agent with workspace and global skill paths", () => {
+			const kiro = agents.kiro;
+			expect(kiro.displayName).toBe("Kiro");
+			expect(kiro.projectPath).toBe(".kiro/skills");
+			expect(kiro.globalPath).toBe(join(home, ".kiro/skills"));
+		});
+
+		it("should have antigravity agent with Antigravity 2.0 skill paths", () => {
+			const antigravity = agents.antigravity;
+			expect(antigravity.displayName).toBe("Antigravity");
+			expect(antigravity.projectPath).toBe(".agents/skills");
+			expect(antigravity.globalPath).toBe(join(home, ".gemini/config/skills"));
 		});
 	});
 
@@ -115,6 +129,24 @@ describe("agents", () => {
 		it("should handle skill names with special characters", () => {
 			const path = getInstallPath("my-skill-v2", "cursor", { global: true });
 			expect(path).toBe(join(home, ".cursor/skills/my-skill-v2"));
+		});
+
+		it("should return Kiro workspace and global skill paths", () => {
+			expect(getInstallPath("my-skill", "kiro", { global: false })).toBe(
+				join(".kiro/skills", "my-skill"),
+			);
+			expect(getInstallPath("my-skill", "kiro", { global: true })).toBe(
+				join(home, ".kiro/skills/my-skill"),
+			);
+		});
+
+		it("should return Antigravity 2.0 workspace and global skill paths", () => {
+			expect(getInstallPath("my-skill", "antigravity", { global: false })).toBe(
+				join(".agents/skills", "my-skill"),
+			);
+			expect(getInstallPath("my-skill", "antigravity", { global: true })).toBe(
+				join(home, ".gemini/config/skills/my-skill"),
+			);
 		});
 
 		it("should work for all agents", () => {
