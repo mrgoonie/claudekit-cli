@@ -107,6 +107,20 @@ function readPackageName() {
 	return packageJson.name;
 }
 
+function readCliManifestVersion() {
+	const manifest = JSON.parse(readFileSync("cli-manifest.json", "utf8"));
+	return manifest.version;
+}
+
+function validateVersionedMetadata(expectedVersion) {
+	const manifestVersion = readCliManifestVersion();
+	if (manifestVersion !== expectedVersion) {
+		throw new Error(
+			`cli-manifest.json version does not match package.json.\nExpected: ${expectedVersion}\nReceived: ${manifestVersion}\nRun: bun run manifest:generate && bun run docs:generate`,
+		);
+	}
+}
+
 function getDirectorySize(dir) {
 	let size = 0;
 	for (const file of readdirSync(dir)) {
@@ -465,6 +479,7 @@ async function verifyPackageReadyForPublish({
 	smokeInstall = true,
 } = {}) {
 	validateBuildArtifacts({ logger });
+	validateVersionedMetadata(expectedVersion);
 	const { manifest, packDir, tarballPath } = packTarball();
 
 	try {
