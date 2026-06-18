@@ -1,3 +1,45 @@
+## [4.5.0](https://github.com/mrgoonie/claudekit-cli/compare/v4.4.0...v4.5.0) (2026-06-18)
+
+### 🚀 Features
+
+* add Kiro skill and migrate support ([a0b5d9e](https://github.com/mrgoonie/claudekit-cli/commit/a0b5d9e09f6caaf5968b2aaaa876d31770d80f17))
+* **init:** preserve ignored skills during updates ([d0fe074](https://github.com/mrgoonie/claudekit-cli/commit/d0fe074694f2e54baf3824a5fd232ea21a5177a9))
+* surface opt-in Codex sync on every update while disabled ([ae4f598](https://github.com/mrgoonie/claudekit-cli/commit/ae4f598516b7e62ad861fc927e25f13e84072ad5)), closes [#881](https://github.com/mrgoonie/claudekit-cli/issues/881)
+
+### 🐞 Bug Fixes
+
+* converge hook self-heal tracking ([8e3b9e0](https://github.com/mrgoonie/claudekit-cli/commit/8e3b9e05ba5207e9180e1065388d105919b20bfd))
+* detect bun via PATH in system info instead of in-process Bun global ([8cb12a6](https://github.com/mrgoonie/claudekit-cli/commit/8cb12a63609312b4ecfeb76f51712208c97b6717))
+* **doctor:** preserve health check display order ([4289849](https://github.com/mrgoonie/claudekit-cli/commit/4289849d44fed5f3ea5806723ada3f9c6b0893cf))
+* **install:** gate dynamic team hook rehydration ([ad59db1](https://github.com/mrgoonie/claudekit-cli/commit/ad59db1e1c869ccae92c563e5fa95b72294112d1))
+* make hook self-heal detection deterministic via kit manifest ([be16e7b](https://github.com/mrgoonie/claudekit-cli/commit/be16e7b3ce77bbaaf82a1e56b4a7b8dc4b01603b)), closes [#881](https://github.com/mrgoonie/claudekit-cli/issues/881)
+* make SQLite driver optional for CLI updates ([4570795](https://github.com/mrgoonie/claudekit-cli/commit/4570795f8fb05ab0efcd9791020f6f0365446281))
+* migrate legacy statusline runner ([0227fe5](https://github.com/mrgoonie/claudekit-cli/commit/0227fe556ae13fe6a68952029a92dc98b0cf1014))
+* prevent false-negative GitHub network checks in ck doctor ([47eba30](https://github.com/mrgoonie/claudekit-cli/commit/47eba30d98a12bfa54bd0a654583dc35716e838a))
+* **release:** sync CLI metadata after version bumps ([9eda3c0](https://github.com/mrgoonie/claudekit-cli/commit/9eda3c0489e7c4517cf98ec088bf4dba3a24bd5b))
+* resolve CLAUDE_PROJECT_DIR in project-scope codex hook migration ([ce514cb](https://github.com/mrgoonie/claudekit-cli/commit/ce514cb147185f959f1ff4512b91ee8d608ef075)), closes [#883](https://github.com/mrgoonie/claudekit-cli/issues/883)
+* **schema:** add quotaLow/quotaHigh to ck-config JSON schema theme ([1bcb126](https://github.com/mrgoonie/claudekit-cli/commit/1bcb12608f315415d30721fc07e0c5feddaf68b0))
+* support Antigravity 2 migrate layout ([a183916](https://github.com/mrgoonie/claudekit-cli/commit/a1839163bd5e430b56d4e29a359021d49f40381a))
+* support antigravity 2 migration paths ([feda9fb](https://github.com/mrgoonie/claudekit-cli/commit/feda9fbf84cd3838d40bcb272dcf7fd71157d32e))
+* surface Codex feature-flag write failure during hook migration ([5ac15d0](https://github.com/mrgoonie/claudekit-cli/commit/5ac15d0ec87ab500345e8674a630ec70cb280916)), closes [#881](https://github.com/mrgoonie/claudekit-cli/issues/881)
+* **sync:** apply deletion-only cleanup ([38b610c](https://github.com/mrgoonie/claudekit-cli/commit/38b610cedd2510e4ebf8c1a6a1f21a57f5ffa790))
+* **ui:** default quotaHigh theme color to red ([a452603](https://github.com/mrgoonie/claudekit-cli/commit/a45260322d3a0b9b79d9e1100159f6cf6afcea13))
+
+### ♻️ Code Refactoring
+
+* render Codex sync notice as a boxed panel with plain-language value ([d1cb302](https://github.com/mrgoonie/claudekit-cli/commit/d1cb302ad25513ebdbbaf47eeaaa66c3242c1ea4))
+
+### 📚 Documentation
+
+* add system-info bun detection before/after screenshots ([d3e2184](https://github.com/mrgoonie/claudekit-cli/commit/d3e2184e345a7094dc9c2b9ba0e611ba0d63954e))
+
+### ✅ Tests
+
+* bypass portable registry mock leakage ([a1726d3](https://github.com/mrgoonie/claudekit-cli/commit/a1726d3b23e48e39c2da5e7614a28a8d6d7b149a))
+* isolate portable registry mock state ([b500821](https://github.com/mrgoonie/claudekit-cli/commit/b5008210a41d8455ff6ae4d56dd4cfa507894482))
+* properly unset CK_TEST_HOME in test-paths cleanup ([86b99ed](https://github.com/mrgoonie/claudekit-cli/commit/86b99edc7581a2403780cbe6123f2c29ae903ea2))
+* reset ConfigManager static cache before each config test ([05afb2b](https://github.com/mrgoonie/claudekit-cli/commit/05afb2bf96134f098789c809742cebacc72e8a4c))
+
 ## [4.4.0](https://github.com/mrgoonie/claudekit-cli/compare/v4.3.1...v4.4.0) (2026-05-27)
 
 ### 🚀 Features
