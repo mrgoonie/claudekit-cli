@@ -211,11 +211,65 @@ export function appendMigrationWarningMessages(
 	warnings: MigrationWarning[] | undefined,
 ): void {
 	if (!warnings) return;
+	for (const message of formatMigrationWarningMessages(warnings)) {
+		if (!target.includes(message)) target.push(message);
+	}
+}
+
+function formatMigrationWarningMessages(warnings: MigrationWarning[]): string[] {
+	const unsupportedEvents = collectWarningValues(warnings, "unsupported-event", "event");
+	const excludedHooks = collectWarningValues(warnings, "excluded-hook", "hookFile");
+	const missingHooks = collectWarningValues(warnings, "missing-hook-file", "hookFile").filter(
+		(hookFile) => !isGeneratedContextHookName(hookFile),
+	);
+	const groupedReasons = new Set(["unsupported-event", "excluded-hook", "missing-hook-file"]);
+	const messages: string[] = [];
+
+	if (unsupportedEvents.length > 0) {
+		messages.push(
+			`Skipped Codex-incompatible Claude hook event(s): ${summarizeValues(unsupportedEvents)}.`,
+		);
+	}
+	if (excludedHooks.length > 0) {
+		messages.push(
+			`Skipped Claude-only/generated hook file(s) for Codex: ${summarizeValues(excludedHooks)}.`,
+		);
+	}
+	if (missingHooks.length > 0) {
+		messages.push(
+			`Skipped hook registration(s) whose files are not installed: ${summarizeValues(missingHooks)}. Run \`ck init --restore-ck-hooks\` if these hooks should exist.`,
+		);
+	}
+
 	for (const warning of warnings) {
-		if (!target.includes(warning.message)) {
-			target.push(warning.message);
+		if (!groupedReasons.has(warning.reason) && !messages.includes(warning.message)) {
+			messages.push(warning.message);
 		}
 	}
+
+	return messages;
+}
+
+function collectWarningValues(
+	warnings: MigrationWarning[],
+	reason: string,
+	field: "event" | "hookFile",
+): string[] {
+	return Array.from(
+		new Set(
+			warnings
+				.filter((warning) => warning.reason === reason)
+				.map((warning) => warning[field])
+				.filter((value): value is string => typeof value === "string" && value.length > 0),
+		),
+	).sort((a, b) => a.localeCompare(b));
+}
+
+function summarizeValues(values: string[], maxValues = 8): string {
+	const visible = values.slice(0, maxValues);
+	const suffix =
+		values.length > visible.length ? `, and ${values.length - visible.length} more` : "";
+	return `${visible.join(", ")}${suffix}`;
 }
 
 export function appendFallbackSkillActionsToPlan(
@@ -678,7 +732,7 @@ export async function migrateCommand(options: MigrateOptions): Promise<void> {
 			);
 		}
 		if (disabledGeneratedHooks.length > 0) {
-			logger.warning(
+			logger.verbose(
 				`[migrate] Disabling ${disabledGeneratedHooks.length} generated-context hook(s): ${disabledGeneratedHooks.map((item) => item.name).join(", ")}`,
 			);
 		}

@@ -10,7 +10,7 @@ import {
 	readHooksFromSettings,
 	rewriteHookPaths,
 } from "../hooks-settings-merger.js";
-import type { ProviderType } from "../types.js";
+import type { MigrationWarning, ProviderType } from "../types.js";
 
 const testDir = join(tmpdir(), "claudekit-hooks-merger-test");
 const normalizePathForAssert = (value: string | null | undefined) =>
@@ -140,6 +140,34 @@ describe("filterToInstalledHooks", () => {
 		expect(result.SessionStart[0].hooks).toHaveLength(1);
 		expect(result.SessionStart[0].hooks[0].command).toContain("session-init.cjs");
 		expect(result.PreToolUse[0].hooks).toHaveLength(1);
+	});
+
+	it("reports project-dir hook references by basename when source files are missing", () => {
+		const warnings: MigrationWarning[] = [];
+		const projectHooks = {
+			SessionStart: [
+				{
+					hooks: [
+						{
+							type: "command",
+							command:
+								'bash "$CLAUDE_PROJECT_DIR"/.claude/hooks/node-hook-runner.sh "$CLAUDE_PROJECT_DIR"/.claude/hooks/session-init.cjs',
+						},
+					],
+				},
+			],
+		};
+
+		const result = filterToInstalledHooks(projectHooks, ["node-hook-runner.sh"], {
+			targetProvider: "codex",
+			warnings,
+		});
+
+		expect(result.SessionStart).toBeUndefined();
+		expect(warnings.some((warning) => warning.hookFile === "session-init.cjs")).toBe(true);
+		expect(warnings.some((warning) => warning.hookFile?.includes("CLAUDE_PROJECT_DIR"))).toBe(
+			false,
+		);
 	});
 
 	it("drops entire event when no hooks match", () => {

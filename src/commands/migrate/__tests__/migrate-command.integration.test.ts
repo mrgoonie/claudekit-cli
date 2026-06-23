@@ -122,7 +122,7 @@ describe("resolveMigrationMode", () => {
 // ---------------------------------------------------------------------------
 
 describe("appendMigrationWarningMessages", () => {
-	it("appends structured hook warning messages even when migration succeeds", () => {
+	it("summarizes structured hook warnings even when migration succeeds", () => {
 		const messages: string[] = ["existing warning"];
 
 		appendMigrationWarningMessages(messages, [
@@ -136,17 +136,23 @@ describe("appendMigrationWarningMessages", () => {
 				hookFile: "usage-context-awareness.cjs",
 				message: "Skipped excluded hook usage-context-awareness.cjs",
 			},
+			{
+				reason: "missing-hook-file",
+				hookFile: "custom-hook.cjs",
+				message: "Hook file not installed: custom-hook.cjs",
+			},
 		]);
 
 		expect(messages).toEqual([
 			"existing warning",
-			"Skipped unsupported Codex hook event SubagentStart",
-			"Skipped excluded hook usage-context-awareness.cjs",
+			"Skipped Codex-incompatible Claude hook event(s): SubagentStart.",
+			"Skipped Claude-only/generated hook file(s) for Codex: usage-context-awareness.cjs.",
+			"Skipped hook registration(s) whose files are not installed: custom-hook.cjs. Run `ck init --restore-ck-hooks` if these hooks should exist.",
 		]);
 	});
 
-	it("deduplicates repeated warning messages", () => {
-		const messages: string[] = ["Skipped unsupported Codex hook event Notification"];
+	it("deduplicates repeated warning summaries", () => {
+		const messages: string[] = ["Skipped Codex-incompatible Claude hook event(s): Notification."];
 
 		appendMigrationWarningMessages(messages, [
 			{
@@ -156,7 +162,21 @@ describe("appendMigrationWarningMessages", () => {
 			},
 		]);
 
-		expect(messages).toEqual(["Skipped unsupported Codex hook event Notification"]);
+		expect(messages).toEqual(["Skipped Codex-incompatible Claude hook event(s): Notification."]);
+	});
+
+	it("does not warn about generated-context hooks that Codex migration disables intentionally", () => {
+		const messages: string[] = [];
+
+		appendMigrationWarningMessages(messages, [
+			{
+				reason: "missing-hook-file",
+				hookFile: "session-init.cjs",
+				message: "Hook file not installed: session-init.cjs",
+			},
+		]);
+
+		expect(messages).toEqual([]);
 	});
 });
 

@@ -35,12 +35,22 @@ const HOOK_REF_EXTENSIONS = new Set([".js", ".cjs", ".mjs", ".ts", ".sh", ".ps1"
 
 export function normalizeHookAssetPath(value: string): string {
 	return value
+		.trim()
 		.replace(/\\/g, "/")
 		.replace(/^["']|["']$/g, "")
 		.replace(/[),;]+$/, "")
+		.replace(/^["']|["']$/g, "")
 		.replace(/^\.\//, "")
+		.replace(/^\$CLAUDE_PROJECT_DIR"?\/\.claude\/hooks\//, "")
+		.replace(/^\$CLAUDE_PROJECT_DIR"?\/\.codex\/hooks\//, "")
+		.replace(/^\$\{CLAUDE_PROJECT_DIR\}"?\/\.claude\/hooks\//, "")
+		.replace(/^\$\{CLAUDE_PROJECT_DIR\}"?\/\.codex\/hooks\//, "")
+		.replace(/^%CLAUDE_PROJECT_DIR%"?\/\.claude\/hooks\//, "")
+		.replace(/^%CLAUDE_PROJECT_DIR%"?\/\.codex\/hooks\//, "")
 		.replace(/^\$HOME\/\.claude\/hooks\//, "")
 		.replace(/^\$HOME\/\.codex\/hooks\//, "")
+		.replace(/^%USERPROFILE%\/\.claude\/hooks\//, "")
+		.replace(/^%USERPROFILE%\/\.codex\/hooks\//, "")
 		.replace(/^~\/\.claude\/hooks\//, "")
 		.replace(/^~\/\.codex\/hooks\//, "")
 		.replace(/^\.claude\/hooks\//, "")
