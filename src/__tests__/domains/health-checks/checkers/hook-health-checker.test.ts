@@ -625,6 +625,65 @@ describe("checkHookCommandPaths", () => {
 			'node "$CLAUDE_PROJECT_DIR"/.claude/hooks/session-state.cjs',
 		);
 	});
+
+	test("auto-fix converges for managed global project-root hooks under custom global dir", async () => {
+		const globalDir = join(tempDir, ".claude");
+		await mkdir(join(globalDir, "hooks"), { recursive: true });
+		await writeFile(
+			join(globalDir, "hooks", "managed-hooks.json"),
+			JSON.stringify({ managedHooks: ["session-init"] }),
+		);
+		const settingsPath = join(globalDir, "settings.json");
+		await writeFile(
+			settingsPath,
+			JSON.stringify(
+				{
+					statusLine: {
+						type: "command",
+						command: 'node "$CLAUDE_PROJECT_DIR"/.claude/statusline.cjs',
+					},
+					hooks: {
+						UserPromptSubmit: [
+							{
+								hooks: [
+									{
+										type: "command",
+										command: 'node "$CLAUDE_PROJECT_DIR"/.claude/hooks/session-init.cjs',
+									},
+								],
+							},
+						],
+					},
+				},
+				null,
+				2,
+			),
+		);
+
+		const result = await checkHookCommandPaths(projectDir);
+
+		expect(result.status).toBe("fail");
+		expect(result.details).toContain("global settings.json");
+		expect(result.details).toContain("statusLine");
+		expect(result.details).toContain("UserPromptSubmit");
+		expect(result.autoFixable).toBe(true);
+
+		const fixResult = await result.fix?.execute();
+		expect(fixResult?.success).toBe(true);
+
+		const repaired = JSON.parse(await readFile(settingsPath, "utf-8")) as {
+			statusLine: { command: string };
+			hooks: { UserPromptSubmit: Array<{ hooks: Array<{ command: string }> }> };
+		};
+		const normalizedGlobalDir = globalDir.replace(/\\/g, "/");
+		expect(repaired.statusLine.command).toBe(`node "${normalizedGlobalDir}/statusline.cjs"`);
+		expect(repaired.hooks.UserPromptSubmit[0].hooks[0].command).toBe(
+			`node "${normalizedGlobalDir}/hooks/session-init.cjs"`,
+		);
+
+		const after = await checkHookCommandPaths(projectDir);
+		expect(after.status).toBe("pass");
+	});
 });
 
 describe("checkLegacyHookPrompts", () => {
