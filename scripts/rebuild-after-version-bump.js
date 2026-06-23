@@ -39,6 +39,10 @@ export async function prepare(_pluginConfig, context) {
 		logger.log(`package.json already at ${nextVersion} before rebuild.`);
 	}
 
+	logger.log("Regenerating versioned CLI manifest and reference docs...");
+	execSync("bun run manifest:generate", { stdio: "inherit" });
+	execSync("bun run docs:generate", { stdio: "inherit" });
+
 	logger.log("Rebuilding dist bundle with bumped version...");
 	execSync("bun run build", { stdio: "inherit" });
 

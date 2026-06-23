@@ -111,6 +111,11 @@ jobs:
         run: |
           npm version "${{ steps.version.outputs.version }}" --no-git-tag-version
 
+      - name: Regenerate versioned CLI metadata
+        run: |
+          bun run manifest:generate
+          bun run docs:generate
+
       - name: Build release bundle after version bump
         run: bun run build
 
@@ -132,6 +137,7 @@ jobs:
       - name: Commit and tag
         run: |
           git add package.json
+          git add cli-manifest.json docs/cli-reference.md
           [ -f CHANGELOG.md ] && git add CHANGELOG.md
           git commit -m "chore(release): ${{ steps.version.outputs.version }} [skip ci]"
           git tag "v${{ steps.version.outputs.version }}"
