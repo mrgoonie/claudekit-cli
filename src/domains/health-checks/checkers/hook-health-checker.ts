@@ -2,7 +2,7 @@ import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
 import { readdir } from "node:fs/promises";
 import { homedir, tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { type SettingsJson, SettingsMerger } from "@/domains/config/settings-merger.js";
 import { isLegacyDescriptiveNamePrompt } from "@/domains/installation/merger/zombie-wirings-pruner.js";
 import { CLAUDEKIT_CLI_NPM_PACKAGE_NAME } from "@/shared/claudekit-constants.js";
@@ -40,6 +40,7 @@ export interface ClaudeSettingsFile {
 	path: string;
 	label: string;
 	root: string;
+	managedHookNames?: Set<string>;
 }
 
 export interface HookCommandFinding {
@@ -107,8 +108,22 @@ function getCanonicalGlobalCommandRoot(): string {
 	return configuredGlobalDir === defaultGlobalDir ? "$HOME" : configuredGlobalDir;
 }
 
+function readManagedHookNamesForClaudeDir(claudeDir: string): Set<string> {
+	const manifestPath = join(claudeDir, "hooks", "managed-hooks.json");
+	if (!existsSync(manifestPath)) return new Set();
+
+	try {
+		const data = JSON.parse(readFileSync(manifestPath, "utf-8")) as { managedHooks?: unknown };
+		if (!Array.isArray(data.managedHooks)) return new Set();
+		return new Set(data.managedHooks.filter((name): name is string => typeof name === "string"));
+	} catch {
+		return new Set();
+	}
+}
+
 function getClaudeSettingsFiles(projectDir: string): ClaudeSettingsFile[] {
 	const globalClaudeDir = PathResolver.getGlobalKitDir();
+	const globalManagedHookNames = readManagedHookNamesForClaudeDir(globalClaudeDir);
 	const ccsSettingsDir = join(process.env.CK_TEST_HOME ?? homedir(), ".ccs");
 	const candidates: ClaudeSettingsFile[] = [
 		{
@@ -125,11 +140,13 @@ function getClaudeSettingsFiles(projectDir: string): ClaudeSettingsFile[] {
 			path: resolve(globalClaudeDir, "settings.json"),
 			label: "global settings.json",
 			root: getCanonicalGlobalCommandRoot(),
+			managedHookNames: globalManagedHookNames,
 		},
 		{
 			path: resolve(globalClaudeDir, "settings.local.json"),
 			label: "global settings.local.json",
 			root: getCanonicalGlobalCommandRoot(),
+			managedHookNames: globalManagedHookNames,
 		},
 	];
 
@@ -147,6 +164,57 @@ function getClaudeSettingsFiles(projectDir: string): ClaudeSettingsFile[] {
 	}
 
 	return candidates.filter((candidate) => existsSync(candidate.path));
+}
+
+function isProjectScopedCanonicalHookCommand(cmd: string): boolean {
+	return (
+		/^node\s+"\$CLAUDE_PROJECT_DIR"\/\.claude\/\S+/.test(cmd) ||
+		/^bash\s+"\$CLAUDE_PROJECT_DIR"\/\.claude\/hooks\/node-hook-runner\.sh\s+"\$CLAUDE_PROJECT_DIR"\/\.claude\/\S+/.test(
+			cmd,
+		)
+	);
+}
+
+function isProjectScopedStatusLineCommand(cmd: string): boolean {
+	return (
+		/^node\s+"\$CLAUDE_PROJECT_DIR"\/\.claude\/statusline\.cjs(?:\s|$)/.test(cmd) ||
+		/^bash\s+"\$CLAUDE_PROJECT_DIR"\/\.claude\/hooks\/node-hook-runner\.sh\s+"\$CLAUDE_PROJECT_DIR"\/\.claude\/statusline\.cjs(?:\s|$)/.test(
+			cmd,
+		)
+	);
+}
+
+function extractHookNames(command: string): string[] {
+	const normalized = command.replace(/\\/g, "/");
+	const names: string[] = [];
+	const pattern = /\/hooks\/([^/"'\s]+)\.(?:cjs|mjs|js)(?:["'\s]|$)/g;
+	for (const match of normalized.matchAll(pattern)) {
+		if (match[1]) names.push(match[1]);
+	}
+	return names;
+}
+
+function getManagedHookNames(settingsFile: ClaudeSettingsFile): Set<string> {
+	return (
+		settingsFile.managedHookNames ?? readManagedHookNamesForClaudeDir(dirname(settingsFile.path))
+	);
+}
+
+function isManagedHookCommand(command: string, settingsFile: ClaudeSettingsFile): boolean {
+	const managedHookNames = getManagedHookNames(settingsFile);
+	if (managedHookNames.size === 0) return false;
+	return extractHookNames(command).some((name) => managedHookNames.has(name));
+}
+
+function shouldRepairManagedGlobalProjectRoot(
+	command: string,
+	settingsFile: ClaudeSettingsFile,
+	eventName?: string,
+): boolean {
+	if (settingsFile.root === "$CLAUDE_PROJECT_DIR") return false;
+	if (eventName === "statusLine" && isProjectScopedStatusLineCommand(command)) return true;
+	if (!isProjectScopedCanonicalHookCommand(command)) return false;
+	return isManagedHookCommand(command, settingsFile);
 }
 
 /**
@@ -179,31 +247,67 @@ function isAlreadyCanonical(cmd: string): boolean {
 	);
 }
 
+function isAlreadyCanonicalForSettingsFile(cmd: string, settingsFile: ClaudeSettingsFile): boolean {
+	if (isAlreadyCanonical(cmd)) return true;
+
+	const root = settingsFile.root.replace(/\\/g, "/").replace(/\/+$/, "");
+	if (root === "$HOME" || root === "$CLAUDE_PROJECT_DIR") return false;
+
+	const command = cmd.replace(/\\/g, "/");
+	const escapedRoot = escapeRegex(root);
+	return (
+		new RegExp(`^node\\s+"${escapedRoot}/[^"]+"`).test(command) ||
+		new RegExp(
+			`^bash\\s+"${escapedRoot}/hooks/node-hook-runner\\.sh"\\s+"${escapedRoot}/[^"]+"`,
+		).test(command)
+	);
+}
+
 function collectHookCommandFindings(
 	settings: SettingsJson,
 	settingsFile: ClaudeSettingsFile,
 ): HookCommandFinding[] {
-	if (!settings.hooks) {
-		return [];
+	const findings: HookCommandFinding[] = [];
+
+	const collectCommand = (eventName: string, command: string, matcher?: string): void => {
+		// Skip canonical cross-scope user hooks, but repair CK-managed global
+		// hooks that still point at the active project.
+		if (
+			isAlreadyCanonicalForSettingsFile(command, settingsFile) &&
+			!shouldRepairManagedGlobalProjectRoot(command, settingsFile, eventName)
+		) {
+			return;
+		}
+
+		const repair = repairClaudeHookCommandPath(command, settingsFile.root);
+		if (!repair.changed || !repair.issue) {
+			return;
+		}
+
+		findings.push({
+			path: settingsFile.path,
+			label: settingsFile.label,
+			eventName,
+			matcher,
+			command,
+			expected: repair.command,
+			issue: repair.issue,
+		});
+	};
+
+	const statusLine = settings.statusLine as { command?: unknown } | undefined;
+	if (typeof statusLine?.command === "string") {
+		collectCommand("statusLine", statusLine.command);
 	}
 
-	const findings: HookCommandFinding[] = [];
+	if (!settings.hooks) {
+		return findings;
+	}
+
 	for (const [eventName, entries] of Object.entries(settings.hooks)) {
 		for (const entry of entries) {
 			if ("command" in entry && typeof entry.command === "string") {
-				// Skip commands already in any canonical form — cross-scope references are valid.
-				if (isAlreadyCanonical(entry.command)) continue;
-				const repair = repairClaudeHookCommandPath(entry.command, settingsFile.root);
-				if (repair.changed && repair.issue) {
-					findings.push({
-						path: settingsFile.path,
-						label: settingsFile.label,
-						eventName,
-						command: entry.command,
-						expected: repair.command,
-						issue: repair.issue,
-					});
-				}
+				collectCommand(eventName, entry.command);
 			}
 
 			if (!("hooks" in entry) || !entry.hooks) {
@@ -215,23 +319,7 @@ function collectHookCommandFindings(
 					continue;
 				}
 
-				// Skip commands already in any canonical form — cross-scope references are valid.
-				if (isAlreadyCanonical(hook.command)) continue;
-
-				const repair = repairClaudeHookCommandPath(hook.command, settingsFile.root);
-				if (!repair.changed || !repair.issue) {
-					continue;
-				}
-
-				findings.push({
-					path: settingsFile.path,
-					label: settingsFile.label,
-					eventName,
-					matcher: "matcher" in entry ? entry.matcher : undefined,
-					command: hook.command,
-					expected: repair.command,
-					issue: repair.issue,
-				});
+				collectCommand(eventName, hook.command, "matcher" in entry ? entry.matcher : undefined);
 			}
 		}
 	}
@@ -260,7 +348,7 @@ export async function findStaleHookCommandsInFile(
 
 async function repairHookCommandsInSettingsFile(settingsFile: ClaudeSettingsFile): Promise<number> {
 	const settings = await SettingsMerger.readSettingsFile(settingsFile.path);
-	if (!settings?.hooks) {
+	if (!settings) {
 		return 0;
 	}
 
@@ -277,28 +365,39 @@ async function repairHookCommandsInSettingsFile(settingsFile: ClaudeSettingsFile
 	const repairMap = new Map<string, string>(findings.map((f) => [f.command, f.expected]));
 
 	let repaired = 0;
-	for (const entries of Object.values(settings.hooks)) {
-		for (const entry of entries) {
-			if ("command" in entry && typeof entry.command === "string") {
-				const fixed = repairMap.get(entry.command);
-				if (fixed !== undefined) {
-					entry.command = fixed;
-					repaired++;
+	const statusLine = settings.statusLine as { command?: unknown } | undefined;
+	if (typeof statusLine?.command === "string") {
+		const fixed = repairMap.get(statusLine.command);
+		if (fixed !== undefined) {
+			statusLine.command = fixed;
+			repaired++;
+		}
+	}
+
+	if (settings.hooks) {
+		for (const entries of Object.values(settings.hooks)) {
+			for (const entry of entries) {
+				if ("command" in entry && typeof entry.command === "string") {
+					const fixed = repairMap.get(entry.command);
+					if (fixed !== undefined) {
+						entry.command = fixed;
+						repaired++;
+					}
 				}
-			}
 
-			if (!("hooks" in entry) || !entry.hooks) {
-				continue;
-			}
-
-			for (const hook of entry.hooks) {
-				if (!hook.command) {
+				if (!("hooks" in entry) || !entry.hooks) {
 					continue;
 				}
-				const fixed = repairMap.get(hook.command);
-				if (fixed !== undefined) {
-					hook.command = fixed;
-					repaired++;
+
+				for (const hook of entry.hooks) {
+					if (!hook.command) {
+						continue;
+					}
+					const fixed = repairMap.get(hook.command);
+					if (fixed !== undefined) {
+						hook.command = fixed;
+						repaired++;
+					}
 				}
 			}
 		}
