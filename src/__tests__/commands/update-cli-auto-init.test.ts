@@ -33,11 +33,19 @@ async function writeMetadata(dir: string, version = "1.0.0") {
 
 async function writeGlobalHookState(
 	dir: string,
-	options: { disabled?: Record<string, boolean>; includeSessionState?: boolean } = {},
+	options: {
+		disabled?: Record<string, boolean>;
+		includeSessionState?: boolean;
+		projectScopedCommands?: boolean;
+	} = {},
 ) {
-	const hooks = [{ type: "command", command: 'node "$HOME/.claude/hooks/simplify-gate.cjs"' }];
+	const commandFor = (name: string) =>
+		options.projectScopedCommands
+			? `node "$CLAUDE_PROJECT_DIR"/.claude/hooks/${name}.cjs`
+			: `node "$HOME/.claude/hooks/${name}.cjs"`;
+	const hooks = [{ type: "command", command: commandFor("simplify-gate") }];
 	if (options.includeSessionState) {
-		hooks.push({ type: "command", command: 'node "$HOME/.claude/hooks/session-state.cjs"' });
+		hooks.push({ type: "command", command: commandFor("session-state") });
 	}
 
 	await writeFile(
@@ -286,6 +294,22 @@ describe("promptKitUpdate auto-init behavior", () => {
 		expect(capturedExecCmd()).toContain("--restore-ck-hooks");
 	});
 
+	test("restores global hook registrations that point at CLAUDE_PROJECT_DIR (--yes mode)", async () => {
+		await writeGlobalHookState(tempDir, {
+			includeSessionState: true,
+			projectScopedCommands: true,
+		});
+
+		const { deps, execCount, spawnCount, capturedExecCmd } = makeDeps();
+		deps.getLatestReleaseTagFn = async () => "v1.0.0";
+		await promptKitUpdate(false, true, deps);
+
+		expect(execCount()).toBe(1);
+		expect(spawnCount()).toBe(0);
+		expect(capturedExecCmd()).toContain("ck init -g");
+		expect(capturedExecCmd()).toContain("--restore-ck-hooks");
+	});
+
 	test("does not force global hook restore for hooks explicitly disabled in .ck.json", async () => {
 		await writeGlobalHookState(tempDir, {
 			disabled: { "session-state": false },
@@ -362,6 +386,39 @@ describe("promptKitUpdate auto-init behavior", () => {
 		await writeDisabledHooks(tempDir, {});
 
 		await expect(countMissingCkHookRegistrations(tempDir, "engineer")).resolves.toBe(1);
+	});
+
+	test("counts global managed hooks registered with project-scoped roots as missing", async () => {
+		await writeManagedHooksManifest(tempDir, ["session-init"]);
+		await writeFile(
+			join(tempDir, "settings.json"),
+			JSON.stringify(
+				{
+					hooks: {
+						UserPromptSubmit: [
+							{
+								hooks: [
+									{
+										type: "command",
+										command: 'node "$CLAUDE_PROJECT_DIR"/.claude/hooks/session-init.cjs',
+									},
+								],
+							},
+						],
+					},
+				},
+				null,
+				2,
+			),
+		);
+		await writeDisabledHooks(tempDir, {});
+
+		await expect(
+			countMissingCkHookRegistrations(tempDir, "engineer", { isGlobal: true }),
+		).resolves.toBe(1);
+		await expect(
+			countMissingCkHookRegistrations(tempDir, "engineer", { isGlobal: false }),
+		).resolves.toBe(0);
 	});
 
 	test("does not count an explicitly disabled managed hook", async () => {

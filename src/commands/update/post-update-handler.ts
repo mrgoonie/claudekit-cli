@@ -20,7 +20,6 @@ import {
 import { getInstalledKits } from "@/domains/migration/metadata-migration.js";
 import { versionsMatch } from "@/domains/versioning/checking/version-utils.js";
 import { getClaudeKitSetup } from "@/services/file-operations/claudekit-scanner.js";
-import { normalizeCommand } from "@/shared/command-normalizer.js";
 import { parseJsonContent } from "@/shared/json-content.js";
 import { logger } from "@/shared/logger.js";
 import { confirm, isCancel, log, spinner } from "@/shared/safe-prompts.js";
@@ -63,6 +62,10 @@ interface CkConfigSnapshot {
 
 interface ManagedHooksManifest {
 	managedHooks?: string[];
+}
+
+interface HookRegistrationStatus {
+	hasCorrectScope: boolean;
 }
 
 // ─── Kit selection ────────────────────────────────────────────────────────────
@@ -143,31 +146,42 @@ function extractCkHookName(command: string): string | null {
 	return match?.[1] ?? null;
 }
 
-function collectSettingsHookCommands(settings: CkSettingsSnapshot): Set<string> {
-	const commands = new Set<string>();
+function commandUsesProjectDirRoot(command: string): boolean {
+	return /\$\{?CLAUDE_PROJECT_DIR\}?|%CLAUDE_PROJECT_DIR%/.test(command);
+}
+
+/** Live CK hook registrations currently present in settings.json. */
+function collectSettingsHookRegistrations(
+	settings: CkSettingsSnapshot,
+	options: { isGlobal?: boolean } = {},
+): Map<string, HookRegistrationStatus> {
+	const registrations = new Map<string, HookRegistrationStatus>();
+
+	const addCommand = (command: string) => {
+		const hookName = extractCkHookName(command);
+		if (!hookName) return;
+
+		const previous = registrations.get(hookName);
+		const hasCorrectScope =
+			previous?.hasCorrectScope ||
+			!(options.isGlobal === true && commandUsesProjectDirRoot(command));
+		registrations.set(hookName, { hasCorrectScope });
+	};
+
 	for (const entries of Object.values(settings.hooks ?? {})) {
 		for (const entry of entries) {
 			if (typeof entry.command === "string") {
-				commands.add(normalizeCommand(entry.command));
+				addCommand(entry.command);
 			}
 			for (const hook of entry.hooks ?? []) {
 				if (typeof hook.command === "string") {
-					commands.add(normalizeCommand(hook.command));
+					addCommand(hook.command);
 				}
 			}
 		}
 	}
-	return commands;
-}
 
-/** Live CK hook names currently registered in settings.json. */
-function collectSettingsHookNames(settings: CkSettingsSnapshot): Set<string> {
-	const names = new Set<string>();
-	for (const command of collectSettingsHookCommands(settings)) {
-		const hookName = extractCkHookName(command);
-		if (hookName) names.add(hookName);
-	}
-	return names;
+	return registrations;
 }
 
 /** Read the kit-shipped managed-hooks manifest from the hooks directory. */
@@ -225,6 +239,7 @@ async function readDisabledHookNames(claudeDir: string): Promise<Set<string>> {
 export async function countMissingCkHookRegistrations(
 	claudeDir: string,
 	kit?: KitType,
+	options: { isGlobal?: boolean } = {},
 ): Promise<number> {
 	void kit;
 	const settingsPath = join(claudeDir, "settings.json");
@@ -234,7 +249,7 @@ export async function countMissingCkHookRegistrations(
 	if (managedHooks.length === 0) return 0;
 
 	const settings = parseJsonContent<CkSettingsSnapshot>(await readFile(settingsPath, "utf-8"));
-	const liveHookNames = collectSettingsHookNames(settings);
+	const liveHookRegistrations = collectSettingsHookRegistrations(settings, options);
 	const disabledHooks = await readDisabledHookNames(claudeDir);
 	const hooksDir = join(claudeDir, "hooks");
 
@@ -242,7 +257,7 @@ export async function countMissingCkHookRegistrations(
 	for (const name of managedHooks) {
 		if (disabledHooks.has(name)) continue;
 		if (!existsSync(join(hooksDir, `${name}.cjs`))) continue;
-		if (!liveHookNames.has(name)) missing++;
+		if (!liveHookRegistrations.get(name)?.hasCorrectScope) missing++;
 	}
 	return missing;
 }
@@ -492,6 +507,7 @@ export async function promptKitUpdate(
 				const missingHookRegistrations = await countMissingCkHookRegistrations(
 					selectedClaudeDir,
 					selection.kit,
+					{ isGlobal: selection.isGlobal },
 				);
 				if (missingHookRegistrations > 0) {
 					logger.warning(
