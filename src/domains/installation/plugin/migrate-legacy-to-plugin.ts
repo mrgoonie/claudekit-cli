@@ -139,10 +139,12 @@ function base(
 	};
 }
 
+const PLUGIN_SUPPLIED_LEGACY_PREFIXES = ["agents/", "skills/"];
+
 /**
- * Default legacy remover: backs up and removes ck-owned engineer kit files tracked
- * in metadata.json (ownership "ck" or "ck-modified"), preserving "user" files.
- * Skill payloads live under skills/ and are the bulk of what the plugin now provides.
+ * Default legacy remover: backs up and removes ck-owned engineer kit files that
+ * are now supplied by the Claude Code plugin, preserving user-owned files and
+ * legacy runtime surfaces that the plugin format does not yet provide.
  */
 export function defaultLegacyRemover(claudeDir: string, backupDir: string): string[] {
 	const meta = readJsonSafe(join(claudeDir, "metadata.json"));
@@ -150,6 +152,7 @@ export function defaultLegacyRemover(claudeDir: string, backupDir: string): stri
 	const removed: string[] = [];
 	for (const file of files) {
 		if (file.ownership === "user") continue; // never delete user-owned content
+		if (!isPluginSuppliedLegacyPath(file.path)) continue;
 		const abs = join(claudeDir, file.path);
 		if (!existsSync(abs)) continue;
 		// Back up before removing.
@@ -160,6 +163,11 @@ export function defaultLegacyRemover(claudeDir: string, backupDir: string): stri
 		removed.push(file.path);
 	}
 	return removed;
+}
+
+function isPluginSuppliedLegacyPath(pathValue: string): boolean {
+	const normalized = pathValue.replace(/\\/g, "/").replace(/^\.claude\//, "");
+	return PLUGIN_SUPPLIED_LEGACY_PREFIXES.some((prefix) => normalized.startsWith(prefix));
 }
 
 interface TrackedFile {

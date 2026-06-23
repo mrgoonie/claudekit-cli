@@ -158,6 +158,8 @@ describe("defaultLegacyRemover", () => {
 
 	test("removes ck-owned files, backs them up, preserves user-owned", async () => {
 		await writeFile(join(claudeDir, "skills", "cook", "SKILL.md"), "ck skill", "utf-8");
+		await mkdir(join(claudeDir, "agents"), { recursive: true });
+		await writeFile(join(claudeDir, "agents", "planner.md"), "ck agent", "utf-8");
 		await writeFile(join(claudeDir, "skills", "mine", "SKILL.md"), "user skill", "utf-8");
 		await writeFile(
 			join(claudeDir, "metadata.json"),
@@ -168,6 +170,7 @@ describe("defaultLegacyRemover", () => {
 						installedAt: "x",
 						files: [
 							{ path: "skills/cook/SKILL.md", ownership: "ck" },
+							{ path: "agents/planner.md", ownership: "ck" },
 							{ path: "skills/mine/SKILL.md", ownership: "user" },
 						],
 					},
@@ -178,10 +181,49 @@ describe("defaultLegacyRemover", () => {
 
 		const removed = defaultLegacyRemover(claudeDir, backupDir);
 
-		expect(removed).toEqual(["skills/cook/SKILL.md"]);
+		expect(removed).toEqual(["skills/cook/SKILL.md", "agents/planner.md"]);
 		expect(existsSync(join(claudeDir, "skills", "cook", "SKILL.md"))).toBe(false); // ck removed
+		expect(existsSync(join(claudeDir, "agents", "planner.md"))).toBe(false); // ck removed
 		expect(existsSync(join(claudeDir, "skills", "mine", "SKILL.md"))).toBe(true); // user preserved
 		expect(existsSync(join(backupDir, "skills", "cook", "SKILL.md"))).toBe(true); // backed up
+		expect(existsSync(join(backupDir, "agents", "planner.md"))).toBe(true); // backed up
+	});
+
+	test("preserves runtime files that the plugin format does not supply yet", async () => {
+		await mkdir(join(claudeDir, "hooks"), { recursive: true });
+		await mkdir(join(claudeDir, "rules"), { recursive: true });
+		await mkdir(join(claudeDir, "skills", "cook"), { recursive: true });
+		await writeFile(join(claudeDir, "hooks", "session-init.cjs"), "hook", "utf-8");
+		await writeFile(join(claudeDir, "rules", "team.md"), "rules", "utf-8");
+		await writeFile(join(claudeDir, "statusline.cjs"), "status", "utf-8");
+		await writeFile(join(claudeDir, "skills", "cook", "SKILL.md"), "skill", "utf-8");
+		await writeFile(
+			join(claudeDir, "metadata.json"),
+			JSON.stringify({
+				kits: {
+					engineer: {
+						version: "2.19.0",
+						installedAt: "x",
+						files: [
+							{ path: "hooks/session-init.cjs", ownership: "ck" },
+							{ path: "rules/team.md", ownership: "ck" },
+							{ path: "statusline.cjs", ownership: "ck" },
+							{ path: "skills/cook/SKILL.md", ownership: "ck" },
+						],
+					},
+				},
+			}),
+			"utf-8",
+		);
+
+		const removed = defaultLegacyRemover(claudeDir, backupDir);
+
+		expect(removed).toEqual(["skills/cook/SKILL.md"]);
+		expect(existsSync(join(claudeDir, "skills", "cook", "SKILL.md"))).toBe(false);
+		expect(existsSync(join(claudeDir, "hooks", "session-init.cjs"))).toBe(true);
+		expect(existsSync(join(claudeDir, "rules", "team.md"))).toBe(true);
+		expect(existsSync(join(claudeDir, "statusline.cjs"))).toBe(true);
+		expect(existsSync(join(backupDir, "hooks", "session-init.cjs"))).toBe(false);
 	});
 
 	test("multi-kit: removes ONLY engineer kit files, never another kit's files", async () => {
