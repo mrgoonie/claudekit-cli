@@ -17,6 +17,7 @@ import {
 	repairLegacyHookPrompts,
 	repairMissingHookFileReferences,
 } from "@/domains/health-checks/checkers/hook-health-checker.js";
+import { shouldRefreshCodexPlugin } from "@/domains/installation/plugin/codex-plugin-installer.js";
 import {
 	type InstallModeReport,
 	detectInstallMode,
@@ -374,6 +375,7 @@ export interface PromptKitUpdateDeps {
 	countMissingHookFileReferencesFn?: (projectDir: string) => Promise<number>;
 	detectInstallModeFn?: (claudeDir: string) => InstallModeReport;
 	hasTrackedPluginSuppliedLegacyFilesFn?: (claudeDir: string) => boolean;
+	shouldRefreshCodexPluginFn?: () => Promise<boolean>;
 }
 
 async function findMissingHookDependencies(claudeDir: string): Promise<string[]> {
@@ -430,6 +432,7 @@ export async function promptKitUpdate(
 		const detectInstallModeFn = deps?.detectInstallModeFn ?? detectInstallMode;
 		const hasTrackedPluginSuppliedLegacyFilesFn =
 			deps?.hasTrackedPluginSuppliedLegacyFilesFn ?? hasTrackedPluginSuppliedLegacyFiles;
+		const shouldRefreshCodexPluginFn = deps?.shouldRefreshCodexPluginFn ?? shouldRefreshCodexPlugin;
 		const setup = await getSetupFn();
 		const hasLocal = !!setup.project.metadata;
 		const hasGlobal = !!setup.global.metadata;
@@ -545,6 +548,12 @@ export async function promptKitUpdate(
 					if (needsPluginMigration) {
 						logger.warning(
 							`Detected ${installMode.mode} global Engineer install; migrating to plugin format`,
+						);
+						forceKitReinstall = true;
+					}
+					if (await shouldRefreshCodexPluginFn()) {
+						logger.warning(
+							"Detected missing Codex ClaudeKit plugin; reinstalling global Engineer content",
 						);
 						forceKitReinstall = true;
 					}

@@ -162,6 +162,7 @@ describe("promptKitUpdate auto-init behavior", () => {
 			isCancelFn: isCancelMock,
 			detectInstallModeFn: () => makeInstallModeReport(tempDir, "plugin"),
 			hasTrackedPluginSuppliedLegacyFilesFn: () => false,
+			shouldRefreshCodexPluginFn: async () => false,
 		};
 		return {
 			deps,
@@ -286,6 +287,20 @@ describe("promptKitUpdate auto-init behavior", () => {
 		await promptKitUpdate(false, true, deps);
 		expect(execCount()).toBe(0);
 		expect(spawnCount()).toBe(0);
+	});
+
+	test("reinstalls latest global engineer kit when Codex plugin is missing (--yes mode)", async () => {
+		const { deps, execCount, spawnCount, capturedExecCmd } = makeDeps();
+		deps.getLatestReleaseTagFn = async () => "v1.0.0";
+		deps.shouldRefreshCodexPluginFn = async () => true;
+
+		await promptKitUpdate(false, true, deps);
+
+		expect(execCount()).toBe(1);
+		expect(spawnCount()).toBe(0);
+		expect(capturedExecCmd()).toContain("ck init -g");
+		expect(capturedExecCmd()).toContain("--kit engineer");
+		expect(capturedExecCmd()).toContain("--restore-ck-hooks");
 	});
 
 	test("reinstalls latest legacy global engineer kit to migrate plugin format (--yes mode)", async () => {
