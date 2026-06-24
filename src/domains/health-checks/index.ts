@@ -43,6 +43,7 @@ export { CheckRunner } from "./check-runner.js";
 // Re-export domain-specific checkers
 export { SystemChecker } from "./system-checker.js";
 export { ClaudekitChecker } from "./claudekit-checker.js";
+export { PluginInstallModeChecker } from "./plugin-install-mode-checker.js";
 export { AuthChecker } from "./auth-checker.js";
 export { PlatformChecker } from "./platform-checker.js";
 export { NetworkChecker } from "./network-checker.js";

@@ -4,6 +4,7 @@
 import { readdir } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
+import { resolveInstalledPluginCacheSubpath } from "@/domains/installation/plugin/install-mode-detector.js";
 import { findFirstExistingPath, getProjectLayoutCandidates } from "@/shared/kit-layout.js";
 import { logger } from "../../shared/logger.js";
 import { parseFrontmatterFile } from "../portable/frontmatter-parser.js";
@@ -18,12 +19,14 @@ import type { PortableItem } from "../portable/types.js";
  */
 export function getAgentSourcePath(globalOnly = false): string | null {
 	const globalPath = join(homedir(), ".claude/agents");
+	const pluginPath = resolveInstalledPluginCacheSubpath("agents", join(homedir(), ".claude"));
+	const globalCandidates = pluginPath ? [pluginPath, globalPath] : [globalPath];
 	if (globalOnly) {
-		return findFirstExistingPath([globalPath]);
+		return findFirstExistingPath(globalCandidates);
 	}
 	return findFirstExistingPath([
 		...getProjectLayoutCandidates(process.cwd(), "agents"),
-		globalPath,
+		...globalCandidates,
 	]);
 }
 

@@ -4,6 +4,7 @@
  * Main orchestrator for the uninstall command.
  */
 
+import { uninstallEnginePlugin } from "@/domains/installation/plugin/uninstall-plugin.js";
 import { getInstalledKits } from "@/domains/migration/metadata-migration.js";
 import { PromptsManager } from "@/domains/ui/prompts.js";
 import { ManifestWriter } from "@/services/file-operations/manifest-writer.js";
@@ -293,6 +294,12 @@ export async function uninstallCommand(options: UninstallCommandOptions): Promis
 					forceOverwrite: validOptions.forceOverwrite,
 					kit: kitToRemove,
 				});
+				if (
+					(scope === "global" || scope === "all") &&
+					(kitToRemove === "engineer" || !kitToRemove)
+				) {
+					log.info("A ClaudeKit Engineer plugin install (if present) would also be deregistered.");
+				}
 				prompts.outro("Dry-run complete. No changes were made.");
 				return;
 			}
@@ -320,6 +327,18 @@ export async function uninstallCommand(options: UninstallCommandOptions): Promis
 				forceOverwrite: validOptions.forceOverwrite,
 				kit: kitToRemove,
 			});
+
+			// 14.5: also remove the engineer plugin (#691) — non-fatal, no-op if not a plugin install
+			if ((scope === "global" || scope === "all") && (kitToRemove === "engineer" || !kitToRemove)) {
+				try {
+					const pluginResult = await uninstallEnginePlugin();
+					if (pluginResult.uninstalled) {
+						log.info("Removed ClaudeKit Engineer plugin.");
+					}
+				} catch (err) {
+					logger.verbose(`Plugin uninstall skipped: ${(err as Error).message}`);
+				}
+			}
 
 			const hasProtectedFiles = results.some((result) => result.protectedTrackedPaths.length > 0);
 

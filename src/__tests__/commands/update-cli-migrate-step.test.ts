@@ -54,6 +54,7 @@ function makeDeps(): PromptMigrateUpdateDeps {
 			cleanupCalls.push({ providers, global: options.global });
 			return [];
 		},
+		readPortableRegistryFn: async () => ({ installations: [] }),
 		repairHookFileReferencesFn: async (projectDir) => {
 			orderedCalls.push("repair");
 			repairCalls.push(projectDir);
@@ -102,6 +103,31 @@ describe("promptMigrateUpdate (step 3 of update pipeline)", () => {
 		await promptMigrateUpdate(makeDeps());
 		expect(legacyRepairCalls).toEqual([process.cwd(), process.cwd()]);
 		expect(repairCalls).toEqual([process.cwd(), process.cwd()]);
+		expect(execCalls).toEqual([]);
+	});
+
+	test("refreshes previously migrated providers even when autoMigrateAfterUpdate is not configured", async () => {
+		detectInstalledProvidersMock.mockResolvedValue(["claude-code", "codex"]);
+		const deps = makeDeps();
+		deps.readPortableRegistryFn = async () => ({
+			installations: [{ provider: "codex", global: false }],
+		});
+
+		await promptMigrateUpdate(deps);
+
+		expect(execCalls).toEqual(["ck migrate --agent codex --yes"]);
+		expect(logger.info).toHaveBeenCalledWith("Refreshing existing migration target(s): Codex");
+	});
+
+	test("does not refresh a previously migrated provider for the opposite scope", async () => {
+		detectInstalledProvidersMock.mockResolvedValue(["claude-code", "codex"]);
+		const deps = makeDeps();
+		deps.readPortableRegistryFn = async () => ({
+			installations: [{ provider: "codex", global: true }],
+		});
+
+		await promptMigrateUpdate(deps);
+
 		expect(execCalls).toEqual([]);
 	});
 
