@@ -1,6 +1,10 @@
-import { cpSync, existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { InitContext } from "@/commands/init/types.js";
+import {
+	type CodexPluginInstallResult,
+	installCodexPlugin,
+} from "@/domains/installation/plugin/codex-plugin-installer.js";
 import {
 	type MigrateResult,
 	migrateLegacyToPlugin,
@@ -13,6 +17,8 @@ const ENGINEER_KIT = "engineer";
 export interface PluginInstallDeps {
 	/** Injectable for tests; defaults to the real migrate flow. */
 	migrate?: typeof migrateLegacyToPlugin;
+	/** Injectable for tests; defaults to the real Codex plugin install flow. */
+	installCodex?: typeof installCodexPlugin;
 	/** Override the staged-source base dir (tests). */
 	stageBaseDir?: string;
 }
@@ -36,13 +42,26 @@ export async function handlePluginInstall(
 	}
 
 	const migrate = deps.migrate ?? migrateLegacyToPlugin;
+	const installCodex = deps.installCodex ?? installCodexPlugin;
 	try {
 		const pluginSourceDir = stagePluginSource(ctx.extractDir, deps.stageBaseDir);
-		const result = await migrate({ pluginSourceDir, claudeDir: ctx.claudeDir });
-		logPluginResult(result);
+		try {
+			const result = await migrate({ pluginSourceDir, claudeDir: ctx.claudeDir });
+			logPluginResult(result);
+		} catch (err) {
+			logger.verbose(
+				`Claude plugin install skipped (legacy copy retained): ${(err as Error).message}`,
+			);
+		}
+		try {
+			const result = await installCodex({ pluginSourceDir });
+			logCodexPluginResult(result);
+		} catch (err) {
+			logger.verbose(`Codex plugin install skipped: ${(err as Error).message}`);
+		}
 	} catch (err) {
 		// Never fail init over the plugin path — the legacy copy from handleMerge stands.
-		logger.verbose(`Plugin install skipped (legacy copy retained): ${(err as Error).message}`);
+		logger.verbose(`Plugin staging skipped (legacy copy retained): ${(err as Error).message}`);
 	}
 	return ctx;
 }
@@ -63,9 +82,11 @@ export function stagePluginSource(extractDir: string, stageBaseDir?: string): st
 
 	rmSync(base, { recursive: true, force: true });
 	mkdirSync(base, { recursive: true });
-	cpSync(payloadSrc, join(base, ".claude"), { recursive: true });
+	const stagedPayload = join(base, ".claude");
+	cpSync(payloadSrc, stagedPayload, { recursive: true });
+	ensureCodexPluginManifest(stagedPayload);
 
-	const marketplace = {
+	const claudeMarketplace = {
 		name: "claudekit",
 		owner: { name: "ClaudeKit" },
 		plugins: [{ name: "ck", source: "./.claude", description: "ClaudeKit Engineer" }],
@@ -73,10 +94,92 @@ export function stagePluginSource(extractDir: string, stageBaseDir?: string): st
 	mkdirSync(join(base, ".claude-plugin"), { recursive: true });
 	writeFileSync(
 		join(base, ".claude-plugin", "marketplace.json"),
-		`${JSON.stringify(marketplace, null, 2)}\n`,
+		`${JSON.stringify(claudeMarketplace, null, 2)}\n`,
+		"utf-8",
+	);
+
+	const codexMarketplace = {
+		name: "claudekit",
+		interface: { displayName: "ClaudeKit" },
+		plugins: [
+			{
+				name: "ck",
+				source: { source: "local", path: "./.claude" },
+				policy: { installation: "AVAILABLE", authentication: "ON_INSTALL" },
+				category: "Productivity",
+			},
+		],
+	};
+	mkdirSync(join(base, ".agents", "plugins"), { recursive: true });
+	writeFileSync(
+		join(base, ".agents", "plugins", "marketplace.json"),
+		`${JSON.stringify(codexMarketplace, null, 2)}\n`,
 		"utf-8",
 	);
 	return base;
+}
+
+function ensureCodexPluginManifest(pluginRoot: string): void {
+	const manifestPath = join(pluginRoot, ".codex-plugin", "plugin.json");
+	if (existsSync(manifestPath)) return;
+
+	const claudeManifest = readJsonSafe(join(pluginRoot, ".claude-plugin", "plugin.json"));
+	const manifest = pruneUndefined({
+		name: stringField(claudeManifest, "name") ?? "ck",
+		version: stringField(claudeManifest, "version") ?? "0.0.0",
+		description:
+			stringField(claudeManifest, "description") ??
+			"ClaudeKit Engineer — multi-agent planning, code review, debugging, and workflow skills for Codex.",
+		author: authorField(claudeManifest),
+		homepage: stringField(claudeManifest, "homepage"),
+		repository: stringField(claudeManifest, "repository"),
+		license: stringField(claudeManifest, "license"),
+		keywords: ["claudekit", "codex", "skills", "agents", "workflow"],
+		skills: "./skills/",
+		interface: {
+			displayName: "ClaudeKit Engineer",
+			shortDescription: "ClaudeKit planning, review, debugging, and workflow skills.",
+			longDescription:
+				"ClaudeKit Engineer provides planning, code review, debugging, testing, browser workflow, and implementation skills for Codex.",
+			developerName: "ClaudeKit",
+			category: "Productivity",
+			capabilities: ["Skills"],
+			websiteURL: "https://github.com/claudekit/claudekit-engineer",
+		},
+	});
+
+	mkdirSync(join(pluginRoot, ".codex-plugin"), { recursive: true });
+	writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, "utf-8");
+}
+
+function readJsonSafe(filePath: string): Record<string, unknown> | null {
+	try {
+		const parsed = JSON.parse(readFileSync(filePath, "utf-8"));
+		return isRecord(parsed) ? parsed : null;
+	} catch {
+		return null;
+	}
+}
+
+function stringField(source: Record<string, unknown> | null, key: string): string | undefined {
+	const value = source?.[key];
+	return typeof value === "string" && value.trim() !== "" ? value : undefined;
+}
+
+function authorField(source: Record<string, unknown> | null): { name: string } {
+	const author = source?.author;
+	if (isRecord(author) && typeof author.name === "string" && author.name.trim() !== "") {
+		return { name: author.name };
+	}
+	return { name: "ClaudeKit" };
+}
+
+function pruneUndefined<T extends Record<string, unknown>>(value: T): Record<string, unknown> {
+	return Object.fromEntries(Object.entries(value).filter(([, entry]) => entry !== undefined));
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+	return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function logPluginResult(result: MigrateResult): void {
@@ -95,6 +198,20 @@ function logPluginResult(result: MigrateResult): void {
 			break;
 		case "install-failed":
 			logger.verbose(`Plugin install did not verify; kept the legacy copy. ${result.error ?? ""}`);
+			break;
+	}
+}
+
+function logCodexPluginResult(result: CodexPluginInstallResult): void {
+	switch (result.action) {
+		case "installed":
+			logger.info("Installed ClaudeKit Engineer as a Codex plugin.");
+			break;
+		case "skipped-codex-unsupported":
+			logger.verbose("Codex plugin support unavailable; skipped Codex plugin install.");
+			break;
+		case "install-failed":
+			logger.verbose(`Codex plugin install did not verify. ${result.error ?? ""}`);
 			break;
 	}
 }

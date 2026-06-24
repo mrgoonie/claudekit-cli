@@ -8,6 +8,7 @@ import {
 	stagePluginSource,
 } from "@/commands/init/phases/plugin-install-handler.js";
 import type { InitContext } from "@/commands/init/types.js";
+import type { CodexPluginInstallResult } from "@/domains/installation/plugin/codex-plugin-installer.js";
 import type { MigrateResult } from "@/domains/installation/plugin/migrate-legacy-to-plugin.js";
 
 const okResult: MigrateResult = {
@@ -17,6 +18,10 @@ const okResult: MigrateResult = {
 	backupDir: null,
 	removedPaths: [],
 	receiptPath: null,
+};
+const okCodexResult: CodexPluginInstallResult = {
+	action: "installed",
+	pluginVerified: true,
 };
 
 describe("handlePluginInstall (init Phase 7.5)", () => {
@@ -76,21 +81,29 @@ describe("handlePluginInstall (init Phase 7.5)", () => {
 		expect(called).toBe(false);
 	});
 
-	test("engineer + global: stages source and calls migrate with claudeDir", async () => {
+	test("engineer + global: stages source and installs Claude and Codex plugins", async () => {
 		const calls: Array<{ pluginSourceDir: string; claudeDir?: string }> = [];
+		const codexCalls: string[] = [];
 		await handlePluginInstall(ctxOf(), {
 			migrate: async (o) => {
 				calls.push({ pluginSourceDir: o.pluginSourceDir, claudeDir: o.claudeDir });
 				return okResult;
+			},
+			installCodex: async (o) => {
+				codexCalls.push(o.pluginSourceDir);
+				return okCodexResult;
 			},
 			stageBaseDir: stageBase,
 		});
 		expect(calls).toHaveLength(1);
 		expect(calls[0].claudeDir).toBe(claudeDir);
 		expect(calls[0].pluginSourceDir).toBe(stageBase);
+		expect(codexCalls).toEqual([stageBase]);
 		// staged payload + synthesized marketplace exist
 		expect(existsSync(join(stageBase, ".claude", ".claude-plugin", "plugin.json"))).toBe(true);
+		expect(existsSync(join(stageBase, ".claude", ".codex-plugin", "plugin.json"))).toBe(true);
 		expect(existsSync(join(stageBase, ".claude-plugin", "marketplace.json"))).toBe(true);
+		expect(existsSync(join(stageBase, ".agents", "plugins", "marketplace.json"))).toBe(true);
 	});
 
 	test("migrate throwing never fails init (legacy copy retained)", async () => {
@@ -120,14 +133,23 @@ describe("stagePluginSource", () => {
 		await rm(root, { recursive: true, force: true });
 	});
 
-	test("copies .claude payload and writes marketplace.json with source ./.claude", () => {
+	test("copies .claude payload and writes Claude and Codex marketplace files", () => {
 		const base = join(root, "stage");
 		const result = stagePluginSource(join(root, "extract"), base);
 		expect(result).toBe(base);
 		expect(existsSync(join(base, ".claude", ".claude-plugin", "plugin.json"))).toBe(true);
-		const mkt = JSON.parse(readFileSync(join(base, ".claude-plugin", "marketplace.json"), "utf-8"));
-		expect(mkt.plugins[0].name).toBe("ck");
-		expect(mkt.plugins[0].source).toBe("./.claude");
+		expect(existsSync(join(base, ".claude", ".codex-plugin", "plugin.json"))).toBe(true);
+		const claudeMarketplace = JSON.parse(
+			readFileSync(join(base, ".claude-plugin", "marketplace.json"), "utf-8"),
+		);
+		expect(claudeMarketplace.plugins[0].name).toBe("ck");
+		expect(claudeMarketplace.plugins[0].source).toBe("./.claude");
+		const codexMarketplace = JSON.parse(
+			readFileSync(join(base, ".agents", "plugins", "marketplace.json"), "utf-8"),
+		);
+		expect(codexMarketplace.plugins[0].name).toBe("ck");
+		expect(codexMarketplace.plugins[0].source.path).toBe("./.claude");
+		expect(codexMarketplace.plugins[0].policy.installation).toBe("AVAILABLE");
 	});
 
 	test("throws when archive has no .claude payload", () => {

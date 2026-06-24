@@ -68,6 +68,7 @@ describe("promptKitUpdate version display", () => {
 					legacy: { installed: false, version: null },
 				}) satisfies InstallModeReport,
 			hasTrackedPluginSuppliedLegacyFilesFn: () => false,
+			shouldRefreshCodexPluginFn: async () => false,
 		};
 		return { deps, stopCalls, wasExecCalled: () => execCalled };
 	}
