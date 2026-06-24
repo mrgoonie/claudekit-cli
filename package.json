@@ -1,6 +1,6 @@
 {
 	"name": "claudekit-cli",
-	"version": "4.5.0",
+	"version": "4.5.0-dev.2",
 	"description": "CLI tool for bootstrapping and updating ClaudeKit projects",
 	"type": "module",
 	"repository": {

@@ -126,11 +126,20 @@ async function assertGlobalCommandConverges(
 	ctx: TestContext,
 	command: string,
 	expectedPattern: RegExp,
+	options: { managedHooks?: string[] } = {},
 ): Promise<void> {
 	// Write to a temp location (not the CK_TEST_HOME global dir to avoid root confusion).
 	const settingsDir = join(ctx.tempDir, "global-test", ".claude");
 	const settingsPath = join(settingsDir, "settings.local.json");
 	await mkdir(settingsDir, { recursive: true });
+	if (options.managedHooks) {
+		const hooksDir = join(settingsDir, "hooks");
+		await mkdir(hooksDir, { recursive: true });
+		await writeFile(
+			join(hooksDir, "managed-hooks.json"),
+			JSON.stringify({ managedHooks: options.managedHooks }),
+		);
+	}
 
 	const fixture = {
 		hooks: {
@@ -454,11 +463,10 @@ describe("hook-health-checker corpus: full convergence cycle per stale shape", (
 		await assertGlobalCommandConverges(ctx, 'node "$HOME"/.claude/hooks/foo.cjs', /\$HOME/);
 	});
 
-	test('no-op: node "$CLAUDE_PROJECT_DIR"/.claude/hooks/foo.cjs in global settings — canonical form, not flagged', async () => {
+	test('no-op: user-authored node "$CLAUDE_PROJECT_DIR"/.claude/hooks/foo.cjs in global settings stays allowed', async () => {
 		// node "$CLAUDE_PROJECT_DIR"/.claude/... is in the canonical var-only-quoted form.
-		// isAlreadyCanonical() returns true → collectHookCommandFindings skips it → 0 findings.
-		// The health-checker does NOT re-root cross-scope canonical commands; only SettingsProcessor
-		// does intentional cross-scope normalization (during install with root=$HOME).
+		// Without a CK managed-hooks manifest, the health-checker preserves the historical
+		// no-op behavior for user-authored cross-scope hooks.
 		const settingsDir = join(ctx.tempDir, "global-test2", ".claude");
 		const settingsPath = join(settingsDir, "settings.local.json");
 		await mkdir(settingsDir, { recursive: true });
@@ -477,6 +485,15 @@ describe("hook-health-checker corpus: full convergence cycle per stale shape", (
 		};
 		const findings = await findStaleHookCommandsInFile(settingsFile);
 		expect(findings).toHaveLength(0); // isAlreadyCanonical gate prevents flagging
+	});
+
+	test('converges: CK-managed node "$CLAUDE_PROJECT_DIR"/.claude hook in global settings', async () => {
+		await assertGlobalCommandConverges(
+			ctx,
+			'node "$CLAUDE_PROJECT_DIR"/.claude/hooks/foo.cjs',
+			/\$HOME/,
+			{ managedHooks: ["foo"] },
+		);
 	});
 
 	// --- Stale shapes: unquoted var ---
