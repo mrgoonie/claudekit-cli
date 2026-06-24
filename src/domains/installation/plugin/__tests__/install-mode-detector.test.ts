@@ -7,6 +7,9 @@ import {
 	detectInstallMode,
 	detectLegacyState,
 	detectPluginState,
+	hasTrackedPluginSuppliedLegacyFiles,
+	resolveInstalledPluginCacheRoot,
+	resolveInstalledPluginCacheSubpath,
 } from "@/domains/installation/plugin/install-mode-detector.js";
 
 describe("install-mode-detector", () => {
@@ -109,6 +112,27 @@ describe("install-mode-detector", () => {
 		expect(plugin.version).toBe("87a174162601");
 	});
 
+	test("registered plugin cache root resolves only for an installed plugin", async () => {
+		await writeSettings({ "ck@claudekit": true });
+		await makePluginCache("claudekit", "87a174162601");
+		await mkdir(join(claudeDir, "plugins", "cache", "claudekit", "ck", "87a174162601", "agents"), {
+			recursive: true,
+		});
+
+		expect(resolveInstalledPluginCacheRoot(claudeDir)).toBe(
+			join(claudeDir, "plugins", "cache", "claudekit", "ck", "87a174162601"),
+		);
+		expect(resolveInstalledPluginCacheSubpath("agents", claudeDir)).toBe(
+			join(claudeDir, "plugins", "cache", "claudekit", "ck", "87a174162601", "agents"),
+		);
+	});
+
+	test("orphaned plugin cache is not used as a source root", async () => {
+		await makePluginCache("claudekit", "87a174162601");
+		expect(resolveInstalledPluginCacheRoot(claudeDir)).toBeNull();
+		expect(resolveInstalledPluginCacheSubpath("agents", claudeDir)).toBeNull();
+	});
+
 	test("plugin: unrelated plugins do not count as ck", async () => {
 		await writeSettings({ "kai@kai-personal-claude": true, "ak-core@agentkit-local": true });
 		expect(detectPluginState(claudeDir).installed).toBe(false);
@@ -123,6 +147,40 @@ describe("install-mode-detector", () => {
 		expect(report.mode).toBe("mixed");
 		expect(report.plugin.installed).toBe(true);
 		expect(report.legacy.installed).toBe(true);
+	});
+
+	test("detects tracked legacy agent/skill payloads that still need plugin cleanup", async () => {
+		await mkdir(join(claudeDir, "agents"), { recursive: true });
+		await mkdir(join(claudeDir, "skills", "cook"), { recursive: true });
+		await writeFile(join(claudeDir, "agents", "planner.md"), "# planner\n", "utf-8");
+		await writeFile(join(claudeDir, "skills", "cook", "SKILL.md"), "# cook\n", "utf-8");
+		await writeMetadata({
+			kits: {
+				engineer: {
+					version: "2.19.0",
+					files: [
+						{ path: "agents/planner.md", ownership: "ck" },
+						{ path: "skills/cook/SKILL.md", ownership: "ck-modified" },
+						{ path: "agents/user.md", ownership: "user" },
+					],
+				},
+			},
+		});
+
+		expect(hasTrackedPluginSuppliedLegacyFiles(claudeDir)).toBe(true);
+	});
+
+	test("ignores mixed installs after plugin-supplied legacy files are gone", async () => {
+		await writeMetadata({
+			kits: {
+				engineer: {
+					version: "2.19.0",
+					files: [{ path: "hooks/session-init.cjs", ownership: "ck" }],
+				},
+			},
+		});
+
+		expect(hasTrackedPluginSuppliedLegacyFiles(claudeDir)).toBe(false);
 	});
 
 	test("classifyInstallMode covers all four quadrants", () => {

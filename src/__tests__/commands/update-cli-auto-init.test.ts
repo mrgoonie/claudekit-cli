@@ -5,6 +5,7 @@ import { join } from "node:path";
 import type { PromptKitUpdateDeps } from "@/commands/update-cli.js";
 import { promptKitUpdate } from "@/commands/update-cli.js";
 import { countMissingCkHookRegistrations } from "@/commands/update/post-update-handler.js";
+import type { InstallModeReport } from "@/domains/installation/plugin/install-mode-detector.js";
 
 const confirmMock = mock(async (_options: { message: string }) => true);
 const isCancelMock = mock((value: unknown) => value === "cancelled");
@@ -29,6 +30,27 @@ async function writeMetadata(dir: string, version = "1.0.0") {
 			kits: { engineer: { version, installedAt: "2025-01-01T00:00:00Z" } },
 		}),
 	);
+}
+
+function makeInstallModeReport(
+	claudeDir: string,
+	mode: InstallModeReport["mode"],
+): InstallModeReport {
+	return {
+		mode,
+		claudeDir,
+		plugin: {
+			installed: mode === "plugin" || mode === "mixed",
+			enabled: mode === "plugin" || mode === "mixed",
+			version: mode === "plugin" || mode === "mixed" ? "v1.0.0" : null,
+			marketplace: mode === "plugin" || mode === "mixed" ? "claudekit" : null,
+			staleCache: false,
+		},
+		legacy: {
+			installed: mode === "legacy" || mode === "mixed",
+			version: mode === "legacy" || mode === "mixed" ? "v1.0.0" : null,
+		},
+	};
 }
 
 async function writeGlobalHookState(
@@ -138,6 +160,8 @@ describe("promptKitUpdate auto-init behavior", () => {
 			loadFullConfigFn: loadFullConfigMock,
 			confirmFn: confirmMock,
 			isCancelFn: isCancelMock,
+			detectInstallModeFn: () => makeInstallModeReport(tempDir, "plugin"),
+			hasTrackedPluginSuppliedLegacyFilesFn: () => false,
 		};
 		return {
 			deps,
@@ -260,6 +284,44 @@ describe("promptKitUpdate auto-init behavior", () => {
 		const { deps, execCount, spawnCount } = makeDeps();
 		deps.getLatestReleaseTagFn = async () => "v1.0.0";
 		await promptKitUpdate(false, true, deps);
+		expect(execCount()).toBe(0);
+		expect(spawnCount()).toBe(0);
+	});
+
+	test("reinstalls latest legacy global engineer kit to migrate plugin format (--yes mode)", async () => {
+		const { deps, execCount, spawnCount, capturedExecCmd } = makeDeps();
+		deps.getLatestReleaseTagFn = async () => "v1.0.0";
+		deps.detectInstallModeFn = () => makeInstallModeReport(tempDir, "legacy");
+
+		await promptKitUpdate(false, true, deps);
+
+		expect(execCount()).toBe(1);
+		expect(spawnCount()).toBe(0);
+		expect(capturedExecCmd()).toContain("ck init -g");
+		expect(capturedExecCmd()).toContain("--kit engineer");
+		expect(capturedExecCmd()).toContain("--restore-ck-hooks");
+	});
+
+	test("reinstalls latest mixed install only when plugin-supplied legacy files remain", async () => {
+		const { deps, execCount, capturedExecCmd } = makeDeps();
+		deps.getLatestReleaseTagFn = async () => "v1.0.0";
+		deps.detectInstallModeFn = () => makeInstallModeReport(tempDir, "mixed");
+		deps.hasTrackedPluginSuppliedLegacyFilesFn = () => true;
+
+		await promptKitUpdate(false, true, deps);
+
+		expect(execCount()).toBe(1);
+		expect(capturedExecCmd()).toContain("--restore-ck-hooks");
+	});
+
+	test("skips latest mixed install after plugin-supplied legacy files are cleaned", async () => {
+		const { deps, execCount, spawnCount } = makeDeps();
+		deps.getLatestReleaseTagFn = async () => "v1.0.0";
+		deps.detectInstallModeFn = () => makeInstallModeReport(tempDir, "mixed");
+		deps.hasTrackedPluginSuppliedLegacyFilesFn = () => false;
+
+		await promptKitUpdate(false, true, deps);
+
 		expect(execCount()).toBe(0);
 		expect(spawnCount()).toBe(0);
 	});

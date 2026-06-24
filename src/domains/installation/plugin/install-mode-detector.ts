@@ -171,6 +171,98 @@ export function detectInstallMode(
 	return { mode: classifyInstallMode(plugin, legacy), claudeDir, plugin, legacy };
 }
 
+/**
+ * Resolve the currently registered plugin cache root. Returns null for stale
+ * cache payloads that are not registered/enabled in settings.json.
+ */
+export function resolveInstalledPluginCacheRoot(
+	claudeDir: string = PathResolver.getGlobalKitDir(),
+): string | null {
+	const plugin = detectPluginState(claudeDir);
+	if (!plugin.installed || !plugin.marketplace || !plugin.version) return null;
+
+	const cacheRoot = join(
+		claudeDir,
+		"plugins",
+		"cache",
+		plugin.marketplace,
+		CK_PLUGIN_NAME,
+		plugin.version,
+	);
+	return existsSync(cacheRoot) && isDir(cacheRoot) ? cacheRoot : null;
+}
+
+/**
+ * Resolve a source path inside the installed plugin cache. The extra nested
+ * `.claude/` candidate keeps the resolver tolerant of Claude Code cache layout
+ * changes while preferring today's plugin payload shape.
+ */
+export function resolveInstalledPluginCacheSubpath(
+	relativePath: string,
+	claudeDir: string = PathResolver.getGlobalKitDir(),
+): string | null {
+	const root = resolveInstalledPluginCacheRoot(claudeDir);
+	if (!root) return null;
+
+	const candidates = [join(root, relativePath), join(root, ".claude", relativePath)];
+	for (const candidate of candidates) {
+		if (existsSync(candidate)) return candidate;
+	}
+	return null;
+}
+
+const PLUGIN_SUPPLIED_LEGACY_PREFIXES = ["agents/", "skills/"];
+
+/**
+ * True when the legacy flat-copy install still has CK-owned files that are now
+ * supplied by the plugin. This avoids forcing plugin migration forever for
+ * mixed installs that intentionally retain runtime hook/rule surfaces.
+ */
+export function hasTrackedPluginSuppliedLegacyFiles(
+	claudeDir: string = PathResolver.getGlobalKitDir(),
+): boolean {
+	const metadata = readJsonSafe(join(claudeDir, "metadata.json"));
+	if (!isRecord(metadata)) return false;
+
+	for (const file of collectTrackedFiles(metadata)) {
+		if (file.ownership === "user") continue;
+		const normalized = file.path.replace(/\\/g, "/").replace(/^\.claude\//, "");
+		if (!PLUGIN_SUPPLIED_LEGACY_PREFIXES.some((prefix) => normalized.startsWith(prefix))) {
+			continue;
+		}
+		if (existsSync(join(claudeDir, normalized))) return true;
+	}
+
+	return false;
+}
+
+interface TrackedFile {
+	path: string;
+	ownership: "ck" | "ck-modified" | "user";
+}
+
+function collectTrackedFiles(metadata: Record<string, unknown>): TrackedFile[] {
+	const tracked: TrackedFile[] = [];
+	const push = (files: unknown) => {
+		if (!Array.isArray(files)) return;
+		for (const file of files) {
+			if (!isRecord(file) || typeof file.path !== "string") continue;
+			const ownership =
+				file.ownership === "user" || file.ownership === "ck-modified" ? file.ownership : "ck";
+			tracked.push({ path: file.path, ownership });
+		}
+	};
+
+	if (isRecord(metadata.kits)) {
+		const engineer = metadata.kits[ENGINEER_KIT_KEY];
+		if (isRecord(engineer)) push(engineer.files);
+	} else {
+		push(metadata.files);
+	}
+
+	return tracked;
+}
+
 function safeReaddir(dir: string): string[] {
 	try {
 		return readdirSync(dir);

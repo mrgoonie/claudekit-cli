@@ -47,6 +47,26 @@ function seedClaudeDir(
 	writeFileSync(join(base, ".claude", "CLAUDE.md"), "# fixture");
 }
 
+function seedInstalledPluginCache(
+	home: string,
+	types: Array<"agents" | "skills">,
+	version = "v2.20.0",
+): string {
+	const claudeDir = join(home, ".claude");
+	const cacheRoot = join(claudeDir, "plugins", "cache", "claudekit", "ck", version);
+	mkdirSync(claudeDir, { recursive: true });
+	writeFileSync(
+		join(claudeDir, "settings.json"),
+		JSON.stringify({ enabledPlugins: { "ck@claudekit": true } }),
+	);
+	for (const type of types) {
+		const dir = join(cacheRoot, type);
+		mkdirSync(dir, { recursive: true });
+		writeFileSync(join(dir, ".keep"), "");
+	}
+	return cacheRoot;
+}
+
 function seedSandbox(opts: {
 	homeTypes: Array<"agents" | "commands" | "skills" | "hooks" | "rules">;
 	cwdTypes: Array<"agents" | "commands" | "skills" | "hooks" | "rules">;
@@ -256,6 +276,35 @@ describe("ck migrate -g: SOURCE scope (issue #803)", () => {
 		expect(getHooksSourcePath()).toBe(join(sb.cwd, ".claude/hooks"));
 		expect(getRulesSourcePath()).toBe(join(sb.cwd, ".claude/rules"));
 		expect(getConfigSourcePath()).toBe(join(sb.cwd, ".claude/CLAUDE.md"));
+	});
+
+	// -------------------------------------------------------------------------
+	// T9: Plugin migration removes flat agents/skills from ~/.claude, but the
+	//     plugin cache is now the authoritative source for portable migration.
+	// -------------------------------------------------------------------------
+	it("T9: globalOnly=true resolves agents and skills from installed plugin cache", () => {
+		const sb = seedSandbox({
+			homeTypes: ["commands", "hooks", "rules"],
+			cwdTypes: [],
+		});
+		const pluginRoot = seedInstalledPluginCache(sb.home, ["agents", "skills"]);
+		activate(sb);
+
+		expect(getAgentSourcePath(true)).toBe(join(pluginRoot, "agents"));
+		expect(getSkillSourcePath(true)).toBe(join(pluginRoot, "skills"));
+		expect(getCommandSourcePath(true)).toBe(join(sb.home, ".claude/commands"));
+	});
+
+	it("T10: project discovery falls back to plugin cache when CWD has no agents or skills", () => {
+		const sb = seedSandbox({
+			homeTypes: ["commands", "hooks", "rules"],
+			cwdTypes: [],
+		});
+		const pluginRoot = seedInstalledPluginCache(sb.home, ["agents", "skills"]);
+		activate(sb);
+
+		expect(getAgentSourcePath()).toBe(join(pluginRoot, "agents"));
+		expect(getSkillSourcePath()).toBe(join(pluginRoot, "skills"));
 	});
 });
 

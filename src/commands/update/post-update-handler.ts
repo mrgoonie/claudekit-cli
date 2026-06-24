@@ -17,6 +17,11 @@ import {
 	repairLegacyHookPrompts,
 	repairMissingHookFileReferences,
 } from "@/domains/health-checks/checkers/hook-health-checker.js";
+import {
+	type InstallModeReport,
+	detectInstallMode,
+	hasTrackedPluginSuppliedLegacyFiles,
+} from "@/domains/installation/plugin/install-mode-detector.js";
 import { getInstalledKits } from "@/domains/migration/metadata-migration.js";
 import { versionsMatch } from "@/domains/versioning/checking/version-utils.js";
 import { getClaudeKitSetup } from "@/services/file-operations/claudekit-scanner.js";
@@ -367,6 +372,8 @@ export interface PromptKitUpdateDeps {
 	isCancelFn?: PromptKitUpdateCancelFn;
 	findMissingHookDependenciesFn?: (claudeDir: string) => Promise<string[]>;
 	countMissingHookFileReferencesFn?: (projectDir: string) => Promise<number>;
+	detectInstallModeFn?: (claudeDir: string) => InstallModeReport;
+	hasTrackedPluginSuppliedLegacyFilesFn?: (claudeDir: string) => boolean;
 }
 
 async function findMissingHookDependencies(claudeDir: string): Promise<string[]> {
@@ -420,6 +427,9 @@ export async function promptKitUpdate(
 		const getSetupFn = deps?.getSetupFn ?? getClaudeKitSetup;
 		const findMissingHookDepsFn =
 			deps?.findMissingHookDependenciesFn ?? findMissingHookDependencies;
+		const detectInstallModeFn = deps?.detectInstallModeFn ?? detectInstallMode;
+		const hasTrackedPluginSuppliedLegacyFilesFn =
+			deps?.hasTrackedPluginSuppliedLegacyFilesFn ?? hasTrackedPluginSuppliedLegacyFiles;
 		const setup = await getSetupFn();
 		const hasLocal = !!setup.project.metadata;
 		const hasGlobal = !!setup.global.metadata;
@@ -520,6 +530,28 @@ export async function promptKitUpdate(
 			} catch (error) {
 				logger.verbose(
 					`Selected hook registration self-heal check skipped: ${
+						error instanceof Error ? error.message : "unknown"
+					}`,
+				);
+			}
+
+			try {
+				if (selection.isGlobal && selection.kit === "engineer") {
+					const installMode = detectInstallModeFn(selectedClaudeDir);
+					const needsPluginMigration =
+						installMode.mode === "legacy" ||
+						(installMode.mode === "mixed" &&
+							hasTrackedPluginSuppliedLegacyFilesFn(selectedClaudeDir));
+					if (needsPluginMigration) {
+						logger.warning(
+							`Detected ${installMode.mode} global Engineer install; migrating to plugin format`,
+						);
+						forceKitReinstall = true;
+					}
+				}
+			} catch (error) {
+				logger.verbose(
+					`Plugin install-mode self-heal check skipped: ${
 						error instanceof Error ? error.message : "unknown"
 					}`,
 				);
@@ -736,6 +768,9 @@ export interface PromptMigrateUpdateDeps {
 	) => Promise<
 		Array<{ hooksPruned: number; filesRemoved: number; registryEntriesRemoved: number }>
 	>;
+	readPortableRegistryFn?: () => Promise<{
+		installations: Array<{ provider: string; global: boolean }>;
+	}>;
 }
 
 export { repairLegacyHookPrompts, repairMissingHookFileReferences };
@@ -847,6 +882,27 @@ export async function promptMigrateUpdate(deps?: PromptMigrateUpdateDeps): Promi
 			return;
 		}
 
+		const previouslyMigratedProviders = new Set<string>();
+		try {
+			const readRegistryFn =
+				deps?.readPortableRegistryFn ??
+				(await import("@/commands/portable/portable-registry.js")).readPortableRegistry;
+			const registry = await readRegistryFn();
+			for (const entry of registry.installations) {
+				if (
+					entry.global === isGlobal &&
+					targets.includes(entry.provider) &&
+					SAFE_PROVIDER_NAME.test(entry.provider)
+				) {
+					previouslyMigratedProviders.add(entry.provider);
+				}
+			}
+		} catch (error) {
+			logger.verbose(
+				`Portable registry lookup skipped: ${error instanceof Error ? error.message : "unknown"}`,
+			);
+		}
+
 		let autoMigrate = false;
 		let migrateProviders: "auto" | string[] = "auto";
 		let migrateScope: MigrateScopeConfig | undefined;
@@ -863,15 +919,24 @@ export async function promptMigrateUpdate(deps?: PromptMigrateUpdateDeps): Promi
 		// Persistent discoverability: surface the opt-in Codex sync to users who
 		// have Codex installed but have not enabled auto-migrate. Shown on every
 		// run while sync is off (no one-time suppression) so it stays visible.
-		if (shouldShowCodexSyncNotice({ providers: targets, autoMigrateEnabled: autoMigrate })) {
+		const hasPreviousMigrationTargets = previouslyMigratedProviders.size > 0;
+
+		if (
+			!hasPreviousMigrationTargets &&
+			shouldShowCodexSyncNotice({ providers: targets, autoMigrateEnabled: autoMigrate })
+		) {
 			for (const line of renderCodexSyncNotice()) logger.info(line);
 		}
 
-		// Skip if user hasn't opted in — --yes alone doesn't trigger migration
-		if (!autoMigrate) return;
+		// --yes alone does not migrate brand-new targets. Existing CK-managed
+		// provider projections are refreshed so a kit update cannot strand Codex
+		// or other prior migrations on stale payloads.
+		if (!autoMigrate && !hasPreviousMigrationTargets) return;
 
 		let providers: string[];
-		if (migrateProviders === "auto") {
+		if (!autoMigrate) {
+			providers = targets.filter((p) => previouslyMigratedProviders.has(p));
+		} else if (migrateProviders === "auto") {
 			providers = targets;
 		} else if (Array.isArray(migrateProviders)) {
 			const invalid = migrateProviders.filter((p) => !targets.includes(p));
@@ -913,7 +978,11 @@ export async function promptMigrateUpdate(deps?: PromptMigrateUpdateDeps): Promi
 		parts.push("--yes");
 		const cmd = parts.join(" ");
 
-		logger.info(`Auto-migrating to: ${providerNames}`);
+		logger.info(
+			autoMigrate
+				? `Auto-migrating to: ${providerNames}`
+				: `Refreshing existing migration target(s): ${providerNames}`,
+		);
 
 		try {
 			await execFn(cmd, { timeout: 300000 });

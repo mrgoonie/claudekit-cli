@@ -8,6 +8,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { PromptKitUpdateDeps } from "@/commands/update-cli.js";
 import { promptKitUpdate } from "@/commands/update-cli.js";
+import type { InstallModeReport } from "@/domains/installation/plugin/install-mode-detector.js";
 import { versionsMatch } from "@/domains/versioning/checking/version-utils.js";
 
 describe("promptKitUpdate version display", () => {
@@ -53,6 +54,20 @@ describe("promptKitUpdate version display", () => {
 			})) as any,
 			getLatestReleaseTagFn: async () => opts?.latestTag ?? null,
 			loadFullConfigFn: async () => ({ config: { updatePipeline: undefined } }),
+			detectInstallModeFn: () =>
+				({
+					mode: "plugin",
+					claudeDir: tempDir,
+					plugin: {
+						installed: true,
+						enabled: true,
+						version: "v1.0.0",
+						marketplace: "claudekit",
+						staleCache: false,
+					},
+					legacy: { installed: false, version: null },
+				}) satisfies InstallModeReport,
+			hasTrackedPluginSuppliedLegacyFilesFn: () => false,
 		};
 		return { deps, stopCalls, wasExecCalled: () => execCalled };
 	}

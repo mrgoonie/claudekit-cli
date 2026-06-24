@@ -4,6 +4,7 @@
 import { readFile, readdir, stat } from "node:fs/promises";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
+import { resolveInstalledPluginCacheSubpath } from "@/domains/installation/plugin/install-mode-detector.js";
 import { findFirstExistingPath, getProjectLayoutCandidates } from "@/shared/kit-layout.js";
 import matter from "gray-matter";
 import { validateSkillFrontmatter } from "../../domains/skills/skill-frontmatter-validator.js";
@@ -22,15 +23,17 @@ const SKIP_DIRS = ["node_modules", ".git", "dist", "build", ".venv", "__pycache_
  */
 export function getSkillSourcePath(globalOnly = false): string | null {
 	const globalPath = join(homedir(), ".claude/skills");
+	const pluginPath = resolveInstalledPluginCacheSubpath("skills", join(homedir(), ".claude"));
+	const globalCandidates = pluginPath ? [pluginPath, globalPath] : [globalPath];
 	if (globalOnly) {
-		return findFirstExistingPath([globalPath]);
+		return findFirstExistingPath(globalCandidates);
 	}
 	const bundledRoot = join(process.cwd(), "node_modules", "claudekit-engineer");
 	return findFirstExistingPath([
 		join(bundledRoot, "skills"),
 		...getProjectLayoutCandidates(bundledRoot, "skills"),
 		...getProjectLayoutCandidates(process.cwd(), "skills"),
-		globalPath,
+		...globalCandidates,
 	]);
 }
 
