@@ -2,7 +2,7 @@ import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
 import { readdir } from "node:fs/promises";
 import { homedir, tmpdir } from "node:os";
-import { dirname, join, resolve } from "node:path";
+import { dirname, join, resolve, sep } from "node:path";
 import { type SettingsJson, SettingsMerger } from "@/domains/config/settings-merger.js";
 import { isLegacyDescriptiveNamePrompt } from "@/domains/installation/merger/zombie-wirings-pruner.js";
 import { CLAUDEKIT_CLI_NPM_PACKAGE_NAME } from "@/shared/claudekit-constants.js";
@@ -1337,6 +1337,41 @@ export async function countMissingHookFileReferences(projectDir = process.cwd())
 		const settings = await SettingsMerger.readSettingsFile(settingsFile.path);
 		if (!settings) continue;
 		count += collectMissingHookReferences(settings, settingsFile, projectDir).length;
+	}
+	return count;
+}
+
+/**
+ * Count CK-registered hook commands in ONE install's settings.json (+ settings.local.json)
+ * whose target script file is missing on disk.
+ *
+ * Unlike {@link countMissingHookFileReferences} (which unions project + global settings for
+ * `ck doctor`), this is scoped to a single install directory so an install/skip decision is not
+ * influenced by unrelated project or global hooks elsewhere on the machine.
+ *
+ * @param claudeDir Absolute path to the install's `.claude` directory (e.g. `~/.claude` for global).
+ * @param projectRoot Directory used to resolve `$CLAUDE_PROJECT_DIR` / bare `.claude/` tokens in
+ *        hook commands; defaults to the parent of `claudeDir`. `$HOME`-rooted global hooks ignore it.
+ */
+export async function countMissingHookFileReferencesForClaudeDir(
+	claudeDir: string,
+	projectRoot: string = dirname(claudeDir),
+): Promise<number> {
+	const hooksDirPrefix = `${resolve(claudeDir, "hooks")}${sep}`;
+	let count = 0;
+	for (const fileName of ["settings.json", "settings.local.json"]) {
+		const filePath = resolve(claudeDir, fileName);
+		if (!existsSync(filePath)) continue;
+		const settings = await SettingsMerger.readSettingsFile(filePath);
+		if (!settings) continue;
+		const descriptor: ClaudeSettingsFile = { path: filePath, label: fileName, root: "$HOME" };
+		// Only count missing scripts that live in THIS install's hooks/ dir — those are the
+		// kit-managed files a reinstall can restore. A hook pointing at a missing file elsewhere
+		// (e.g. a user's own absolute path) is ignored so the version-skip optimization is not
+		// permanently disabled by an unrelated broken reference a reinstall could not fix.
+		count += collectMissingHookReferences(settings, descriptor, projectRoot).filter((finding) =>
+			finding.resolvedPath.startsWith(hooksDirPrefix),
+		).length;
 	}
 	return count;
 }

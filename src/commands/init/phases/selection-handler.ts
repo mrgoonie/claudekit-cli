@@ -9,6 +9,7 @@ import { ConfigManager } from "@/domains/config/config-manager.js";
 import { GitHubClient } from "@/domains/github/github-client.js";
 import { detectAccessibleKits } from "@/domains/github/kit-access-checker.js";
 import { runPreflightChecks } from "@/domains/github/preflight-checker.js";
+import { countMissingHookFileReferencesForClaudeDir } from "@/domains/health-checks/checkers/hook-health-checker.js";
 import { handleFreshInstallation } from "@/domains/installation/fresh-installer.js";
 import { repairLegacyWindowsGlobalKitDir } from "@/domains/installation/global-kit-legacy-repair.js";
 import { versionsMatch } from "@/domains/versioning/checking/version-utils.js";
@@ -528,10 +529,21 @@ export async function handleSelection(ctx: InitContext): Promise<InitContext> {
 			const existingMetadata = await readManifest(claudeDir);
 			const installedKitVersion = existingMetadata?.kits?.[kitType]?.version;
 			if (installedKitVersion && versionsMatch(installedKitVersion, releaseTag)) {
-				logger.success(
-					`Already at latest version (${kitType}@${installedKitVersion}), skipping reinstall`,
-				);
-				return { ...ctx, cancelled: true };
+				// Version match alone is not enough: a prior broken state (e.g. a buggy uninstall
+				// or partial install) can leave registered hooks in settings.json pointing at
+				// .cjs files that no longer exist on disk. Skipping here would leave those hooks
+				// erroring on every event. Re-onboard the missing files instead of skipping.
+				const missingHookFiles = await countMissingHookFileReferencesForClaudeDir(claudeDir);
+				if (missingHookFiles > 0) {
+					logger.warning(
+						`Detected ${missingHookFiles} registered hook(s) whose script is missing on disk; reinstalling to restore them`,
+					);
+				} else {
+					logger.success(
+						`Already at latest version (${kitType}@${installedKitVersion}), skipping reinstall`,
+					);
+					return { ...ctx, cancelled: true };
+				}
 			}
 		} catch (error) {
 			logger.verbose(
