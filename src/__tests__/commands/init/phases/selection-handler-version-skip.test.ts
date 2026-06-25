@@ -43,6 +43,20 @@ describe("selection-handler version skip (structural)", () => {
 		expect(earlyExitBlock).toContain("cancelled: true");
 	});
 
+	it("checks for missing registered hook files before skipping (issue #900)", () => {
+		expect(earlyExitBlock).toContain("countMissingHookFileReferencesForClaudeDir(claudeDir)");
+		expect(earlyExitBlock).toContain("missingHookFiles > 0");
+	});
+
+	it("guards the skip return behind the missing-hooks check (not version match alone)", () => {
+		// The skip's success log must come AFTER the missing-hooks check, i.e. live in the
+		// else branch so a broken install re-onboards instead of skipping.
+		const missingIdx = earlyExitBlock.indexOf("missingHookFiles > 0");
+		const skipIdx = earlyExitBlock.indexOf("skipping reinstall");
+		expect(missingIdx).toBeGreaterThan(-1);
+		expect(missingIdx).toBeLessThan(skipIdx);
+	});
+
 	it("catches metadata read errors with verbose logging", () => {
 		expect(earlyExitBlock).toContain("catch");
 		expect(earlyExitBlock).toContain("logger.verbose");
