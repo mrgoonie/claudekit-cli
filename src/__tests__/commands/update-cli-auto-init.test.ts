@@ -101,9 +101,16 @@ async function writeGlobalHookState(
 
 describe("promptKitUpdate auto-init behavior", () => {
 	let tempDir: string;
+	// Isolated empty home so hook self-heal checks never read the developer's real
+	// global ~/.claude (which has CK hooks installed). Without this, version-skip
+	// tests reinstall on a dev machine but pass in CI where ~/.claude is empty.
+	let testHome: string;
 
 	beforeEach(async () => {
 		tempDir = await mkdtemp(join(tmpdir(), "ck-auto-init-"));
+		testHome = await mkdtemp(join(tmpdir(), "ck-auto-init-home-"));
+		await mkdir(join(testHome, ".claude"), { recursive: true });
+		process.env.CK_TEST_HOME = testHome;
 		await writeMetadata(tempDir);
 		confirmMock.mockReset();
 		confirmMock.mockResolvedValue(true);
@@ -115,6 +122,8 @@ describe("promptKitUpdate auto-init behavior", () => {
 
 	afterEach(async () => {
 		await rm(tempDir, { recursive: true, force: true });
+		await rm(testHome, { recursive: true, force: true });
+		Reflect.deleteProperty(process.env, "CK_TEST_HOME");
 	});
 
 	/** Create test deps with exec mock (for -y mode) and spawn mock (for interactive mode) */

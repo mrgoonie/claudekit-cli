@@ -26,6 +26,7 @@ import {
 	displayDryRunPreview,
 } from "./analysis-handler.js";
 import type { Installation } from "./installation-detector.js";
+import { type SettingsCleanupResult, cleanupUninstalledSettings } from "./settings-cleanup.js";
 
 export interface UninstallExecutionSummary {
 	path: string;
@@ -48,12 +49,46 @@ async function isDirectory(filePath: string): Promise<boolean> {
 
 function getUninstallMutatePaths(options: {
 	retainedManifestPaths: string[];
+	settingsFileExists: boolean;
+	ckJsonExists: boolean;
 }): string[] {
+	const paths: string[] = [];
+
+	// metadata.json is mutated (rewritten) only on partial uninstall; a full uninstall lists it
+	// in toDelete instead, so adding it here would be redundant.
 	if (options.retainedManifestPaths.length > 0) {
-		return ["metadata.json"];
+		paths.push("metadata.json");
 	}
 
-	return [];
+	// settings.json and .ck.json are mutated by settings cleanup. Back them up so an uninstall
+	// failure rolls their previous content back alongside the deleted files.
+	if (options.settingsFileExists) {
+		paths.push("settings.json");
+	}
+	if (options.ckJsonExists) {
+		paths.push(".ck.json");
+	}
+
+	return paths;
+}
+
+/**
+ * Log a one-line summary of the settings.json/.ck.json entries reversed during uninstall.
+ */
+function logSettingsCleanup(result: SettingsCleanupResult, dryRun: boolean): void {
+	if (result.hooksRemoved === 0 && result.mcpServersRemoved === 0) return;
+
+	const parts: string[] = [];
+	if (result.hooksRemoved > 0) {
+		parts.push(`${result.hooksRemoved} hook${result.hooksRemoved === 1 ? "" : "s"}`);
+	}
+	if (result.mcpServersRemoved > 0) {
+		parts.push(
+			`${result.mcpServersRemoved} MCP server${result.mcpServersRemoved === 1 ? "" : "s"}`,
+		);
+	}
+	const verb = dryRun ? "Would remove" : "Removed";
+	log.info(`${verb} ${parts.join(" and ")} from settings.json`);
 }
 
 async function restoreUninstallBackup(backup: DestructiveOperationBackup): Promise<void> {
@@ -127,6 +162,12 @@ export async function removeInstallations(
 				const label = options.kit ? `${installation.type} (${options.kit} kit)` : installation.type;
 				const legacyLabel = !installation.hasMetadata ? " [legacy]" : "";
 				displayDryRunPreview(analysis, `${label}${legacyLabel}`);
+				const settingsPreview = await cleanupUninstalledSettings(installation.path, {
+					kit: options.kit,
+					remainingKits: analysis.remainingKits,
+					dryRun: true,
+				});
+				logSettingsCleanup(settingsPreview, true);
 				if (analysis.remainingKits.length > 0) {
 					log.info(`Remaining kits after uninstall: ${analysis.remainingKits.join(", ")}`);
 				}
@@ -138,6 +179,8 @@ export async function removeInstallations(
 
 			const mutatePaths = getUninstallMutatePaths({
 				retainedManifestPaths: analysis.retainedManifestPaths,
+				settingsFileExists: await pathExists(join(installation.path, "settings.json")),
+				ckJsonExists: await pathExists(join(installation.path, ".ck.json")),
 			});
 			let backup: DestructiveOperationBackup | null = null;
 
@@ -212,6 +255,16 @@ export async function removeInstallations(
 						throw new Error("Failed to update metadata.json after partial uninstall");
 					}
 				}
+
+				// Reverse settings.json hook/MCP registrations and clear .ck.json tracking.
+				// Runs before the empty-directory check so removing settings.json / .ck.json can
+				// leave the install dir empty and eligible for cleanup. Covered by the recovery
+				// backup (settings.json / .ck.json are in mutatePaths) so a failure rolls back.
+				const settingsCleanup = await cleanupUninstalledSettings(installation.path, {
+					kit: options.kit,
+					remainingKits: analysis.remainingKits,
+				});
+				logSettingsCleanup(settingsCleanup, false);
 
 				// Check if installation directory is now empty, remove it
 				try {

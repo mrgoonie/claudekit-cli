@@ -3,7 +3,7 @@
  * Uses ONLY dependency injection — zero mock.module() to avoid cross-file contamination.
  */
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { PromptKitUpdateDeps } from "@/commands/update-cli.js";
@@ -13,13 +13,22 @@ import { versionsMatch } from "@/domains/versioning/checking/version-utils.js";
 
 describe("promptKitUpdate version display", () => {
 	let tempDir: string;
+	// Isolated empty home so hook self-heal checks never read the developer's real
+	// global ~/.claude (which has CK hooks installed). Without this, version-skip
+	// tests reinstall on a dev machine but pass in CI where ~/.claude is empty.
+	let testHome: string;
 
 	beforeEach(async () => {
 		tempDir = await mkdtemp(join(tmpdir(), "ck-prompt-kit-"));
+		testHome = await mkdtemp(join(tmpdir(), "ck-prompt-kit-home-"));
+		await mkdir(join(testHome, ".claude"), { recursive: true });
+		process.env.CK_TEST_HOME = testHome;
 	});
 
 	afterEach(async () => {
 		await rm(tempDir, { recursive: true, force: true });
+		await rm(testHome, { recursive: true, force: true });
+		Reflect.deleteProperty(process.env, "CK_TEST_HOME");
 	});
 
 	/** Build deps with injectable exec side-effect and spinner capture */
