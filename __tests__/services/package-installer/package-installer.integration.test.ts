@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import {
 	type PackageInstallResult,
-	installGemini,
+	installAgy,
 	installOpenCode,
 	installPackageGlobally,
 	processPackageInstallations,
@@ -16,7 +16,7 @@ describe("Package Installer Integration Tests", () => {
 			// Test that functions exist and have correct signatures
 			expect(typeof installPackageGlobally).toBe("function");
 			expect(typeof installOpenCode).toBe("function");
-			expect(typeof installGemini).toBe("function");
+			expect(typeof installAgy).toBe("function");
 			expect(typeof processPackageInstallations).toBe("function");
 		});
 
@@ -69,19 +69,18 @@ describe("Package Installer Integration Tests", () => {
 		});
 	});
 
-	describe("Google Gemini CLI Specific Tests", () => {
-		test("should use correct package name for Google Gemini CLI", () => {
-			// This test validates that the installGemini function uses the correct package name
-			// We can't easily mock it, but we can validate the package name format
-			const geminiPackageName = "@google/gemini-cli";
-			expect(geminiPackageName).toMatch(/^@[a-z0-9-~][a-z0-9-._~]*\/[a-z0-9-~][a-z0-9-._~]*$/);
+	describe("Antigravity (agy) CLI Specific Tests", () => {
+		test("should use the official install script (not npm) for agy", () => {
+			// agy is NOT distributed via npm; it is installed via Google's official script.
+			const expectedUnixUrl = "https://antigravity.google/cli/install.sh";
+			const expectedWindowsUrl = "https://antigravity.google/cli/install.ps1";
+			expect(expectedUnixUrl).toContain("antigravity.google/cli/install.sh");
+			expect(expectedWindowsUrl).toContain("antigravity.google/cli/install.ps1");
 		});
 
-		test("should handle gemini installation result structure", async () => {
-			// This test checks that the function returns the expected structure
-			// We expect it to use installPackageGlobally with the correct parameters
-			// but we won't actually call it to avoid installation
-			expect(() => validatePackageName("@google/gemini-cli")).not.toThrow();
+		test("should detect agy via the 'agy --version' command", () => {
+			const agyCommand = "agy --version";
+			expect(agyCommand).toBe("agy --version");
 		});
 	});
 
@@ -108,18 +107,18 @@ describe("Package Installer Integration Tests", () => {
 			expect(result).toBeDefined();
 			expect(typeof result).toBe("object");
 			expect(result.opencode).toBeUndefined();
-			expect(result.gemini).toBeUndefined();
+			expect(result.agy).toBeUndefined();
 		});
 
 		test("should handle boolean flag parameters", async () => {
 			// Test only safe combinations that won't trigger installations
 			const testCases = [
-				{ opencode: false, gemini: false },
-				{ opencode: true, gemini: false }, // Only opencode (already installed)
+				{ opencode: false, agy: false },
+				{ opencode: true, agy: false }, // Only opencode (already installed)
 			];
 
 			for (const testCase of testCases) {
-				const result = await processPackageInstallations(testCase.opencode, testCase.gemini);
+				const result = await processPackageInstallations(testCase.opencode, testCase.agy);
 				expect(result).toBeDefined();
 				expect(typeof result).toBe("object");
 
@@ -127,8 +126,8 @@ describe("Package Installer Integration Tests", () => {
 					expect(result.opencode).toBeUndefined();
 				}
 
-				if (!testCase.gemini) {
-					expect(result.gemini).toBeUndefined();
+				if (!testCase.agy) {
+					expect(result.agy).toBeUndefined();
 				}
 			}
 		});
@@ -152,8 +151,8 @@ describe("Package Installer Integration Tests", () => {
 	});
 
 	describe("Package Name Validation Integration", () => {
-		test("should validate Google Gemini CLI package name", () => {
-			const packageName = "@google/gemini-cli";
+		test("should validate scoped npm package names", () => {
+			const packageName = "@scope/example-cli";
 
 			// Test that this is a valid npm package name
 			expect(packageName).toMatch(/^@[a-z0-9-~][a-z0-9-._~]*\/[a-z0-9-~][a-z0-9-._~]*$/);

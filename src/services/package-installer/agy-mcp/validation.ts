@@ -1,5 +1,10 @@
 /**
- * Gemini MCP validation utilities
+ * Antigravity (agy) MCP validation utilities
+ *
+ * The Antigravity CLI reads MCP servers from a dedicated `mcp_config.json` file
+ * (same `{ "mcpServers": {...} }` shape as Claude Code's `.mcp.json`):
+ *   - Workspace: <projectDir>/.agents/mcp_config.json
+ *   - Global:    ~/.gemini/config/mcp_config.json
  */
 
 import { existsSync, lstatSync, readlinkSync } from "node:fs";
@@ -8,7 +13,8 @@ import { join } from "node:path";
 import { logger } from "@/shared/logger.js";
 
 /**
- * Get the global MCP config path (~/.claude/.mcp.json)
+ * Get the global MCP config path (~/.claude/.mcp.json) — the source of truth
+ * that agy's config is linked/merged from.
  */
 export function getGlobalMcpConfigPath(): string {
 	return join(homedir(), ".claude", ".mcp.json");
@@ -46,21 +52,21 @@ export function findMcpConfigPath(projectDir: string): string | null {
 }
 
 /**
- * Get the Gemini settings path based on install type
- * - Global: ~/.gemini/settings.json (Gemini CLI's global config location)
- * - Local: projectDir/.gemini/settings.json
+ * Get the Antigravity (agy) MCP config path based on install type.
+ * - Global: ~/.gemini/config/mcp_config.json (agy's shared global MCP config)
+ * - Local:  <projectDir>/.agents/mcp_config.json (agy's workspace MCP config)
  */
-export function getGeminiSettingsPath(projectDir: string, isGlobal: boolean): string {
+export function getAgyMcpConfigPath(projectDir: string, isGlobal: boolean): string {
 	if (isGlobal) {
-		return join(homedir(), ".gemini", "settings.json");
+		return join(homedir(), ".gemini", "config", "mcp_config.json");
 	}
-	return join(projectDir, ".gemini", "settings.json");
+	return join(projectDir, ".agents", "mcp_config.json");
 }
 
 /**
- * Check if .gemini/settings.json already exists
+ * Check if agy's mcp_config.json already exists.
  */
-export function checkExistingGeminiConfig(
+export function checkExistingAgyConfig(
 	projectDir: string,
 	isGlobal = false,
 ): {
@@ -69,25 +75,25 @@ export function checkExistingGeminiConfig(
 	currentTarget?: string;
 	settingsPath: string;
 } {
-	const geminiSettingsPath = getGeminiSettingsPath(projectDir, isGlobal);
+	const agyConfigPath = getAgyMcpConfigPath(projectDir, isGlobal);
 
-	if (!existsSync(geminiSettingsPath)) {
-		return { exists: false, isSymlink: false, settingsPath: geminiSettingsPath };
+	if (!existsSync(agyConfigPath)) {
+		return { exists: false, isSymlink: false, settingsPath: agyConfigPath };
 	}
 
 	try {
-		const stats = lstatSync(geminiSettingsPath);
+		const stats = lstatSync(agyConfigPath);
 		if (stats.isSymbolicLink()) {
-			const target = readlinkSync(geminiSettingsPath);
+			const target = readlinkSync(agyConfigPath);
 			return {
 				exists: true,
 				isSymlink: true,
 				currentTarget: target,
-				settingsPath: geminiSettingsPath,
+				settingsPath: agyConfigPath,
 			};
 		}
-		return { exists: true, isSymlink: false, settingsPath: geminiSettingsPath };
+		return { exists: true, isSymlink: false, settingsPath: agyConfigPath };
 	} catch {
-		return { exists: true, isSymlink: false, settingsPath: geminiSettingsPath };
+		return { exists: true, isSymlink: false, settingsPath: agyConfigPath };
 	}
 }

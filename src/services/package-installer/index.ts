@@ -33,12 +33,12 @@ export {
 	type OSInfo,
 } from "./dependency-installer.js";
 export {
-	linkGeminiMcpConfig,
-	processGeminiMcpLinking,
+	linkAgyMcpConfig,
+	processAgyMcpLinking,
 	findMcpConfigPath,
-	checkExistingGeminiConfig,
-	addGeminiToGitignore,
-	getGeminiSettingsPath,
-	type GeminiLinkResult,
-	type GeminiLinkOptions,
-} from "./gemini-mcp-linker.js";
+	checkExistingAgyConfig,
+	addAgyToGitignore,
+	getAgyMcpConfigPath,
+	type AgyLinkResult,
+	type AgyLinkOptions,
+} from "./agy-mcp-linker.js";

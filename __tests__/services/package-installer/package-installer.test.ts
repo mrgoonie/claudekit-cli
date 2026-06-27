@@ -28,7 +28,7 @@ describe("Package Installer Tests", () => {
 	describe("validatePackageName", () => {
 		test("should accept valid npm package names", () => {
 			expect(() => validatePackageName("lodash")).not.toThrow();
-			expect(() => validatePackageName("@google/gemini-cli")).not.toThrow();
+			expect(() => validatePackageName("@scope/example-cli")).not.toThrow();
 			expect(() => validatePackageName("react-dom")).not.toThrow();
 			expect(() => validatePackageName("express")).not.toThrow();
 		});
@@ -117,15 +117,19 @@ describe("Package Installer Tests", () => {
 		});
 	});
 
-	// Test Google Gemini CLI specific functionality
-	describe("Google Gemini CLI", () => {
-		test("should detect if @google/gemini-cli is installed", async () => {
-			const isInstalled = await isPackageInstalled("@google/gemini-cli");
+	// Test scoped npm package detection via the npm utilities.
+	// Note: the Antigravity CLI (agy) is NOT an npm package — it is installed via
+	// Google's official script — so it is not detected through these npm helpers.
+	describe("Scoped npm package detection", () => {
+		const scopedExample = "@ck-test/definitely-not-a-real-pkg-12345";
+
+		test("should return a boolean from isPackageInstalled for a scoped package", async () => {
+			const isInstalled = await isPackageInstalled(scopedExample);
 			expect(typeof isInstalled).toBe("boolean");
 		}, 15000);
 
-		test("should get version if @google/gemini-cli is installed", async () => {
-			const version = await getPackageVersion("@google/gemini-cli");
+		test("should return string or null from getPackageVersion for a scoped package", async () => {
+			const version = await getPackageVersion(scopedExample);
 			if (version) {
 				expect(typeof version).toBe("string");
 				expect(version.length).toBeGreaterThan(0);
@@ -135,9 +139,8 @@ describe("Package Installer Tests", () => {
 			}
 		}, 15000);
 
-		test("should have correct package name for Gemini", async () => {
-			// Verify the function uses the correct package name
-			expect(() => validatePackageName("@google/gemini-cli")).not.toThrow();
+		test("should accept a valid scoped package name", async () => {
+			expect(() => validatePackageName(scopedExample)).not.toThrow();
 		});
 	});
 
@@ -166,7 +169,7 @@ describe("Package Installer Tests", () => {
 		test("should skip packages when installation flags are false", async () => {
 			const result = await processPackageInstallations(false, false);
 			expect(result.opencode).toBeUndefined();
-			expect(result.gemini).toBeUndefined();
+			expect(result.agy).toBeUndefined();
 		});
 
 		test("should handle processPackageInstallations function structure", async () => {
@@ -176,7 +179,7 @@ describe("Package Installer Tests", () => {
 			// Should return empty result when both flags are false
 			expect(result).toBeDefined();
 			expect(result.opencode).toBeUndefined();
-			expect(result.gemini).toBeUndefined();
+			expect(result.agy).toBeUndefined();
 		});
 
 		test("should handle processPackageInstallations with opencode only", async () => {
@@ -186,7 +189,7 @@ describe("Package Installer Tests", () => {
 
 			// Should have opencode result
 			expect(result).toBeDefined();
-			expect(result.gemini).toBeUndefined();
+			expect(result.agy).toBeUndefined();
 
 			if (result.opencode) {
 				expect(result.opencode.package).toBe("OpenCode CLI");

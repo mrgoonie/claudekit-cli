@@ -2,7 +2,7 @@ import { describe, expect, it } from "bun:test";
 import {
 	type PackageInstallResult,
 	getPackageVersion,
-	installGemini,
+	installAgy,
 	installOpenCode,
 	installPackageGlobally,
 	isPackageInstalled,
@@ -35,7 +35,7 @@ describe("Package Installer", () => {
 			const results = await processPackageInstallations(false, false);
 
 			expect(results.opencode).toBeUndefined();
-			expect(results.gemini).toBeUndefined();
+			expect(results.agy).toBeUndefined();
 		});
 	});
 
@@ -58,12 +58,12 @@ describe("Package Installer", () => {
 			expect(result.package).toBe("OpenCode CLI");
 		});
 
-		it("should return proper result structure for Gemini", async () => {
-			const result = await installGemini();
+		it("should return proper result structure for Antigravity (agy)", async () => {
+			const result = await installAgy();
 
 			expect(result).toHaveProperty("success");
 			expect(result).toHaveProperty("package");
-			expect(result.package).toBe("Google Gemini CLI");
+			expect(result.package).toBe("Antigravity CLI (agy)");
 		});
 
 		it("should attempt installation when requested", async () => {
@@ -71,7 +71,7 @@ describe("Package Installer", () => {
 
 			// Results should be defined (even if installation fails)
 			expect(results).toHaveProperty("opencode");
-			expect(results).toHaveProperty("gemini");
+			expect(results).toHaveProperty("agy");
 
 			// Each result should have the expected structure
 			if (results.opencode) {
@@ -79,9 +79,9 @@ describe("Package Installer", () => {
 				expect(results.opencode).toHaveProperty("package");
 			}
 
-			if (results.gemini) {
-				expect(results.gemini).toHaveProperty("success");
-				expect(results.gemini).toHaveProperty("package");
+			if (results.agy) {
+				expect(results.agy).toHaveProperty("success");
+				expect(results.agy).toHaveProperty("package");
 			}
 		});
 
@@ -89,14 +89,14 @@ describe("Package Installer", () => {
 			const results = await processPackageInstallations(true, false);
 
 			expect(results.opencode).toBeDefined();
-			expect(results.gemini).toBeUndefined();
+			expect(results.agy).toBeUndefined();
 		});
 
-		it("should handle only Gemini installation", async () => {
+		it("should handle only Antigravity (agy) installation", async () => {
 			const results = await processPackageInstallations(false, true);
 
 			expect(results.opencode).toBeUndefined();
-			expect(results.gemini).toBeDefined();
+			expect(results.agy).toBeDefined();
 		});
 	});
 

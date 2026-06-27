@@ -7,7 +7,7 @@
 
 import type { VersionSelectorOptions } from "@/domains/versioning/version-selector.js";
 import {
-	isGeminiInstalled,
+	isAgyInstalled,
 	isOpenCodeInstalled,
 } from "@/services/package-installer/package-installer.js";
 import { logger } from "@/shared/logger.js";
@@ -106,17 +106,17 @@ export class PromptsManager {
 
 	async promptPackageInstallations(): Promise<{
 		installOpenCode: boolean;
-		installGemini: boolean;
+		installAgy: boolean;
 	}> {
 		log.step("Optional Package Installations");
 
-		const [openCodeInstalled, geminiInstalled] = await Promise.all([
+		const [openCodeInstalled, agyInstalled] = await Promise.all([
 			isOpenCodeInstalled(),
-			isGeminiInstalled(),
+			isAgyInstalled(),
 		]);
 
 		let installOpenCode = false;
-		let installGemini = false;
+		let installAgy = false;
 
 		if (openCodeInstalled) {
 			logger.success("OpenCode CLI is already installed");
@@ -133,24 +133,24 @@ export class PromptsManager {
 			installOpenCode = shouldInstallOpenCode;
 		}
 
-		if (geminiInstalled) {
-			logger.success("Google Gemini CLI is already installed");
+		if (agyInstalled) {
+			logger.success("Antigravity CLI (agy) is already installed");
 		} else {
-			const shouldInstallGemini = await confirm({
+			const shouldInstallAgy = await confirm({
 				message:
-					"Install Google Gemini CLI for AI-powered assistance? (Optional additional AI capabilities)",
+					"Install Antigravity CLI (agy) for AI-powered assistance? (Optional additional AI capabilities)",
 			});
 
-			if (isCancel(shouldInstallGemini)) {
+			if (isCancel(shouldInstallAgy)) {
 				throw new Error("Package installation cancelled");
 			}
 
-			installGemini = shouldInstallGemini;
+			installAgy = shouldInstallAgy;
 		}
 
 		return {
 			installOpenCode,
-			installGemini,
+			installAgy,
 		};
 	}
 
@@ -160,7 +160,7 @@ export class PromptsManager {
 
 	showPackageInstallationResults(results: {
 		opencode?: { success: boolean; package: string; version?: string; error?: string };
-		gemini?: { success: boolean; package: string; version?: string; error?: string };
+		agy?: { success: boolean; package: string; version?: string; error?: string };
 	}): void {
 		const successfulInstalls: string[] = [];
 		const failedInstalls: string[] = [];
@@ -177,14 +177,14 @@ export class PromptsManager {
 			}
 		}
 
-		if (results.gemini) {
-			if (results.gemini.success) {
+		if (results.agy) {
+			if (results.agy.success) {
 				successfulInstalls.push(
-					`${results.gemini.package}${results.gemini.version ? ` v${results.gemini.version}` : ""}`,
+					`${results.agy.package}${results.agy.version ? ` v${results.agy.version}` : ""}`,
 				);
 			} else {
 				failedInstalls.push(
-					`${results.gemini.package}: ${results.gemini.error || "Installation failed"}`,
+					`${results.agy.package}: ${results.agy.error || "Installation failed"}`,
 				);
 			}
 		}
@@ -195,7 +195,7 @@ export class PromptsManager {
 
 		if (failedInstalls.length > 0) {
 			logger.warning(`Failed to install: ${failedInstalls.join(", ")}`);
-			logger.info("You can install these manually later using npm install -g <package>");
+			logger.info("You can install these manually later from each tool's official install guide.");
 		}
 	}
 

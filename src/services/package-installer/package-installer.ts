@@ -7,7 +7,7 @@
 
 import { isTestEnvironment } from "@/shared/environment.js";
 import { logger } from "@/shared/logger.js";
-import { installGemini, isGeminiInstalled } from "./gemini-installer.js";
+import { AGY_DISPLAY_NAME, installAgy, isAgyInstalled } from "./agy-installer.js";
 import { installOpenCode, isOpenCodeInstalled } from "./opencode-installer.js";
 import type { PackageInstallResult } from "./types.js";
 
@@ -40,8 +40,8 @@ export {
 // Re-export OpenCode installer
 export { isOpenCodeInstalled, installOpenCode } from "./opencode-installer.js";
 
-// Re-export Gemini installer
-export { isGeminiInstalled, installGemini } from "./gemini-installer.js";
+// Re-export Antigravity (agy) installer
+export { isAgyInstalled, installAgy, AGY_DISPLAY_NAME } from "./agy-installer.js";
 
 // Re-export skills installer
 export {
@@ -54,20 +54,20 @@ export {
  * Check and install packages based on user preferences
  *
  * @param shouldInstallOpenCode - Whether to install OpenCode CLI
- * @param shouldInstallGemini - Whether to install Gemini CLI
- * @param projectDir - Project directory for Gemini MCP linking (optional)
+ * @param shouldInstallAgy - Whether to install the Antigravity CLI (agy)
+ * @param projectDir - Project directory for agy MCP linking (optional)
  */
 export async function processPackageInstallations(
 	shouldInstallOpenCode: boolean,
-	shouldInstallGemini: boolean,
+	shouldInstallAgy: boolean,
 	projectDir?: string,
 ): Promise<{
 	opencode?: PackageInstallResult;
-	gemini?: PackageInstallResult;
+	agy?: PackageInstallResult;
 }> {
 	const results: {
 		opencode?: PackageInstallResult;
-		gemini?: PackageInstallResult;
+		agy?: PackageInstallResult;
 	} = {};
 
 	if (shouldInstallOpenCode) {
@@ -92,31 +92,31 @@ export async function processPackageInstallations(
 		}
 	}
 
-	if (shouldInstallGemini) {
+	if (shouldInstallAgy) {
 		if (isTestEnvironment()) {
-			results.gemini = {
+			results.agy = {
 				success: true,
-				package: "Google Gemini CLI",
+				package: AGY_DISPLAY_NAME,
 				skipped: true,
 			};
 		} else {
-			const alreadyInstalled = await isGeminiInstalled();
+			const alreadyInstalled = await isAgyInstalled();
 			if (alreadyInstalled) {
-				logger.info("Google Gemini CLI already installed");
-				results.gemini = {
+				logger.info(`${AGY_DISPLAY_NAME} already installed`);
+				results.agy = {
 					success: true,
-					package: "Google Gemini CLI",
+					package: AGY_DISPLAY_NAME,
 				};
 			} else {
-				results.gemini = await installGemini();
+				results.agy = await installAgy();
 			}
 
-			// Set up Gemini MCP integration (symlink .gemini/settings.json → .mcp.json)
-			// Only run if Gemini is available (already installed or just installed successfully)
-			const geminiAvailable = alreadyInstalled || results.gemini?.success;
-			if (projectDir && geminiAvailable) {
-				const { processGeminiMcpLinking } = await import("./gemini-mcp-linker.js");
-				await processGeminiMcpLinking(projectDir);
+			// Set up agy MCP integration (link .agents/mcp_config.json → .mcp.json)
+			// Only run if agy is available (already installed or just installed successfully)
+			const agyAvailable = alreadyInstalled || results.agy?.success;
+			if (projectDir && agyAvailable) {
+				const { processAgyMcpLinking } = await import("./agy-mcp-linker.js");
+				await processAgyMcpLinking(projectDir);
 			}
 		}
 	}
