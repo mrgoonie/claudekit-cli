@@ -24,28 +24,30 @@ export async function postSetup(
 	prompts: PromptsManager,
 ): Promise<void> {
 	// Handle optional package installations
+	// Note: the `--gemini` flag now drives the Antigravity (agy) CLI install, since
+	// Google retired the standalone gemini CLI. The flag name is kept for compatibility.
 	let installOpenCode = validOptions.opencode;
-	let installGemini = validOptions.gemini;
+	let installAgy = validOptions.gemini;
 	let installSkills = validOptions.installSkills;
 
-	if (!isNonInteractive && !installOpenCode && !installGemini && !installSkills) {
+	if (!isNonInteractive && !installOpenCode && !installAgy && !installSkills) {
 		// Interactive mode: prompt for package installations
 		const packageChoices = await prompts.promptPackageInstallations();
 		installOpenCode = packageChoices.installOpenCode;
-		installGemini = packageChoices.installGemini;
+		installAgy = packageChoices.installAgy;
 
 		// Prompt for skills installation
 		installSkills = await prompts.promptSkillsInstallation();
 	}
 
 	// Install packages if requested
-	if (installOpenCode || installGemini) {
+	if (installOpenCode || installAgy) {
 		logger.info("Installing optional packages...");
 		try {
 			const installationResults = await processPackageInstallations(
 				installOpenCode,
-				installGemini,
-				resolvedDir, // Pass project dir for Gemini MCP symlink setup
+				installAgy,
+				resolvedDir, // Pass project dir for agy MCP linking setup
 			);
 			prompts.showPackageInstallationResults(installationResults);
 		} catch (error) {
@@ -53,7 +55,9 @@ export async function postSetup(
 			logger.warning(
 				`Package installation failed: ${error instanceof Error ? error.message : String(error)}`,
 			);
-			logger.info("You can install these packages manually later using npm install -g <package>");
+			logger.info(
+				"You can install these packages manually later from each tool's official install guide.",
+			);
 		}
 	}
 

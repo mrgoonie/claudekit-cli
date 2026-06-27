@@ -4,20 +4,20 @@ import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import {
-	addGeminiToGitignore,
-	checkExistingGeminiConfig,
+	addAgyToGitignore,
+	checkExistingAgyConfig,
 	findMcpConfigPath,
-	getGeminiSettingsPath,
-	linkGeminiMcpConfig,
-} from "@/services/package-installer/gemini-mcp-linker.js";
+	getAgyMcpConfigPath,
+	linkAgyMcpConfig,
+} from "@/services/package-installer/agy-mcp-linker.js";
 
-describe("gemini-mcp-linker", () => {
+describe("agy-mcp-linker", () => {
 	let tempDir: string;
 	const globalMcpPath = join(homedir(), ".claude", ".mcp.json");
 	const hasGlobalMcpConfig = existsSync(globalMcpPath);
 
 	beforeEach(async () => {
-		tempDir = join(tmpdir(), `ck-gemini-test-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+		tempDir = join(tmpdir(), `ck-agy-test-${Date.now()}-${Math.random().toString(36).slice(2)}`);
 		await mkdir(tempDir, { recursive: true });
 	});
 
@@ -58,31 +58,34 @@ describe("gemini-mcp-linker", () => {
 		});
 	});
 
-	describe("getGeminiSettingsPath", () => {
-		test("returns local path for non-global installs", () => {
-			const result = getGeminiSettingsPath(tempDir, false);
-			expect(result).toBe(join(tempDir, ".gemini", "settings.json"));
+	describe("getAgyMcpConfigPath", () => {
+		test("returns local .agents/mcp_config.json for non-global installs", () => {
+			const result = getAgyMcpConfigPath(tempDir, false);
+			expect(result).toBe(join(tempDir, ".agents", "mcp_config.json"));
 		});
 
-		test("returns global ~/.gemini/settings.json for global installs", () => {
-			const result = getGeminiSettingsPath(tempDir, true);
-			expect(result).toBe(join(homedir(), ".gemini", "settings.json"));
+		test("returns global ~/.gemini/config/mcp_config.json for global installs", () => {
+			const result = getAgyMcpConfigPath(tempDir, true);
+			expect(result).toBe(join(homedir(), ".gemini", "config", "mcp_config.json"));
 		});
 	});
 
-	describe("checkExistingGeminiConfig", () => {
-		test("returns exists=false when no .gemini/settings.json", () => {
-			const result = checkExistingGeminiConfig(tempDir);
+	describe("checkExistingAgyConfig", () => {
+		test("returns exists=false when no .agents/mcp_config.json", () => {
+			const result = checkExistingAgyConfig(tempDir);
 			expect(result.exists).toBe(false);
 			expect(result.isSymlink).toBe(false);
-			expect(result.settingsPath).toBe(join(tempDir, ".gemini", "settings.json"));
+			expect(result.settingsPath).toBe(join(tempDir, ".agents", "mcp_config.json"));
 		});
 
 		test("returns exists=true, isSymlink=false for regular file", async () => {
-			await mkdir(join(tempDir, ".gemini"), { recursive: true });
-			await writeFile(join(tempDir, ".gemini", "settings.json"), JSON.stringify({ theme: "dark" }));
+			await mkdir(join(tempDir, ".agents"), { recursive: true });
+			await writeFile(
+				join(tempDir, ".agents", "mcp_config.json"),
+				JSON.stringify({ mcpServers: {} }),
+			);
 
-			const result = checkExistingGeminiConfig(tempDir);
+			const result = checkExistingAgyConfig(tempDir);
 			expect(result.exists).toBe(true);
 			expect(result.isSymlink).toBe(false);
 		});
@@ -93,61 +96,61 @@ describe("gemini-mcp-linker", () => {
 			await writeFile(targetPath, JSON.stringify({ mcpServers: {} }));
 
 			// Create symlink
-			await mkdir(join(tempDir, ".gemini"), { recursive: true });
-			const linkPath = join(tempDir, ".gemini", "settings.json");
+			await mkdir(join(tempDir, ".agents"), { recursive: true });
+			const linkPath = join(tempDir, ".agents", "mcp_config.json");
 			const { symlink } = await import("node:fs/promises");
 			await symlink(targetPath, linkPath);
 
-			const result = checkExistingGeminiConfig(tempDir);
+			const result = checkExistingAgyConfig(tempDir);
 			expect(result.exists).toBe(true);
 			expect(result.isSymlink).toBe(true);
 			expect(result.currentTarget).toBe(targetPath);
 		});
 
 		test("checks global path when isGlobal=true", () => {
-			const result = checkExistingGeminiConfig(tempDir, true);
-			expect(result.settingsPath).toBe(join(homedir(), ".gemini", "settings.json"));
+			const result = checkExistingAgyConfig(tempDir, true);
+			expect(result.settingsPath).toBe(join(homedir(), ".gemini", "config", "mcp_config.json"));
 		});
 	});
 
-	describe("addGeminiToGitignore", () => {
-		test("creates .gitignore with .gemini/ if it does not exist", async () => {
-			await addGeminiToGitignore(tempDir);
+	describe("addAgyToGitignore", () => {
+		test("creates .gitignore with .agents/mcp_config.json if it does not exist", async () => {
+			await addAgyToGitignore(tempDir);
 
 			const gitignorePath = join(tempDir, ".gitignore");
 			expect(existsSync(gitignorePath)).toBe(true);
 
 			const content = await readFile(gitignorePath, "utf-8");
-			expect(content).toContain(".gemini/");
-			expect(content).toContain("# Gemini CLI settings");
+			expect(content).toContain(".agents/mcp_config.json");
+			expect(content).toContain("# Antigravity CLI MCP config");
 		});
 
-		test("appends .gemini/ to existing .gitignore", async () => {
+		test("appends .agents/mcp_config.json to existing .gitignore", async () => {
 			const gitignorePath = join(tempDir, ".gitignore");
 			await writeFile(gitignorePath, "node_modules/\n.env\n");
 
-			await addGeminiToGitignore(tempDir);
+			await addAgyToGitignore(tempDir);
 
 			const content = await readFile(gitignorePath, "utf-8");
 			expect(content).toContain("node_modules/");
 			expect(content).toContain(".env");
-			expect(content).toContain(".gemini/");
+			expect(content).toContain(".agents/mcp_config.json");
 		});
 
-		test("does not duplicate .gemini/ if already present", async () => {
+		test("does not duplicate .agents/mcp_config.json if already present", async () => {
 			const gitignorePath = join(tempDir, ".gitignore");
-			await writeFile(gitignorePath, "node_modules/\n.gemini/\n");
+			await writeFile(gitignorePath, "node_modules/\n.agents/mcp_config.json\n");
 
-			await addGeminiToGitignore(tempDir);
+			await addAgyToGitignore(tempDir);
 
 			const content = await readFile(gitignorePath, "utf-8");
 			// Should only have one occurrence
-			const matches = content.match(/\.gemini\//g);
+			const matches = content.match(/\.agents\/mcp_config\.json/g);
 			expect(matches?.length).toBe(1);
 		});
 
-		test("handles various .gemini patterns in gitignore", async () => {
-			const patterns = [".gemini/", ".gemini", "/.gemini/", "/.gemini"];
+		test("handles various .agents/mcp_config.json patterns in gitignore", async () => {
+			const patterns = [".agents/mcp_config.json", "/.agents/mcp_config.json"];
 
 			for (const pattern of patterns) {
 				const testDir = join(tempDir, `test-${pattern.replace(/\//g, "-")}`);
@@ -155,18 +158,18 @@ describe("gemini-mcp-linker", () => {
 				const gitignorePath = join(testDir, ".gitignore");
 				await writeFile(gitignorePath, `node_modules/\n${pattern}\n`);
 
-				await addGeminiToGitignore(testDir);
+				await addAgyToGitignore(testDir);
 
 				const content = await readFile(gitignorePath, "utf-8");
-				// Should not add another .gemini/ entry
-				expect(content).not.toContain("# Gemini CLI settings");
+				// Should not add another entry
+				expect(content).not.toContain("# Antigravity CLI MCP config");
 			}
 		});
 	});
 
-	describe("linkGeminiMcpConfig", () => {
+	describe("linkAgyMcpConfig", () => {
 		test("handles case when no local MCP config found", async () => {
-			const result = await linkGeminiMcpConfig(tempDir);
+			const result = await linkAgyMcpConfig(tempDir);
 
 			// If global config exists, it will succeed using global config
 			// Otherwise, it will fail with "No MCP config found"
@@ -178,46 +181,46 @@ describe("gemini-mcp-linker", () => {
 			}
 		});
 
-		test("creates symlink when no existing Gemini config", async () => {
+		test("creates symlink when no existing agy config", async () => {
 			// Create local .mcp.json
 			const mcpPath = join(tempDir, ".mcp.json");
 			await writeFile(mcpPath, JSON.stringify({ mcpServers: { test: {} } }));
 
-			const result = await linkGeminiMcpConfig(tempDir);
+			const result = await linkAgyMcpConfig(tempDir);
 
 			expect(result.success).toBe(true);
 			expect(result.method).toBe("symlink");
 
 			// Verify symlink created
-			const settingsPath = join(tempDir, ".gemini", "settings.json");
-			expect(existsSync(settingsPath)).toBe(true);
+			const configPath = join(tempDir, ".agents", "mcp_config.json");
+			expect(existsSync(configPath)).toBe(true);
 
-			const stats = lstatSync(settingsPath);
+			const stats = lstatSync(configPath);
 			expect(stats.isSymbolicLink()).toBe(true);
 
 			// Verify relative path (portable) - normalize for cross-platform (Windows uses \, Unix uses /)
-			const linkTarget = readlinkSync(settingsPath);
+			const linkTarget = readlinkSync(configPath);
 			expect(linkTarget.replace(/\\/g, "/")).toBe("../.mcp.json");
 		});
 
-		test("skips when Gemini config is already a symlink", async () => {
+		test("skips when agy config is already a symlink", async () => {
 			// Create local .mcp.json
 			const mcpPath = join(tempDir, ".mcp.json");
 			await writeFile(mcpPath, JSON.stringify({ mcpServers: {} }));
 
 			// Create existing symlink
-			await mkdir(join(tempDir, ".gemini"), { recursive: true });
-			const settingsPath = join(tempDir, ".gemini", "settings.json");
+			await mkdir(join(tempDir, ".agents"), { recursive: true });
+			const configPath = join(tempDir, ".agents", "mcp_config.json");
 			const { symlink } = await import("node:fs/promises");
-			await symlink("../.mcp.json", settingsPath);
+			await symlink("../.mcp.json", configPath);
 
-			const result = await linkGeminiMcpConfig(tempDir);
+			const result = await linkAgyMcpConfig(tempDir);
 
 			expect(result.success).toBe(true);
 			expect(result.method).toBe("skipped");
 		});
 
-		test("merges mcpServers into existing Gemini settings file", async () => {
+		test("merges mcpServers into existing agy config file", async () => {
 			// Create local .mcp.json with mcpServers
 			const mcpPath = join(tempDir, ".mcp.json");
 			await writeFile(
@@ -229,24 +232,24 @@ describe("gemini-mcp-linker", () => {
 				}),
 			);
 
-			// Create existing Gemini settings with user preferences
-			await mkdir(join(tempDir, ".gemini"), { recursive: true });
-			const settingsPath = join(tempDir, ".gemini", "settings.json");
+			// Create existing agy mcp_config.json with extra user keys
+			await mkdir(join(tempDir, ".agents"), { recursive: true });
+			const configPath = join(tempDir, ".agents", "mcp_config.json");
 			await writeFile(
-				settingsPath,
+				configPath,
 				JSON.stringify({
 					theme: "dark",
 					preferredEditor: "vscode",
 				}),
 			);
 
-			const result = await linkGeminiMcpConfig(tempDir);
+			const result = await linkAgyMcpConfig(tempDir);
 
 			expect(result.success).toBe(true);
 			expect(result.method).toBe("merge");
 
-			// Verify merge preserved user settings and added mcpServers
-			const mergedContent = JSON.parse(await readFile(settingsPath, "utf-8"));
+			// Verify merge preserved user keys and added mcpServers
+			const mergedContent = JSON.parse(await readFile(configPath, "utf-8"));
 			expect(mergedContent.theme).toBe("dark");
 			expect(mergedContent.preferredEditor).toBe("vscode");
 			expect(mergedContent.mcpServers).toEqual({ "test-server": { command: "test" } });
@@ -256,19 +259,19 @@ describe("gemini-mcp-linker", () => {
 			// Create local .mcp.json
 			await writeFile(join(tempDir, ".mcp.json"), JSON.stringify({ mcpServers: {} }));
 
-			await linkGeminiMcpConfig(tempDir);
+			await linkAgyMcpConfig(tempDir);
 
 			const gitignorePath = join(tempDir, ".gitignore");
 			expect(existsSync(gitignorePath)).toBe(true);
 			const content = await readFile(gitignorePath, "utf-8");
-			expect(content).toContain(".gemini/");
+			expect(content).toContain(".agents/mcp_config.json");
 		});
 
 		test("skips .gitignore update when skipGitignore=true", async () => {
 			// Create local .mcp.json
 			await writeFile(join(tempDir, ".mcp.json"), JSON.stringify({ mcpServers: {} }));
 
-			await linkGeminiMcpConfig(tempDir, { skipGitignore: true });
+			await linkAgyMcpConfig(tempDir, { skipGitignore: true });
 
 			const gitignorePath = join(tempDir, ".gitignore");
 			expect(existsSync(gitignorePath)).toBe(false);
@@ -278,11 +281,14 @@ describe("gemini-mcp-linker", () => {
 			// Create .mcp.json without mcpServers
 			await writeFile(join(tempDir, ".mcp.json"), JSON.stringify({ other: "value" }));
 
-			// Create existing Gemini settings to trigger merge mode
-			await mkdir(join(tempDir, ".gemini"), { recursive: true });
-			await writeFile(join(tempDir, ".gemini", "settings.json"), JSON.stringify({ theme: "dark" }));
+			// Create existing agy config to trigger merge mode
+			await mkdir(join(tempDir, ".agents"), { recursive: true });
+			await writeFile(
+				join(tempDir, ".agents", "mcp_config.json"),
+				JSON.stringify({ theme: "dark" }),
+			);
 
-			const result = await linkGeminiMcpConfig(tempDir);
+			const result = await linkAgyMcpConfig(tempDir);
 
 			expect(result.success).toBe(false);
 			expect(result.method).toBe("merge");
@@ -293,11 +299,14 @@ describe("gemini-mcp-linker", () => {
 			// Create .mcp.json with mcpServers as array (invalid)
 			await writeFile(join(tempDir, ".mcp.json"), JSON.stringify({ mcpServers: ["invalid"] }));
 
-			// Create existing Gemini settings to trigger merge mode
-			await mkdir(join(tempDir, ".gemini"), { recursive: true });
-			await writeFile(join(tempDir, ".gemini", "settings.json"), JSON.stringify({ theme: "dark" }));
+			// Create existing agy config to trigger merge mode
+			await mkdir(join(tempDir, ".agents"), { recursive: true });
+			await writeFile(
+				join(tempDir, ".agents", "mcp_config.json"),
+				JSON.stringify({ theme: "dark" }),
+			);
 
-			const result = await linkGeminiMcpConfig(tempDir);
+			const result = await linkAgyMcpConfig(tempDir);
 
 			expect(result.success).toBe(false);
 			expect(result.method).toBe("merge");
@@ -308,10 +317,10 @@ describe("gemini-mcp-linker", () => {
 			// Create local .mcp.json
 			await writeFile(join(tempDir, ".mcp.json"), JSON.stringify({ mcpServers: {} }));
 
-			// Note: For global installs, the symlink would go to ~/.gemini/settings.json
+			// Note: For global installs, the symlink would go to ~/.gemini/config/mcp_config.json
 			// We can't easily test that without modifying user's home directory
 			// So we test that gitignore is NOT updated for global installs
-			await linkGeminiMcpConfig(tempDir, { isGlobal: true, skipGitignore: false });
+			await linkAgyMcpConfig(tempDir, { isGlobal: true, skipGitignore: false });
 
 			// For global installs, .gitignore should NOT be updated (project gitignore is irrelevant)
 			const gitignorePath = join(tempDir, ".gitignore");

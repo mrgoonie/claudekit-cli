@@ -1,12 +1,15 @@
 /**
- * Gemini MCP configuration management
+ * Antigravity (agy) MCP configuration management
  */
 
 import { existsSync } from "node:fs";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { logger } from "@/shared/logger.js";
-import type { GeminiLinkResult } from "./linker-core.js";
+import type { AgyLinkResult } from "./linker-core.js";
+
+/** The agy workspace MCP config file, ignored from VCS (it is a symlink/local artifact). */
+const AGY_GITIGNORE_PATTERN = ".agents/mcp_config.json";
 
 /**
  * Read and parse JSON file safely
@@ -24,11 +27,14 @@ export async function readJsonFile(filePath: string): Promise<Record<string, unk
 }
 
 /**
- * Add .gemini/ to .gitignore if not already present
+ * Add .agents/mcp_config.json to .gitignore if not already present.
+ *
+ * We ignore only the MCP config file (not the whole `.agents/` directory) because
+ * agy keeps skills and other workspace assets under `.agents/` that users may want
+ * to commit.
  */
-export async function addGeminiToGitignore(projectDir: string): Promise<void> {
+export async function addAgyToGitignore(projectDir: string): Promise<void> {
 	const gitignorePath = join(projectDir, ".gitignore");
-	const geminiPattern = ".gemini/";
 
 	try {
 		let content = "";
@@ -36,25 +42,33 @@ export async function addGeminiToGitignore(projectDir: string): Promise<void> {
 		if (existsSync(gitignorePath)) {
 			content = await readFile(gitignorePath, "utf-8");
 
-			// Check if .gemini/ is already in gitignore (exclude commented lines)
+			// Check if the pattern is already in gitignore (exclude commented lines)
 			const lines = content
 				.split("\n")
 				.map((line) => line.trim())
 				.filter((line) => !line.startsWith("#")); // Exclude comments
-			const geminiPatterns = [".gemini/", ".gemini", "/.gemini/", "/.gemini"];
+			const agyPatterns = [
+				".agents/mcp_config.json",
+				"/.agents/mcp_config.json",
+				".agents/mcp_config.json/",
+			];
 
-			if (lines.some((line) => geminiPatterns.includes(line))) {
-				logger.debug(".gemini/ already in .gitignore");
+			if (lines.some((line) => agyPatterns.includes(line))) {
+				logger.debug(".agents/mcp_config.json already in .gitignore");
 				return;
 			}
 		}
 
-		// Append .gemini/ to gitignore
+		// Append the pattern to gitignore
 		const newLine = content.endsWith("\n") || content === "" ? "" : "\n";
-		const comment = "# Gemini CLI settings (contains user-specific config)";
-		await writeFile(gitignorePath, `${content}${newLine}${comment}\n${geminiPattern}\n`, "utf-8");
+		const comment = "# Antigravity CLI MCP config (symlinked to your Claude MCP config)";
+		await writeFile(
+			gitignorePath,
+			`${content}${newLine}${comment}\n${AGY_GITIGNORE_PATTERN}\n`,
+			"utf-8",
+		);
 
-		logger.debug(`Added ${geminiPattern} to .gitignore`);
+		logger.debug(`Added ${AGY_GITIGNORE_PATTERN} to .gitignore`);
 	} catch (error) {
 		const errorMessage = error instanceof Error ? error.message : "Unknown error";
 		logger.warning(`Failed to update .gitignore: ${errorMessage}`);
@@ -62,15 +76,15 @@ export async function addGeminiToGitignore(projectDir: string): Promise<void> {
 }
 
 /**
- * Create new Gemini settings file with mcpServers from MCP config
- * Used as Windows fallback when symlink creation fails (no admin rights)
+ * Create new agy mcp_config.json file with mcpServers from MCP config.
+ * Used as Windows fallback when symlink creation fails (no admin rights).
  */
 export async function createNewSettingsWithMerge(
-	geminiSettingsPath: string,
+	agyConfigPath: string,
 	mcpConfigPath: string,
-): Promise<GeminiLinkResult> {
+): Promise<AgyLinkResult> {
 	// Ensure parent directory exists
-	const linkDir = dirname(geminiSettingsPath);
+	const linkDir = dirname(agyConfigPath);
 	if (!existsSync(linkDir)) {
 		await mkdir(linkDir, { recursive: true });
 		logger.debug(`Created directory: ${linkDir}`);
@@ -88,12 +102,12 @@ export async function createNewSettingsWithMerge(
 		return { success: false, method: "merge", error: "MCP config has no valid mcpServers object" };
 	}
 
-	// Create new settings file with just mcpServers
+	// Create new config file with just mcpServers
 	const newSettings = { mcpServers };
 
 	try {
-		await writeFile(geminiSettingsPath, JSON.stringify(newSettings, null, 2), "utf-8");
-		logger.debug(`Created new Gemini settings with mcpServers: ${geminiSettingsPath}`);
+		await writeFile(agyConfigPath, JSON.stringify(newSettings, null, 2), "utf-8");
+		logger.debug(`Created new agy mcp_config.json with mcpServers: ${agyConfigPath}`);
 		return { success: true, method: "merge", targetPath: mcpConfigPath };
 	} catch (error) {
 		const errorMessage = error instanceof Error ? error.message : "Unknown error";
@@ -106,17 +120,21 @@ export async function createNewSettingsWithMerge(
 }
 
 /**
- * Merge mcpServers from MCP config into existing Gemini settings
- * Preserves all other Gemini settings (theme, preferredEditor, etc.)
+ * Merge mcpServers from MCP config into existing agy mcp_config.json.
+ * Preserves any other keys the user added to the file.
  */
-export async function mergeGeminiSettings(
-	geminiSettingsPath: string,
+export async function mergeAgySettings(
+	agyConfigPath: string,
 	mcpConfigPath: string,
-): Promise<GeminiLinkResult> {
-	// Read existing Gemini settings
-	const geminiSettings = await readJsonFile(geminiSettingsPath);
-	if (!geminiSettings) {
-		return { success: false, method: "merge", error: "Failed to read existing Gemini settings" };
+): Promise<AgyLinkResult> {
+	// Read existing agy config
+	const agyConfig = await readJsonFile(agyConfigPath);
+	if (!agyConfig) {
+		return {
+			success: false,
+			method: "merge",
+			error: "Failed to read existing agy mcp_config.json",
+		};
 	}
 
 	// Read MCP config
@@ -131,15 +149,15 @@ export async function mergeGeminiSettings(
 		return { success: false, method: "merge", error: "MCP config has no valid mcpServers object" };
 	}
 
-	// Merge: preserve existing Gemini settings, inject/replace mcpServers
+	// Merge: preserve existing agy keys, inject/replace mcpServers
 	const mergedSettings = {
-		...geminiSettings,
+		...agyConfig,
 		mcpServers,
 	};
 
 	try {
-		await writeFile(geminiSettingsPath, JSON.stringify(mergedSettings, null, 2), "utf-8");
-		logger.debug(`Merged mcpServers into: ${geminiSettingsPath}`);
+		await writeFile(agyConfigPath, JSON.stringify(mergedSettings, null, 2), "utf-8");
+		logger.debug(`Merged mcpServers into: ${agyConfigPath}`);
 		return { success: true, method: "merge", targetPath: mcpConfigPath };
 	} catch (error) {
 		const errorMessage = error instanceof Error ? error.message : "Unknown error";

@@ -1,6 +1,6 @@
 /**
  * Post-installation phase
- * Handles CLAUDE.md copy, skills installation, Gemini MCP, setup wizard, and project registration
+ * Handles CLAUDE.md copy, skills installation, agy MCP, setup wizard, and project registration
  */
 
 import { join } from "node:path";
@@ -56,30 +56,32 @@ export async function handlePostInstall(ctx: InitContext): Promise<InitContext> 
 		});
 	}
 
-	// Auto-detect Gemini CLI and offer MCP integration setup
+	// Auto-detect Antigravity (agy) CLI and offer MCP integration setup
 	if (!ctx.isNonInteractive) {
-		const { isGeminiInstalled } = await import("@/services/package-installer/package-installer.js");
-		const { checkExistingGeminiConfig, findMcpConfigPath, processGeminiMcpLinking } = await import(
-			"@/services/package-installer/gemini-mcp-linker.js"
+		const { isAgyInstalled } = await import("@/services/package-installer/package-installer.js");
+		const { checkExistingAgyConfig, findMcpConfigPath, processAgyMcpLinking } = await import(
+			"@/services/package-installer/agy-mcp-linker.js"
 		);
 
-		const geminiInstalled = await isGeminiInstalled();
-		const existingConfig = checkExistingGeminiConfig(ctx.resolvedDir, ctx.options.global);
+		const agyInstalled = await isAgyInstalled();
+		const existingConfig = checkExistingAgyConfig(ctx.resolvedDir, ctx.options.global);
 		const mcpConfigPath = findMcpConfigPath(ctx.resolvedDir);
 		const mcpConfigExists = mcpConfigPath !== null;
 
-		if (geminiInstalled && !existingConfig.exists && mcpConfigExists) {
-			const geminiPath = ctx.options.global ? "~/.gemini/settings.json" : ".gemini/settings.json";
+		if (agyInstalled && !existingConfig.exists && mcpConfigExists) {
+			const agyPath = ctx.options.global
+				? "~/.gemini/config/mcp_config.json"
+				: ".agents/mcp_config.json";
 			const mcpPath = ctx.options.global ? "~/.claude/.mcp.json" : ".mcp.json";
 			const promptMessage = [
-				"Gemini CLI detected. Set up MCP integration?",
-				`  → Creates ${geminiPath} symlink to ${mcpPath}`,
-				"  → Gemini CLI will share MCP servers with Claude Code",
+				"Antigravity CLI (agy) detected. Set up MCP integration?",
+				`  → Creates ${agyPath} symlink to ${mcpPath}`,
+				"  → agy will share MCP servers with Claude Code",
 			].join("\n");
 
-			const shouldSetupGemini = await ctx.prompts.confirm(promptMessage);
-			if (shouldSetupGemini) {
-				await processGeminiMcpLinking(ctx.resolvedDir, {
+			const shouldSetupAgy = await ctx.prompts.confirm(promptMessage);
+			if (shouldSetupAgy) {
+				await processAgyMcpLinking(ctx.resolvedDir, {
 					isGlobal: ctx.options.global,
 				});
 			}

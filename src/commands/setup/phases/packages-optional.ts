@@ -1,9 +1,9 @@
 /**
  * Optional packages installation phase for setup command
- * Prompts user to install OpenCode and Gemini CLIs
+ * Prompts user to install OpenCode and the Antigravity (agy) CLIs
  */
 
-import { installGemini, isGeminiInstalled } from "@/services/package-installer/gemini-installer.js";
+import { installAgy, isAgyInstalled } from "@/services/package-installer/agy-installer.js";
 import {
 	installOpenCode,
 	isOpenCodeInstalled,
@@ -49,26 +49,28 @@ export async function handleOptionalPackages(ctx: SetupContext): Promise<SetupCo
 		}
 	}
 
-	// Check and prompt for Gemini CLI
-	const hasGemini = await isGeminiInstalled();
-	if (hasGemini) {
-		clack.log.success("Google Gemini CLI: already installed");
+	// Check and prompt for Antigravity (agy) CLI
+	const hasAgy = await isAgyInstalled();
+	if (hasAgy) {
+		clack.log.success("Antigravity CLI (agy): already installed");
 	} else {
-		const installGem = await clack.confirm({
-			message: "Install Google Gemini CLI? (AI assistant)",
+		const installAgyChoice = await clack.confirm({
+			message: "Install Antigravity CLI (agy)? (AI assistant)",
 			initialValue: false,
 		});
 
-		if (clack.isCancel(installGem)) {
+		if (clack.isCancel(installAgyChoice)) {
 			return { ...ctx, cancelled: true };
 		}
 
-		if (installGem) {
-			const result = await installGemini();
+		if (installAgyChoice) {
+			const result = await installAgy();
 			if (result.success) {
-				installedPackages.push("Google Gemini CLI");
+				installedPackages.push("Antigravity CLI (agy)");
 			} else {
-				clack.log.warning(`Failed to install Gemini CLI: ${result.error || "Unknown error"}`);
+				clack.log.warning(
+					`Failed to install Antigravity CLI (agy): ${result.error || "Unknown error"}`,
+				);
 			}
 		}
 	}
