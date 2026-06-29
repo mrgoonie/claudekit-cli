@@ -348,28 +348,10 @@ describe("codex hook compat integration — upgrade from previous ck migrate", (
 		};
 		// New SessionStart from source should be added
 		expect(written.hooks.SessionStart).toBeDefined();
-		// L10 — The legacy SubagentStart entry in the pre-populated hooks.json must be absent
-		// in the result. The new migration must not preserve unsupported events even if they
-		// appeared in a pre-existing hooks.json. (ck-managed entries are replaced on migration;
-		// unknown user entries are preserved as-is by deduplicateMerge — but SubagentStart is
-		// not a valid Codex event so Codex ignores it, and our pipeline never writes it.)
-		//
-		// Note: the pre-existing SubagentStart entry in this test was written raw (simulating
-		// a stale CK-managed entry). After migration, deduplicateMerge preserves existing keys
-		// not overwritten by new hooks. SubagentStart is NOT emitted by the new migration
-		// (it's unsupported per capability table), so it SURVIVES in hooks.json from the
-		// pre-existing content. The important assertion is that we did NOT add new SubagentStart
-		// entries — hooksRegistered only counts CK-converted hooks, not pre-existing stale ones.
-		//
-		// For CK-managed entries (identified by _origin field in future), removal is tracked
-		// as a separate cleanup step. This test documents the current behavior.
+		// Stale CK-managed unsupported events are pruned on rerun, then the new migration
+		// adds only supported Codex hook events.
 		const subagentEntries = (written.hooks.SubagentStart as Array<unknown> | undefined) ?? [];
-		// The old direct-copied entry from the pre-populated hooks.json is preserved by
-		// deduplicateMerge (unknown user content). But our new pipeline added 0 SubagentStart
-		// entries — so count must not INCREASE beyond what was there before migration.
-		expect(subagentEntries.length).toBe(1); // Pre-existing stale entry: preserved as-is
-		// Explicitly: no additional SubagentStart from the new migration run
-		// (result.hooksRegistered does not count SubagentStart — it was filtered out)
+		expect(subagentEntries.length).toBe(0);
 	}, 10000);
 
 	it("upgrade: repeat migration does not duplicate entries (idempotent)", async () => {

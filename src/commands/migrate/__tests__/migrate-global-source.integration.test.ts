@@ -49,7 +49,7 @@ function seedClaudeDir(
 
 function seedInstalledPluginCache(
 	home: string,
-	types: Array<"agents" | "skills">,
+	types: Array<"agents" | "skills" | "hooks">,
 	version = "v2.20.0",
 ): string {
 	const claudeDir = join(home, ".claude");
@@ -64,7 +64,56 @@ function seedInstalledPluginCache(
 		mkdirSync(dir, { recursive: true });
 		writeFileSync(join(dir, ".keep"), "");
 	}
+	if (types.includes("hooks")) {
+		writeFileSync(
+			join(cacheRoot, "settings.json"),
+			JSON.stringify({
+				hooks: {
+					PreToolUse: [
+						{
+							matcher: "Read",
+							hooks: [{ type: "command", command: 'node "$HOME/.claude/hooks/privacy-block.cjs"' }],
+						},
+					],
+				},
+			}),
+		);
+	}
 	return cacheRoot;
+}
+
+function seedConfiguredPluginSource(home: string): string {
+	const claudeDir = join(home, ".claude");
+	const sourceRoot = join(home, ".cache", "claude", "ck-plugin-source");
+	const pluginClaudeRoot = join(sourceRoot, ".claude");
+	mkdirSync(join(pluginClaudeRoot, "hooks"), { recursive: true });
+	writeFileSync(join(pluginClaudeRoot, "hooks", ".keep"), "");
+	writeFileSync(
+		join(pluginClaudeRoot, "settings.json"),
+		JSON.stringify({
+			hooks: {
+				PreToolUse: [
+					{
+						matcher: "Read",
+						hooks: [{ type: "command", command: 'node "$HOME/.claude/hooks/privacy-block.cjs"' }],
+					},
+				],
+			},
+		}),
+	);
+	mkdirSync(claudeDir, { recursive: true });
+	writeFileSync(
+		join(claudeDir, "settings.json"),
+		JSON.stringify({
+			enabledPlugins: { "ck@claudekit": true },
+			extraKnownMarketplaces: {
+				claudekit: {
+					source: { source: "directory", path: sourceRoot },
+				},
+			},
+		}),
+	);
+	return pluginClaudeRoot;
 }
 
 function seedSandbox(opts: {
@@ -305,6 +354,31 @@ describe("ck migrate -g: SOURCE scope (issue #803)", () => {
 
 		expect(getAgentSourcePath()).toBe(join(pluginRoot, "agents"));
 		expect(getSkillSourcePath()).toBe(join(pluginRoot, "skills"));
+	});
+
+	it("T11: globalOnly=true resolves hooks from plugin cache when hook settings are plugin-owned", () => {
+		const sb = seedSandbox({
+			homeTypes: ["commands", "rules"],
+			cwdTypes: [],
+		});
+		const pluginRoot = seedInstalledPluginCache(sb.home, ["hooks"]);
+		activate(sb);
+
+		expect(getHooksSourcePath(true)).toBe(join(pluginRoot, "hooks"));
+		expect(getHooksSourcePath()).toBe(join(pluginRoot, "hooks"));
+	});
+
+	it("T12: configured marketplace source wins over installed plugin cache for hooks", () => {
+		const sb = seedSandbox({
+			homeTypes: ["commands", "rules"],
+			cwdTypes: [],
+		});
+		seedInstalledPluginCache(sb.home, ["hooks"], "v2.19.0");
+		const pluginClaudeRoot = seedConfiguredPluginSource(sb.home);
+		activate(sb);
+
+		expect(getHooksSourcePath(true)).toBe(join(pluginClaudeRoot, "hooks"));
+		expect(getHooksSourcePath()).toBe(join(pluginClaudeRoot, "hooks"));
 	});
 });
 

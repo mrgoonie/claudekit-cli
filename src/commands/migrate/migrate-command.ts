@@ -6,7 +6,7 @@
 import { existsSync } from "node:fs";
 import { readFile, rm, unlink } from "node:fs/promises";
 import { homedir } from "node:os";
-import { basename, join, resolve } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
 import * as p from "@clack/prompts";
 import pc from "picocolors";
 import { handleDeletions } from "../../domains/installation/deletion-handler.js";
@@ -617,6 +617,29 @@ function createSkippedPathMigrationCleanupResult(action: ReconcileAction): Porta
 		skipped: true,
 		skipReason: "Legacy path cleanup skipped because no successful replacement write was recorded",
 	};
+}
+
+function resolveHookTargetPath(
+	item: PortableItem,
+	provider: ProviderType,
+	global: boolean,
+): string | null {
+	const pathConfig = providers[provider].hooks;
+	if (!pathConfig) return null;
+	const basePath = global ? pathConfig.globalPath : pathConfig.projectPath;
+	if (!basePath) return null;
+
+	const converted = convertItem(item, pathConfig.format, provider, { global });
+	if (converted.error) return null;
+
+	const targetPath =
+		pathConfig.writeStrategy === "single-file" ? basePath : join(basePath, converted.filename);
+	const resolvedTarget = resolve(targetPath).replace(/\\/g, "/");
+	const resolvedBase = resolve(basePath).replace(/\\/g, "/").replace(/\/+$/, "");
+	if (resolvedTarget !== resolvedBase && !resolvedTarget.startsWith(`${resolvedBase}/`)) {
+		return null;
+	}
+	return targetPath;
 }
 
 /**
@@ -1231,24 +1254,34 @@ export async function migrateCommand(options: MigrateOptions): Promise<void> {
 		const progressSink = createMigrateProgressSink(writeTasks.length + plannedDeleteActions.length);
 		const writtenPaths = new Set<string>();
 		type WriteTask = (typeof writeTasks)[number];
+		const recordHookTargetForSettings = (
+			provider: ProviderType,
+			global: boolean,
+			targetPath: string,
+		) => {
+			if (targetPath.length === 0 || !existsSync(targetPath)) return;
+			const resolvedPath = resolve(targetPath);
+			const entry = successfulHookFiles.get(provider) ?? {
+				files: [],
+				global,
+			};
+			const hookFile = basename(targetPath);
+			if (!entry.files.includes(hookFile)) entry.files.push(hookFile);
+			successfulHookFiles.set(provider, entry);
+
+			const absExisting = successfulHookAbsPaths.get(provider) ?? [];
+			if (!absExisting.includes(resolvedPath)) {
+				absExisting.push(resolvedPath);
+				successfulHookAbsPaths.set(provider, absExisting);
+			}
+		};
 		const recordSuccessfulWrites = (task: WriteTask, taskResults: PortableInstallResult[]) => {
-			for (const result of taskResults.filter((entry) => entry.success && !entry.skipped)) {
-				if (result.path.length > 0) {
+			for (const result of taskResults.filter((entry) => entry.success)) {
+				if (!result.skipped && result.path.length > 0) {
 					writtenPaths.add(resolve(result.path));
 				}
 				if (task.type === "hooks") {
-					const existing = successfulHookFiles.get(task.provider) ?? {
-						files: [],
-						global: task.global,
-					};
-					existing.files.push(basename(result.path));
-					successfulHookFiles.set(task.provider, existing);
-					// Track absolute paths for Codex wrapper generation
-					if (result.path.length > 0) {
-						const absExisting = successfulHookAbsPaths.get(task.provider) ?? [];
-						absExisting.push(resolve(result.path));
-						successfulHookAbsPaths.set(task.provider, absExisting);
-					}
+					recordHookTargetForSettings(task.provider, task.global, result.path);
 				}
 			}
 		};
@@ -1301,6 +1334,17 @@ export async function migrateCommand(options: MigrateOptions): Promise<void> {
 			allResults.push(...taskResults);
 			recordSuccessfulWrites(task, taskResults);
 			progressSink.tick(progressLabelForType(task.type));
+		}
+
+		if (hooksSource && effectiveHookItems.length > 0) {
+			for (const provider of selectedProviders) {
+				if (!getProvidersSupporting("hooks").includes(provider)) continue;
+				const global = resolvePortableTypeGlobal(provider, "hooks", installGlobally);
+				for (const item of effectiveHookItems) {
+					const targetPath = resolveHookTargetPath(item, provider, global);
+					if (targetPath) recordHookTargetForSettings(provider, global, targetPath);
+				}
+			}
 		}
 
 		// Ensure opencode.json has a `model` — migrated agents inherit from global
@@ -1375,12 +1419,17 @@ export async function migrateCommand(options: MigrateOptions): Promise<void> {
 		// After all actions executed, merge hooks into target settings.json per provider
 		for (const [hooksProvider, entry] of successfulHookFiles) {
 			if (entry.files.length === 0) continue;
+			const sourceSettingsPath = hooksSource
+				? join(dirname(hooksSource), "settings.json")
+				: undefined;
 			const mergeResult = await migrateHooksSettings({
 				sourceProvider: "claude-code",
 				targetProvider: hooksProvider,
 				installedHookFiles: entry.files,
 				installedHookAbsolutePaths: successfulHookAbsPaths.get(hooksProvider),
 				global: entry.global,
+				sourceSettingsPath,
+				sourceHooksDir: hooksSource ?? undefined,
 			});
 			appendMigrationWarningMessages(postProgressWarnings, mergeResult.warnings);
 			if (mergeResult.success && mergeResult.hooksRegistered > 0) {
