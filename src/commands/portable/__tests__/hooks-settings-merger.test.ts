@@ -395,6 +395,76 @@ describe("mergeHooksIntoSettings", () => {
 		expect(commands).not.toContain(staleCommand);
 		expect(commands).toContain(liveCommand);
 	});
+
+	it("prunes generated Codex wrappers whose original hook target is missing", async () => {
+		const ckHooksDir = join(testDir, ".codex", "hooks");
+		await Bun.write(join(ckHooksDir, ".keep"), "");
+		const path = join(testDir, "merge-codex-missing-original.json");
+		const wrapperPath = join(ckHooksDir, "1234abcd-privacy-block.cjs");
+		const missingOriginal = join(ckHooksDir, "privacy-block.cjs");
+		const wrapperCommand = `node "${wrapperPath}"`;
+		writeFileSync(wrapperPath, `const ORIGINAL_HOOK = ${JSON.stringify(missingOriginal)};\n`);
+
+		writeFileSync(
+			path,
+			JSON.stringify({
+				hooks: {
+					PreToolUse: [
+						{
+							matcher: "Read",
+							hooks: [{ type: "command", command: wrapperCommand }],
+						},
+					],
+				},
+			}),
+		);
+
+		await mergeHooksIntoSettings(path, {}, { targetProvider: "codex", targetHooksDir: ckHooksDir });
+
+		const content = JSON.parse(await Bun.file(path).text());
+		expect(content.hooks.PreToolUse).toBeUndefined();
+	});
+
+	it("prunes direct Claude hook commands from Codex settings on rerun", async () => {
+		const ckHooksDir = join(testDir, ".codex", "hooks");
+		await Bun.write(join(ckHooksDir, ".keep"), "");
+		const path = join(testDir, "merge-codex-foreign-claude-hook.json");
+		const wrapperPath = join(ckHooksDir, "abcd1234-privacy-block.cjs");
+		const rawClaudeCommand = 'node "$HOME/.claude/hooks/privacy-block.cjs"';
+		const wrapperCommand = `node "${wrapperPath}"`;
+		writeFileSync(wrapperPath, "process.exit(0);\n");
+		writeFileSync(
+			path,
+			JSON.stringify({
+				hooks: {
+					PreToolUse: [
+						{
+							matcher: "Read",
+							hooks: [{ type: "command", command: rawClaudeCommand }],
+						},
+					],
+				},
+			}),
+		);
+
+		await mergeHooksIntoSettings(
+			path,
+			{
+				PreToolUse: [
+					{
+						matcher: "Read",
+						hooks: [{ type: "command", command: wrapperCommand }],
+					},
+				],
+			},
+			{ targetProvider: "codex", targetHooksDir: ckHooksDir },
+		);
+
+		const content = JSON.parse(await Bun.file(path).text());
+		const commands = content.hooks.PreToolUse[0].hooks.map((h: { command: string }) => h.command);
+		expect(commands).not.toContain(rawClaudeCommand);
+		expect(commands).toContain(wrapperCommand);
+	});
 });
 
 describe("migrateHooksSettings", () => {
@@ -461,6 +531,55 @@ describe("migrateHooksSettings", () => {
 			expect(result.status).toBe("registered");
 			expect(result.success).toBe(true);
 			expect(result.hooksRegistered).toBe(1);
+		} finally {
+			process.chdir(originalCwd);
+			rmSync(tempBase, { recursive: true, force: true });
+		}
+	});
+
+	it("reads hook registrations from an explicit source settings path", async () => {
+		const tempBase = mkdtempSync(join(tmpdir(), "hooks-source-override-"));
+		const originalCwd = process.cwd();
+		try {
+			process.chdir(tempBase);
+			const sourceRoot = join(tempBase, "plugin-source", ".claude");
+			const sourceHooksDir = join(sourceRoot, "hooks");
+			mkdirSync(sourceHooksDir, { recursive: true });
+			writeFileSync(join(sourceHooksDir, "plugin-hook.cjs"), "// hook");
+			writeFileSync(
+				join(sourceRoot, "settings.json"),
+				JSON.stringify({
+					hooks: {
+						PreToolUse: [
+							{
+								matcher: "Read",
+								hooks: [
+									{
+										type: "command",
+										command: 'node ".claude/hooks/plugin-hook.cjs"',
+									},
+								],
+							},
+						],
+					},
+				}),
+			);
+
+			const result = await migrateHooksSettings({
+				sourceProvider: "claude-code",
+				targetProvider: "gemini-cli",
+				installedHookFiles: ["plugin-hook.cjs"],
+				global: false,
+				sourceSettingsPath: join(sourceRoot, "settings.json"),
+				sourceHooksDir,
+			});
+
+			expect(result.status).toBe("registered");
+			expect(result.sourceSettingsPath).toBe(join(sourceRoot, "settings.json"));
+			const target = JSON.parse(await Bun.file(join(tempBase, ".gemini", "settings.json")).text());
+			const command = target.hooks.BeforeTool[0].hooks[0].command;
+			expect(command).toContain(".gemini/hooks/plugin-hook.cjs");
+			expect(command).not.toContain("plugin-source/.claude/hooks");
 		} finally {
 			process.chdir(originalCwd);
 			rmSync(tempBase, { recursive: true, force: true });

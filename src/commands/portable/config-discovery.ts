@@ -2,6 +2,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { cp, mkdir, readFile, readdir, stat } from "node:fs/promises";
 import { homedir } from "node:os";
 import { basename, dirname, extname, join, relative, resolve, sep } from "node:path";
+import { resolveInstalledPluginCacheSubpath } from "@/domains/installation/plugin/install-mode-detector.js";
 import {
 	findExistingProjectConfigPath,
 	findExistingProjectLayoutPath,
@@ -219,6 +220,54 @@ export function getRulesSourcePath(globalOnly = false): string {
 	return findExistingProjectLayoutPath(process.cwd(), "rules") ?? globalPath;
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+	return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function isClaudeKitPluginEnabled(settings: unknown): boolean {
+	if (!isRecord(settings)) return false;
+	const enabledPlugins = settings.enabledPlugins;
+	if (Array.isArray(enabledPlugins)) {
+		return enabledPlugins.includes("ck@claudekit");
+	}
+	return isRecord(enabledPlugins) && enabledPlugins["ck@claudekit"] === true;
+}
+
+function readJsonSafe(filePath: string): unknown | null {
+	try {
+		return JSON.parse(readFileSync(filePath, "utf-8"));
+	} catch {
+		return null;
+	}
+}
+
+function resolveConfiguredClaudeKitPluginSourceSubpath(relativePath: string): string | null {
+	const claudeDir = join(homedir(), ".claude");
+	const settings = readJsonSafe(join(claudeDir, "settings.json"));
+	if (!isClaudeKitPluginEnabled(settings) || !isRecord(settings)) return null;
+
+	const marketplaces = settings.extraKnownMarketplaces;
+	const claudekit = isRecord(marketplaces) ? marketplaces.claudekit : null;
+	const source = isRecord(claudekit) ? claudekit.source : null;
+	const sourcePath = isRecord(source) && typeof source.path === "string" ? source.path : null;
+	if (!sourcePath) return null;
+
+	const candidates = [join(sourcePath, ".claude", relativePath), join(sourcePath, relativePath)];
+	return candidates.find((candidate) => existsSync(candidate)) ?? null;
+}
+
+function hasAdjacentSettings(sourceDir: string): boolean {
+	return existsSync(join(dirname(sourceDir), "settings.json"));
+}
+
+function resolveClaudeKitPluginHooksSourcePath(): string | null {
+	const candidates = [
+		resolveConfiguredClaudeKitPluginSourceSubpath("hooks"),
+		resolveInstalledPluginCacheSubpath("hooks", join(homedir(), ".claude")),
+	].filter((path): path is string => typeof path === "string");
+	return candidates.find((candidate) => hasAdjacentSettings(candidate)) ?? null;
+}
+
 /**
  * Get default hooks source path.
  *
@@ -227,8 +276,10 @@ export function getRulesSourcePath(globalOnly = false): string {
  */
 export function getHooksSourcePath(globalOnly = false): string {
 	const globalPath = join(homedir(), ".claude", "hooks");
-	if (globalOnly) return globalPath;
-	return findExistingProjectLayoutPath(process.cwd(), "hooks") ?? globalPath;
+	const pluginPath = resolveClaudeKitPluginHooksSourcePath();
+	const globalCandidate = pluginPath ?? globalPath;
+	if (globalOnly) return globalCandidate;
+	return findExistingProjectLayoutPath(process.cwd(), "hooks") ?? globalCandidate;
 }
 
 /** Discover CLAUDE.md config file */

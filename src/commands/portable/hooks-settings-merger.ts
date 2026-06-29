@@ -4,10 +4,10 @@
  *
  * Used by `ck migrate` to auto-register hooks after copying hook files.
  */
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
-import { basename, dirname, extname, join, resolve } from "node:path";
+import { basename, dirname, extname, isAbsolute, join, resolve } from "node:path";
 import type { CodexCapabilities } from "./codex-capabilities.js";
 import { detectCodexCapabilities } from "./codex-capabilities.js";
 import { ensureCodexHooksFeatureFlag } from "./codex-features-flag.js";
@@ -65,6 +65,17 @@ export interface MigrateHooksSettingsOptions {
 	installedHookFiles: string[];
 	global: boolean;
 	/**
+	 * Optional settings.json override adjacent to the actual hook source tree.
+	 * Plugin installs can source hook files from a staged/cache tree while the
+	 * default global Claude settings no longer contains plugin-owned hooks.
+	 */
+	sourceSettingsPath?: string;
+	/**
+	 * Optional hooks directory override used for command path rewriting.
+	 * Should match the directory that supplied installedHookFiles.
+	 */
+	sourceHooksDir?: string;
+	/**
 	 * For codex target: absolute paths to the original installed .cjs hook scripts.
 	 * Used to generate wrapper scripts. If omitted when target=codex, wrapper
 	 * generation is skipped and commands are rewritten via path substitution only.
@@ -99,10 +110,37 @@ interface MergeHooksOptions {
 
 const CODEX_WRAPPABLE_HOOK_EXTENSIONS = new Set([".js", ".cjs", ".mjs", ".ts"]);
 
+function resolveSettingsPath(pathValue: string, isGlobal: boolean): string {
+	if (isGlobal || isAbsolute(pathValue)) return pathValue;
+	return join(process.cwd(), pathValue);
+}
+
 function isCodexWrappableHookPath(filePath: string): boolean {
 	return (
 		hookAssetBasename(filePath) !== "node-hook-runner.sh" &&
 		CODEX_WRAPPABLE_HOOK_EXTENSIONS.has(extname(filePath).toLowerCase())
+	);
+}
+
+function collectSourceHookDirs(
+	sourceHooksDirOverride: string | undefined,
+	providerSourceHooksDir: string,
+): string[] {
+	const dirs = [sourceHooksDirOverride, providerSourceHooksDir].filter(
+		(value): value is string => typeof value === "string" && value.length > 0,
+	);
+	return Array.from(new Set(dirs));
+}
+
+function rewriteHookPathsFromSourceDirs(
+	hooks: HooksSection,
+	sourceHooksDirs: string[],
+	targetHooksDir: string,
+): HooksSection {
+	return sourceHooksDirs.reduce(
+		(currentHooks, sourceHooksDir) =>
+			rewriteHookPaths(currentHooks, sourceHooksDir, targetHooksDir),
+		hooks,
 	);
 }
 
@@ -405,9 +443,10 @@ function pruneIncompatibleHookRegistrations(
 			const keptHooks = group.hooks.filter((entry) => {
 				const refs = extractHookReferencesFromCommand(entry.command);
 				const targetOwned = commandTargetsHookDir(entry.command, targetHooksDir);
+				const foreignCkOwned = commandTargetsForeignCkHookDir(entry.command, targetHooksDir);
 				const incompatible =
 					!isCodexSupportedHookEvent(event) || refs.some((ref) => isExcludedHookAsset(ref));
-				if (targetOwned && incompatible) {
+				if (foreignCkOwned || (targetOwned && incompatible)) {
 					hooksPruned += 1;
 					return false;
 				}
@@ -480,6 +519,23 @@ function commandTargetsHookDir(command: string, targetHooksDir: string): boolean
 	);
 }
 
+function commandTargetsForeignCkHookDir(command: string, targetHooksDir: string): boolean {
+	const normalizedCommand = command.replace(/\\/g, "/");
+	const normalizedDir = targetHooksDir.replace(/\\/g, "/").replace(/\/+$/, "");
+	const targetTokens = [
+		`${normalizedDir}/`,
+		"$HOME/.codex/hooks/",
+		"~/.codex/hooks/",
+		".codex/hooks/",
+	];
+	if (targetTokens.some((token) => normalizedCommand.includes(token))) return false;
+	return (
+		normalizedCommand.includes("$HOME/.claude/hooks/") ||
+		normalizedCommand.includes("~/.claude/hooks/") ||
+		normalizedCommand.includes(".claude/hooks/")
+	);
+}
+
 /**
  * True if the absolute path looks like a CK-managed hook install location.
  * We only self-heal ck-owned entries to avoid silently dropping a user's
@@ -494,6 +550,29 @@ function isCkManagedHookPath(absPath: string): boolean {
 		normalized.includes("/.codex/hooks/") ||
 		normalized.includes("/.gemini/hooks/")
 	);
+}
+
+function readCodexWrapperOriginalHookPath(wrapperPath: string): string | null {
+	try {
+		const content = readFileSync(wrapperPath, "utf8");
+		const match = content.match(
+			/const\s+ORIGINAL_HOOK\s*=\s*("(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*')/,
+		);
+		if (!match) return null;
+		const literal = match[1];
+		if (literal.startsWith('"')) {
+			return JSON.parse(literal) as string;
+		}
+		return literal.slice(1, -1).replace(/\\'/g, "'").replace(/\\\\/g, "\\");
+	} catch {
+		return null;
+	}
+}
+
+function codexWrapperReferencesMissingOriginal(wrapperPath: string): boolean {
+	const originalPath = readCodexWrapperOriginalHookPath(wrapperPath);
+	if (!originalPath || !isCkManagedHookPath(originalPath)) return false;
+	return !existsSync(originalPath);
 }
 
 /**
@@ -544,7 +623,7 @@ function pruneStaleFileHooks(existing: HooksSection): HooksSection {
 				const ckPaths = paths.filter(isCkManagedHookPath);
 				if (ckPaths.length === 0) return true; // No CK-managed reference — keep
 				// Hook is stale iff every CK-managed reference is missing.
-				return ckPaths.some((p) => existsSync(p));
+				return ckPaths.some((p) => existsSync(p) && !codexWrapperReferencesMissingOriginal(p));
 			});
 			if (survivingHooks.length > 0) {
 				prunedGroups.push({ ...group, hooks: survivingHooks });
@@ -639,9 +718,11 @@ export async function migrateHooksSettings(
 	}
 
 	// Resolve settings.json paths
-	const sourceSettingsPath = isGlobal
-		? sourceConfig.settingsJsonPath?.globalPath
-		: sourceConfig.settingsJsonPath?.projectPath;
+	const sourceSettingsPath =
+		options.sourceSettingsPath ??
+		(isGlobal
+			? sourceConfig.settingsJsonPath?.globalPath
+			: sourceConfig.settingsJsonPath?.projectPath);
 	const targetSettingsPath = isGlobal
 		? targetConfig.settingsJsonPath?.globalPath
 		: targetConfig.settingsJsonPath?.projectPath;
@@ -671,9 +752,7 @@ export async function migrateHooksSettings(
 	}
 
 	// For project-level, resolve relative to cwd
-	const resolvedSourcePath = isGlobal
-		? sourceSettingsPath
-		: join(process.cwd(), sourceSettingsPath);
+	const resolvedSourcePath = resolveSettingsPath(sourceSettingsPath, isGlobal);
 	const resolvedTargetPath = isGlobal
 		? targetSettingsPath
 		: join(process.cwd(), targetSettingsPath);
@@ -730,9 +809,10 @@ export async function migrateHooksSettings(
 	}
 
 	// Resolve hooks directories for path rewriting
-	const sourceHooksDir = isGlobal
+	const providerSourceHooksDir = isGlobal
 		? (sourceConfig.hooks?.globalPath ?? "")
 		: (sourceConfig.hooks?.projectPath ?? "");
+	const sourceHooksDirs = collectSourceHookDirs(options.sourceHooksDir, providerSourceHooksDir);
 	const targetHooksDir = isGlobal
 		? (targetConfig.hooks?.globalPath ?? "")
 		: (targetConfig.hooks?.projectPath ?? "");
@@ -743,7 +823,7 @@ export async function migrateHooksSettings(
 		targetProvider,
 		warnings,
 	});
-	const rewritten = rewriteHookPaths(filtered, sourceHooksDir, targetHooksDir);
+	const rewritten = rewriteHookPathsFromSourceDirs(filtered, sourceHooksDirs, targetHooksDir);
 	const eventMapped = mapHookEventsForProvider(rewritten, targetProvider);
 
 	// Count hooks being registered
@@ -856,9 +936,11 @@ async function migrateHooksSettingsForCodex(
 	const capabilities: CodexCapabilities = await detectCodexCapabilities();
 
 	// Resolve settings paths
-	const sourceSettingsPath = isGlobal
-		? sourceConfig.settingsJsonPath.globalPath
-		: sourceConfig.settingsJsonPath.projectPath;
+	const sourceSettingsPath =
+		options.sourceSettingsPath ??
+		(isGlobal
+			? sourceConfig.settingsJsonPath.globalPath
+			: sourceConfig.settingsJsonPath.projectPath);
 	const targetSettingsPath = isGlobal
 		? (codexConfig.settingsJsonPath?.globalPath ?? null)
 		: (codexConfig.settingsJsonPath?.projectPath ?? null);
@@ -875,9 +957,7 @@ async function migrateHooksSettingsForCodex(
 		};
 	}
 
-	const resolvedSourcePath = isGlobal
-		? sourceSettingsPath
-		: join(process.cwd(), sourceSettingsPath);
+	const resolvedSourcePath = resolveSettingsPath(sourceSettingsPath, isGlobal);
 	const resolvedTargetPath = isGlobal
 		? targetSettingsPath
 		: join(process.cwd(), targetSettingsPath);
@@ -943,9 +1023,14 @@ async function migrateHooksSettingsForCodex(
 		? (codexConfig.hooks?.globalPath ?? "")
 		: (codexConfig.hooks?.projectPath ?? "");
 
-	const sourceHooksDir = isGlobal
+	const providerSourceHooksDir = isGlobal
 		? (sourceConfig.hooks?.globalPath ?? "")
 		: (sourceConfig.hooks?.projectPath ?? "");
+	const sourceHooksDir = options.sourceHooksDir ?? providerSourceHooksDir;
+	const sourceHookCommandDirs = collectSourceHookDirs(
+		options.sourceHooksDir,
+		providerSourceHooksDir,
+	);
 
 	// If caller provided absolute paths, generate wrappers; otherwise fall back to path rewrite.
 	// commandSubstitutions maps each original absolute hook path → its hash-prefixed wrapper path.
@@ -977,11 +1062,11 @@ async function migrateHooksSettingsForCodex(
 					addKey(join(targetHooksDir, base));
 					addKey(`./${join(targetHooksDir, base)}`);
 				}
-				if (sourceHooksDir) {
-					const sourceAbs = join(resolve(sourceHooksDir), base);
+				for (const commandSourceHooksDir of sourceHookCommandDirs) {
+					const sourceAbs = join(resolve(commandSourceHooksDir), base);
 					addKey(sourceAbs);
-					addKey(join(sourceHooksDir, base));
-					addKey(`./${join(sourceHooksDir, base)}`);
+					addKey(join(commandSourceHooksDir, base));
+					addKey(`./${join(commandSourceHooksDir, base)}`);
 					// macOS: `/var` is a symlink to `/private/var`. Tmp paths and user
 					// paths can appear in either form. Add both so includes() matches.
 					if (sourceAbs.startsWith("/private/")) {
@@ -997,7 +1082,8 @@ async function migrateHooksSettingsForCodex(
 	// Step 6: Convert hooks through Codex compatibility transformer
 	// Guard: if sourceHooksDir is empty, skip path rewrite to avoid catastrophic replacement
 	// where rewriteCommandPath would replace every "/" in commands with the target path.
-	if (!sourceHooksDir) {
+	const pathRewriteSourceDir = providerSourceHooksDir || sourceHooksDir;
+	if (!pathRewriteSourceDir) {
 		// Return the filtered hooks converted without path rewriting
 		const convertedNoRewrite = convertClaudeHooksToCodex(
 			filtered,
@@ -1049,7 +1135,7 @@ async function migrateHooksSettingsForCodex(
 	// Global-scope migrations pass undefined → no behavior change.
 	const effectiveTargetDir = targetHooksDir || sourceHooksDir;
 	const converted = convertClaudeHooksToCodex(filtered, capabilities, {
-		sourceDir: sourceHooksDir,
+		sourceDir: pathRewriteSourceDir,
 		targetDir: effectiveTargetDir,
 		commandSubstitutions: commandSubstitutions.size > 0 ? commandSubstitutions : undefined,
 		projectDir,
