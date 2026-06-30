@@ -1,6 +1,10 @@
 import { join } from "node:path";
 import { generateEnvFile } from "@/domains/config/config-generator.js";
-import { VALIDATION_PATTERNS, validateApiKey } from "@/domains/config/config-validator.js";
+import {
+	VALIDATION_PATTERNS,
+	normalizeApiKeyInput,
+	validateApiKey,
+} from "@/domains/config/config-validator.js";
 import { logger } from "@/shared/logger.js";
 import { PathResolver } from "@/shared/path-resolver.js";
 import * as clack from "@clack/prompts";
@@ -343,8 +347,9 @@ export async function runSetupWizard(options: SetupWizardOptions): Promise<boole
 		}
 
 		// Type guard: after isCancel check, result is string
-		if (typeof result === "string" && result) {
-			values[config.key] = result;
+		if (typeof result === "string") {
+			const normalized = normalizeApiKeyInput(result);
+			if (normalized) values[config.key] = normalized;
 		}
 	}
 
@@ -451,7 +456,7 @@ async function promptForAdditionalGeminiKeys(primaryKey: string): Promise<string
 				// Empty = done adding keys
 				if (!value) return;
 				// Trim whitespace (handles copy-paste issues)
-				const trimmed = value.trim();
+				const trimmed = normalizeApiKeyInput(value);
 				if (!trimmed) return;
 				// Validate format
 				if (!validateApiKey(trimmed, VALIDATION_PATTERNS.GEMINI_API_KEY)) {
@@ -471,13 +476,13 @@ async function promptForAdditionalGeminiKeys(primaryKey: string): Promise<string
 		}
 
 		// Empty string means done
-		if (!result || result.trim() === "") {
+		const normalized = typeof result === "string" ? normalizeApiKeyInput(result) : "";
+		if (!normalized) {
 			break;
 		}
 
-		const trimmedKey = result.trim();
-		additionalKeys.push(trimmedKey);
-		allKeys.add(trimmedKey);
+		additionalKeys.push(normalized);
+		allKeys.add(normalized);
 		keyNumber++;
 	}
 

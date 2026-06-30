@@ -3,6 +3,11 @@ import { mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
+	VALIDATION_PATTERNS,
+	normalizeApiKeyInput,
+	validateApiKey,
+} from "@/domains/config/config-validator.js";
+import {
 	REQUIRED_ENV_KEYS,
 	checkRequiredKeysExist,
 	getConfiguredImageProviders,
@@ -205,6 +210,13 @@ describe("checkRequiredKeysExist", () => {
 });
 
 describe("image provider helpers", () => {
+	test("Gemini validation accepts AI Studio keys with copy-paste whitespace", () => {
+		const pasted = `\n ${VALID_GEMINI_KEY}\r\n`;
+
+		expect(normalizeApiKeyInput(pasted)).toBe(VALID_GEMINI_KEY);
+		expect(validateApiKey(pasted, VALIDATION_PATTERNS.GEMINI_API_KEY)).toBe(true);
+	});
+
 	test("getConfiguredImageProviders returns all configured provider paths", () => {
 		expect(
 			getConfiguredImageProviders({

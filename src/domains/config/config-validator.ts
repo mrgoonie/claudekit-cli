@@ -12,9 +12,13 @@ export const VALIDATION_PATTERNS = {
 	TELEGRAM_BOT_TOKEN: /^\d+:[A-Za-z0-9_-]{35}$/,
 };
 
+export function normalizeApiKeyInput(value: string): string {
+	return value.trim().replace(/\u200B|\u200C|\u200D|\uFEFF/g, "");
+}
+
 /**
  * Validate an API key or configuration value against a pattern
  */
 export function validateApiKey(value: string, pattern: RegExp): boolean {
-	return pattern.test(value);
+	return pattern.test(normalizeApiKeyInput(value));
 }
