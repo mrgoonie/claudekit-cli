@@ -192,10 +192,13 @@ function removeOrphanLegacySentinels(
 	}
 
 	const removed: string[] = [];
-	for (const root of rootsToSweep) {
+	for (const root of [...rootsToSweep].sort(compareLegacyPaths)) {
 		const rootAbs = join(claudeDir, root);
 		if (!existsSync(rootAbs)) continue;
-		for (const sentinelAbs of findLegacySentinels(rootAbs)) {
+		const sentinels = findLegacySentinels(rootAbs).sort((a, b) =>
+			compareLegacyPaths(relative(claudeDir, a), relative(claudeDir, b)),
+		);
+		for (const sentinelAbs of sentinels) {
 			const sentinelPath = normalizeLegacyPath(relative(claudeDir, sentinelAbs));
 			if (!isSafeToRemoveLegacySentinel(sentinelPath, sentinelAbs, normalizedRemoved)) continue;
 			if (!backupAndRemove(backupDir, sentinelPath, sentinelAbs)) continue;
@@ -214,7 +217,7 @@ function findLegacySentinels(dir: string): string[] {
 		return out;
 	}
 
-	for (const entry of entries) {
+	for (const entry of entries.sort((a, b) => compareLegacyPaths(a.name, b.name))) {
 		const abs = join(dir, entry.name);
 		if (entry.isDirectory()) {
 			out.push(...findLegacySentinels(abs));
@@ -325,6 +328,14 @@ function isAbsoluteLike(pathValue: string): boolean {
 
 function normalizeLegacyPath(pathValue: string): string {
 	return pathValue.replace(/\\/g, "/");
+}
+
+function compareLegacyPaths(a: string, b: string): number {
+	const normalizedA = normalizeLegacyPath(a);
+	const normalizedB = normalizeLegacyPath(b);
+	if (normalizedA < normalizedB) return -1;
+	if (normalizedA > normalizedB) return 1;
+	return 0;
 }
 
 interface TrackedFile {
