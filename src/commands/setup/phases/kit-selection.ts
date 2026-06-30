@@ -64,6 +64,7 @@ export async function handleKitSelection(ctx: SetupContext): Promise<SetupContex
 			refresh: false,
 			sync: false,
 			useGit: false,
+			installMode: "auto",
 			verbose: false,
 			json: false,
 		});

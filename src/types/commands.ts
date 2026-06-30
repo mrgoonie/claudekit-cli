@@ -90,6 +90,7 @@ export const UpdateCommandOptionsSchema = z
 		useGit: z.boolean().default(false), // Use git clone instead of API download
 		archive: z.string().optional(), // Local archive file path (zip/tar.gz)
 		kitPath: z.string().optional(), // Local kit directory path
+		installMode: z.enum(["auto", "plugin", "legacy"]).default("auto"), // Engineer global install shape
 	})
 	.merge(GlobalOutputOptionsSchema);
 export type UpdateCommandOptions = z.infer<typeof UpdateCommandOptionsSchema>;

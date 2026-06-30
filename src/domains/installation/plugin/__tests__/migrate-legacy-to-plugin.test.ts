@@ -21,7 +21,16 @@ function ok(stdout: string, success = true): ClaudeRunResult {
 
 /** Fake installer scripted by command; records argv. */
 function fakeInstaller(
-	opts: { claudeAvailable?: boolean; pluginSupported?: boolean; verified?: boolean } = {},
+	opts: {
+		claudeAvailable?: boolean;
+		pluginSupported?: boolean;
+		verified?: boolean;
+		installOk?: boolean;
+		updateOk?: boolean;
+		marketplaceAddOk?: boolean;
+		marketplaceUpdateOk?: boolean;
+		enableOk?: boolean;
+	} = {},
 ) {
 	const calls: string[][] = [];
 	const runner: ClaudeRunner = async (args) => {
@@ -32,6 +41,13 @@ function fakeInstaller(
 			return ok(opts.pluginSupported !== false ? "Manage marketplaces" : "no plugins");
 		if (a === "plugin list")
 			return ok(opts.verified !== false ? "ck@claudekit Status: enabled" : "No plugins installed.");
+		if (a === "plugin marketplace add /src" || a === "plugin marketplace add /staged/kit")
+			return ok("", opts.marketplaceAddOk !== false);
+		if (a === "plugin marketplace update claudekit")
+			return ok("", opts.marketplaceUpdateOk !== false);
+		if (a === "plugin install ck@claudekit --scope user") return ok("", opts.installOk !== false);
+		if (a === "plugin update ck") return ok("", opts.updateOk !== false);
+		if (a === "plugin enable ck") return ok("", opts.enableOk !== false);
 		return ok("");
 	};
 	return { installer: new PluginInstaller(runner), calls };
@@ -139,6 +155,36 @@ describe("migrateLegacyToPlugin (orchestration)", () => {
 		const receipt = JSON.parse(readFileSync(r.receiptPath as string, "utf-8"));
 		expect(receipt[0].fromMode).toBe("legacy");
 		expect(receipt[0].toMode).toBe("plugin");
+	});
+
+	test("mixed already-installed plugin refreshes plugin and still cleans legacy skills", async () => {
+		await mkdir(join(claudeDir, "skills", "cook"), { recursive: true });
+		await writeFile(join(claudeDir, "skills", "cook", "SKILL.md"), "legacy skill", "utf-8");
+		await writeSettings({ "ck@claudekit": true });
+		await writeMetadata({
+			kits: {
+				engineer: {
+					version: "2.19.0",
+					installedAt: "x",
+					files: [{ path: "skills/cook/SKILL.md", ownership: "ck" }],
+				},
+			},
+		});
+		const { installer, calls } = fakeInstaller({ installOk: false, marketplaceAddOk: false });
+
+		const r = await migrateLegacyToPlugin({
+			pluginSourceDir: "/src",
+			claudeDir,
+			installer,
+			now: TS,
+		});
+
+		expect(r.action).toBe("migrated-from-legacy");
+		expect(r.removedPaths).toEqual(["skills/cook/SKILL.md"]);
+		expect(existsSync(join(claudeDir, "skills", "cook", "SKILL.md"))).toBe(false);
+		expect(calls).toContainEqual(["plugin", "marketplace", "update", "claudekit"]);
+		expect(calls).toContainEqual(["plugin", "update", "ck"]);
+		expect(calls).not.toContainEqual(["plugin", "install", "ck@claudekit", "--scope", "user"]);
 	});
 });
 

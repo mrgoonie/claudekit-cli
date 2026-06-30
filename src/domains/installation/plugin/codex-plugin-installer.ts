@@ -66,6 +66,11 @@ export interface CodexPluginInstallResult {
 	error?: string;
 }
 
+export interface RemoveCodexPluginResult {
+	removed: boolean;
+	marketplaceRemoved: boolean;
+}
+
 export interface InstallCodexPluginOptions {
 	/** Staged kit dir containing .agents/plugins/marketplace.json. */
 	pluginSourceDir: string;
@@ -96,8 +101,16 @@ export class CodexPluginInstaller {
 		return this.run(["plugin", "marketplace", "add", source], this.opts());
 	}
 
+	async marketplaceRemove(name: string = CK_MARKETPLACE_NAME): Promise<CodexRunResult> {
+		return this.run(["plugin", "marketplace", "remove", name], this.opts());
+	}
+
 	async add(): Promise<CodexRunResult> {
 		return this.run(["plugin", "add", `${CK_PLUGIN_NAME}@${CK_MARKETPLACE_NAME}`], this.opts());
+	}
+
+	async remove(): Promise<CodexRunResult> {
+		return this.run(["plugin", "remove", `${CK_PLUGIN_NAME}@${CK_MARKETPLACE_NAME}`], this.opts());
 	}
 
 	async listJson(): Promise<CodexRunResult> {
@@ -160,6 +173,23 @@ export async function installCodexPlugin(
 	}
 
 	return { action: "installed", pluginVerified: true };
+}
+
+export async function removeCodexPlugin(
+	opts: { installer?: CodexPluginInstaller; codexHome?: string } = {},
+): Promise<RemoveCodexPluginResult> {
+	const installer = opts.installer ?? new CodexPluginInstaller(undefined, opts.codexHome);
+
+	if (!(await installer.isCodexAvailable()) || !(await installer.isPluginSupported())) {
+		return { removed: false, marketplaceRemoved: false };
+	}
+
+	const removed = await installer.remove();
+	const marketplaceRemoved = await installer.marketplaceRemove();
+	return {
+		removed: removed.ok,
+		marketplaceRemoved: marketplaceRemoved.ok,
+	};
 }
 
 export async function shouldRefreshCodexPlugin(

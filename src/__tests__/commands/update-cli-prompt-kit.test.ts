@@ -35,12 +35,17 @@ describe("promptKitUpdate version display", () => {
 	function makeDeps(opts?: {
 		sideEffect?: () => void | Promise<void>;
 		latestTag?: string | null;
+		installMode?: InstallModeReport["mode"];
+		hasTrackedPluginSuppliedLegacyFiles?: boolean;
 	}) {
 		const stopCalls: string[] = [];
+		const execCommands: string[] = [];
+		const hasLegacyInstall = opts?.installMode === "legacy" || opts?.installMode === "mixed";
 		let execCalled = false;
 		const deps: PromptKitUpdateDeps = {
-			execAsyncFn: async () => {
+			execAsyncFn: async (command) => {
 				execCalled = true;
+				execCommands.push(command);
 				if (opts?.sideEffect) await opts.sideEffect();
 				return { stdout: "", stderr: "" };
 			},
@@ -65,7 +70,7 @@ describe("promptKitUpdate version display", () => {
 			loadFullConfigFn: async () => ({ config: { updatePipeline: undefined } }),
 			detectInstallModeFn: () =>
 				({
-					mode: "plugin",
+					mode: opts?.installMode ?? "plugin",
 					claudeDir: tempDir,
 					plugin: {
 						installed: true,
@@ -74,12 +79,16 @@ describe("promptKitUpdate version display", () => {
 						marketplace: "claudekit",
 						staleCache: false,
 					},
-					legacy: { installed: false, version: null },
+					legacy: {
+						installed: hasLegacyInstall,
+						version: hasLegacyInstall ? "1.0.0" : null,
+					},
 				}) satisfies InstallModeReport,
-			hasTrackedPluginSuppliedLegacyFilesFn: () => false,
+			hasTrackedPluginSuppliedLegacyFilesFn: () =>
+				opts?.hasTrackedPluginSuppliedLegacyFiles ?? false,
 			shouldRefreshCodexPluginFn: async () => false,
 		};
-		return { deps, stopCalls, wasExecCalled: () => execCalled };
+		return { deps, stopCalls, execCommands, wasExecCalled: () => execCalled };
 	}
 
 	it("shows version transition when kit version changed after init", async () => {
@@ -148,6 +157,28 @@ describe("promptKitUpdate version display", () => {
 
 		await promptKitUpdate(false, true, depsWithPrefix.deps);
 		expect(depsWithPrefix.wasExecCalled()).toBe(false);
+	});
+
+	it("runs kit init for mixed plugin installs with tracked legacy skills even when version matches", async () => {
+		await writeFile(
+			join(tempDir, "metadata.json"),
+			JSON.stringify({
+				version: "1.0.0",
+				kits: { engineer: { version: "1.0.0", installedAt: "2025-01-01T00:00:00Z" } },
+			}),
+		);
+
+		const { deps, execCommands, wasExecCalled } = makeDeps({
+			latestTag: "v1.0.0",
+			installMode: "mixed",
+			hasTrackedPluginSuppliedLegacyFiles: true,
+		});
+
+		await promptKitUpdate(false, true, deps);
+
+		expect(wasExecCalled()).toBe(true);
+		expect(execCommands[0]).toContain("ck init -g --kit engineer --yes");
+		expect(execCommands[0]).toContain("--restore-ck-hooks");
 	});
 
 	it("proceeds normally when latest tag fetch fails (returns null)", async () => {

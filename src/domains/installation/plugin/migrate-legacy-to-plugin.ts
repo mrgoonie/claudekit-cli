@@ -69,20 +69,15 @@ export async function migrateLegacyToPlugin(opts: MigrateOptions): Promise<Migra
 		return base("skipped-cc-unsupported", before.mode, false);
 	}
 
-	// Non-destructive: register marketplace + install + verify. Surface command
-	// failures early (before the destructive step) instead of relying on verify alone.
-	const added = await installer.marketplaceAdd(opts.pluginSourceDir);
-	if (!added.ok) {
+	// Non-destructive: register/refresh marketplace + install/update + verify. Surface
+	// command failures early before removing the legacy copy.
+	const prepared = before.plugin.installed
+		? await refreshExistingPlugin(installer, opts.pluginSourceDir, before.plugin.enabled)
+		: await installPlugin(installer, opts.pluginSourceDir);
+	if (!prepared.ok) {
 		return {
 			...base("install-failed", before.mode, false),
-			error: `marketplace add failed: ${added.stderr.trim()}`,
-		};
-	}
-	const installed = await installer.install("user");
-	if (!installed.ok) {
-		return {
-			...base("install-failed", before.mode, false),
-			error: `plugin install failed: ${installed.stderr.trim()}`,
+			error: prepared.error,
 		};
 	}
 	const verified = await installer.verifyInstalled();
@@ -226,6 +221,56 @@ function readJsonSafe(filePath: string): unknown {
 	} catch {
 		return null;
 	}
+}
+
+interface PluginPrepareResult {
+	ok: boolean;
+	error?: string;
+}
+
+async function installPlugin(
+	installer: PluginInstaller,
+	pluginSourceDir: string,
+): Promise<PluginPrepareResult> {
+	const added = await installer.marketplaceAdd(pluginSourceDir);
+	if (!added.ok) {
+		return { ok: false, error: `marketplace add failed: ${added.stderr.trim()}` };
+	}
+	const installed = await installer.install("user");
+	if (!installed.ok) {
+		return { ok: false, error: `plugin install failed: ${installed.stderr.trim()}` };
+	}
+	return { ok: true };
+}
+
+async function refreshExistingPlugin(
+	installer: PluginInstaller,
+	pluginSourceDir: string,
+	enabled: boolean,
+): Promise<PluginPrepareResult> {
+	const added = await installer.marketplaceAdd(pluginSourceDir);
+	if (!added.ok) {
+		const updatedMarketplace = await installer.marketplaceUpdate();
+		if (!updatedMarketplace.ok) {
+			return {
+				ok: false,
+				error: `marketplace refresh failed: ${updatedMarketplace.stderr.trim() || added.stderr.trim()}`,
+			};
+		}
+	}
+
+	if (!enabled) {
+		const enabledResult = await installer.enable();
+		if (!enabledResult.ok) {
+			return { ok: false, error: `plugin enable failed: ${enabledResult.stderr.trim()}` };
+		}
+	}
+
+	const updated = await installer.update();
+	if (!updated.ok) {
+		return { ok: false, error: `plugin update failed: ${updated.stderr.trim()}` };
+	}
+	return { ok: true };
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

@@ -1,6 +1,6 @@
 {
 	"version": "4.5.0-dev.7",
-	"generatedAt": "2026-06-29T17:20:27.008Z",
+	"generatedAt": "2026-06-30T16:03:20.406Z",
 	"commands": {
 		"agents": {
 			"name": "agents",
@@ -1096,6 +1096,10 @@
 						{
 							"flags": "--sync",
 							"description": "Sync config files from upstream with interactive hunk-by-hunk merge"
+						},
+						{
+							"flags": "--install-mode <mode>",
+							"description": "Engineer global install mode: auto, plugin, or legacy (default: auto)"
 						},
 						{
 							"flags": "--archive <path>",

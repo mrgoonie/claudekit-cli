@@ -3,6 +3,7 @@ import {
 	CodexPluginInstaller,
 	type CodexRunResult,
 	installCodexPlugin,
+	removeCodexPlugin,
 	resolveCodexExecutable,
 	shouldRefreshCodexPlugin,
 	shouldRunCodexInShell,
@@ -115,5 +116,44 @@ describe("CodexPluginInstaller", () => {
 			return fail("unexpected");
 		});
 		await expect(shouldRefreshCodexPlugin(missing)).resolves.toBe(true);
+	});
+
+	test("removes ck@claudekit and the marketplace when Codex plugins are supported", async () => {
+		const calls: string[][] = [];
+		const installer = new CodexPluginInstaller(async (args) => {
+			calls.push(args);
+			if (args.join(" ") === "--version") return ok("codex-cli 0.143.0-alpha.14");
+			if (args.join(" ") === "plugin --help") return ok("plugin marketplace add");
+			if (args.join(" ") === "plugin remove ck@claudekit") return ok();
+			if (args.join(" ") === "plugin marketplace remove claudekit") return ok();
+			return fail(`unexpected command: ${args.join(" ")}`);
+		});
+
+		await expect(removeCodexPlugin({ installer })).resolves.toEqual({
+			removed: true,
+			marketplaceRemoved: true,
+		});
+		expect(calls).toEqual([
+			["--version"],
+			["plugin", "--help"],
+			["plugin", "remove", "ck@claudekit"],
+			["plugin", "marketplace", "remove", "claudekit"],
+		]);
+	});
+
+	test("skips Codex plugin removal when Codex has no plugin support", async () => {
+		const calls: string[][] = [];
+		const installer = new CodexPluginInstaller(async (args) => {
+			calls.push(args);
+			if (args.join(" ") === "--version") return ok("codex-cli 0.142.0");
+			if (args.join(" ") === "plugin --help") return fail("unknown command");
+			return fail("should not remove");
+		});
+
+		await expect(removeCodexPlugin({ installer })).resolves.toEqual({
+			removed: false,
+			marketplaceRemoved: false,
+		});
+		expect(calls).toEqual([["--version"], ["plugin", "--help"]]);
 	});
 });

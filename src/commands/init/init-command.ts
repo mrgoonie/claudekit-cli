@@ -134,6 +134,7 @@ function createInitContext(rawOptions: UpdateCommandOptions, prompts: PromptsMan
 		prefix: false,
 		sync: false,
 		useGit: false,
+		installMode: "auto",
 	};
 
 	return {
