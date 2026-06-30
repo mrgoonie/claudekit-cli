@@ -242,7 +242,8 @@ async function parseEnvFile(path: string): Promise<Record<string, string>> {
 					value = value.slice(1, -1);
 				}
 				// Trim final value to handle whitespace-only values like `KEY=" "`
-				env[key.trim()] = value.trim();
+				const normalizedKey = key.trim();
+				env[normalizedKey] = normalizeParsedEnvValue(normalizedKey, value);
 			}
 		}
 
@@ -251,6 +252,19 @@ async function parseEnvFile(path: string): Promise<Record<string, string>> {
 		logger.debug(`Failed to parse .env file at ${path}: ${error}`);
 		return {};
 	}
+}
+
+function normalizeParsedEnvValue(key: string, value: string): string {
+	const trimmed = value.trim();
+	if (
+		key === "GEMINI_API_KEY" ||
+		key.startsWith("GEMINI_API_KEY_") ||
+		key === "OPENROUTER_API_KEY" ||
+		key === "MINIMAX_API_KEY"
+	) {
+		return normalizeApiKeyInput(trimmed);
+	}
+	return trimmed;
 }
 
 /**

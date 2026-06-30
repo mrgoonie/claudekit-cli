@@ -75,6 +75,18 @@ describe("checkRequiredKeysExist", () => {
 		expect(result.missing).toEqual([]);
 	});
 
+	test("normalizes hidden copy-paste characters from provider values in .env", async () => {
+		const envPath = join(tempDir, ".env");
+		await writeFile(envPath, `GEMINI_API_KEY=\u200B ${VALID_GEMINI_KEY}\uFEFF`);
+
+		const result = await checkRequiredKeysExist(envPath);
+
+		expect(result.envExists).toBe(true);
+		expect(result.allPresent).toBe(true);
+		expect(result.missing).toEqual([]);
+		expect(result.configuredProviders).toEqual(["google"]);
+	});
+
 	test("returns allPresent: true when OPENROUTER_API_KEY exists", async () => {
 		const envPath = join(tempDir, ".env");
 		await writeFile(envPath, `OPENROUTER_API_KEY=${VALID_OPENROUTER_KEY}`);
@@ -212,6 +224,13 @@ describe("checkRequiredKeysExist", () => {
 describe("image provider helpers", () => {
 	test("Gemini validation accepts AI Studio keys with copy-paste whitespace", () => {
 		const pasted = `\n ${VALID_GEMINI_KEY}\r\n`;
+
+		expect(normalizeApiKeyInput(pasted)).toBe(VALID_GEMINI_KEY);
+		expect(validateApiKey(pasted, VALIDATION_PATTERNS.GEMINI_API_KEY)).toBe(true);
+	});
+
+	test("Gemini validation accepts keys with hidden leading characters before whitespace", () => {
+		const pasted = `\u200B ${VALID_GEMINI_KEY}`;
 
 		expect(normalizeApiKeyInput(pasted)).toBe(VALID_GEMINI_KEY);
 		expect(validateApiKey(pasted, VALIDATION_PATTERNS.GEMINI_API_KEY)).toBe(true);

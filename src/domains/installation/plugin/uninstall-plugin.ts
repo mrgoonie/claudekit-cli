@@ -11,6 +11,8 @@ import { PathResolver } from "@/shared/path-resolver.js";
 export interface UninstallPluginResult {
 	uninstalled: boolean;
 	staleCacheRemoved: boolean;
+	pluginStillInstalled: boolean;
+	error?: string;
 }
 
 export interface UninstallPluginOptions {
@@ -32,10 +34,22 @@ export async function uninstallEnginePlugin(
 	const state = detectPluginState(claudeDir);
 
 	let uninstalled = false;
+	const errors: string[] = [];
 	if (state.installed) {
-		await installer.uninstall();
-		await installer.marketplaceRemove(state.marketplace ?? CK_MARKETPLACE_NAME);
-		uninstalled = true;
+		const removed = await installer.uninstall();
+		if (removed.ok) {
+			uninstalled = true;
+		} else {
+			errors.push(`plugin uninstall failed: ${removed.stderr.trim() || "unknown error"}`);
+		}
+		const marketplaceRemoved = await installer.marketplaceRemove(
+			state.marketplace ?? CK_MARKETPLACE_NAME,
+		);
+		if (!marketplaceRemoved.ok) {
+			errors.push(
+				`marketplace remove failed: ${marketplaceRemoved.stderr.trim() || "unknown error"}`,
+			);
+		}
 	}
 
 	// Purge cache payload (covers both a registered uninstall and an orphaned stale cache).
@@ -47,5 +61,15 @@ export async function uninstallEnginePlugin(
 		staleCacheRemoved = true;
 	}
 
-	return { uninstalled, staleCacheRemoved };
+	const pluginStillInstalled = state.installed ? detectPluginState(claudeDir).installed : false;
+	if (pluginStillInstalled) {
+		errors.push("plugin remains registered after cleanup");
+	}
+
+	return {
+		uninstalled,
+		staleCacheRemoved,
+		pluginStillInstalled,
+		error: errors.length > 0 ? errors.join("; ") : undefined,
+	};
 }

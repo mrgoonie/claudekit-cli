@@ -5,6 +5,7 @@ import {
 	installCodexPlugin,
 	removeCodexPlugin,
 	resolveCodexExecutable,
+	resolveCodexExecutableCandidates,
 	shouldRefreshCodexPlugin,
 	shouldRunCodexInShell,
 } from "@/domains/installation/plugin/codex-plugin-installer.js";
@@ -23,6 +24,17 @@ describe("CodexPluginInstaller", () => {
 		expect(shouldRunCodexInShell("win32")).toBe(false);
 		expect(resolveCodexExecutable("linux")).toBe("codex");
 		expect(shouldRunCodexInShell("linux")).toBe(false);
+	});
+
+	test("falls back to the Windows codex.cmd shim without shell mode", () => {
+		expect(resolveCodexExecutableCandidates("win32")).toEqual([
+			{ command: "codex", argsPrefix: [] },
+			{ command: "cmd.exe", argsPrefix: ["/d", "/s", "/c", "codex.cmd"] },
+		]);
+		expect(resolveCodexExecutableCandidates("linux")).toEqual([
+			{ command: "codex", argsPrefix: [] },
+		]);
+		expect(shouldRunCodexInShell("win32")).toBe(false);
 	});
 
 	test("installs ck@claudekit through a local marketplace", async () => {

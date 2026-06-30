@@ -57,17 +57,29 @@ export async function handlePluginInstall(
 	const removeCodex = deps.removeCodexPlugin ?? removeCodexPlugin;
 
 	if (ctx.options.installMode === "legacy") {
+		let cleanupError: Error | null = null;
 		try {
 			const result = await uninstallClaude({ claudeDir: ctx.claudeDir });
 			logLegacyPluginCleanup(result);
+			if (result.pluginStillInstalled) {
+				cleanupError = new Error(
+					`Claude plugin cleanup failed for legacy install mode: ${
+						result.error ?? "plugin remains registered"
+					}`,
+				);
+			}
 		} catch (err) {
 			logger.verbose(`Claude plugin cleanup skipped: ${(err as Error).message}`);
+			cleanupError = err as Error;
 		}
 		try {
 			const result = await removeCodex();
 			logCodexPluginCleanup(result);
 		} catch (err) {
 			logger.verbose(`Codex plugin cleanup skipped: ${(err as Error).message}`);
+		}
+		if (cleanupError) {
+			throw cleanupError;
 		}
 		return ctx;
 	}

@@ -13,7 +13,7 @@ export const VALIDATION_PATTERNS = {
 };
 
 export function normalizeApiKeyInput(value: string): string {
-	return value.trim().replace(/\u200B|\u200C|\u200D|\uFEFF/g, "");
+	return value.replace(/\u200B|\u200C|\u200D|\uFEFF/g, "").trim();
 }
 
 /**

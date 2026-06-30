@@ -8,7 +8,7 @@ import {
 	rmSync,
 	writeFileSync,
 } from "node:fs";
-import { dirname, join, relative } from "node:path";
+import { dirname, join, relative, resolve } from "node:path";
 import {
 	ENGINEER_KIT_KEY,
 	type InstallMode,
@@ -156,23 +156,25 @@ export function defaultLegacyRemover(claudeDir: string, backupDir: string): stri
 	const files = collectTrackedFiles(meta);
 	const removed: string[] = [];
 	for (const file of files) {
-		if (!isPluginSuppliedLegacyPath(file.path)) continue;
-		const abs = join(claudeDir, file.path);
-		if (!existsSync(abs)) continue;
-		if (!isSafeToRemovePluginSuppliedLegacyFile(file, abs)) continue;
+		const legacyPath = resolveSafePluginSuppliedLegacyPath(claudeDir, file.path);
+		if (!legacyPath) continue;
+		if (!existsSync(legacyPath.absolutePath)) continue;
+		if (!isSafeToRemovePluginSuppliedLegacyFile(file, legacyPath.absolutePath)) continue;
 		// Back up before removing.
-		backupAndRemove(backupDir, file.path, abs);
-		removed.push(file.path);
+		if (!backupAndRemove(backupDir, legacyPath.relativePath, legacyPath.absolutePath)) continue;
+		removed.push(legacyPath.relativePath);
 	}
 	removed.push(...removeOrphanLegacySentinels(claudeDir, backupDir, removed));
 	return removed;
 }
 
-function backupAndRemove(backupDir: string, relativePath: string, abs: string): void {
-	const backupTarget = join(backupDir, relativePath);
+function backupAndRemove(backupDir: string, relativePath: string, abs: string): boolean {
+	const backupTarget = resolveSafeChildPath(backupDir, relativePath);
+	if (!backupTarget) return false;
 	mkdirSync(dirname(backupTarget), { recursive: true });
 	cpSync(abs, backupTarget, { recursive: true });
 	rmSync(abs, { recursive: true, force: true });
+	return true;
 }
 
 function removeOrphanLegacySentinels(
@@ -196,7 +198,7 @@ function removeOrphanLegacySentinels(
 		for (const sentinelAbs of findLegacySentinels(rootAbs)) {
 			const sentinelPath = normalizeLegacyPath(relative(claudeDir, sentinelAbs));
 			if (!isSafeToRemoveLegacySentinel(sentinelPath, sentinelAbs, normalizedRemoved)) continue;
-			backupAndRemove(backupDir, sentinelPath, sentinelAbs);
+			if (!backupAndRemove(backupDir, sentinelPath, sentinelAbs)) continue;
 			removed.push(sentinelPath);
 		}
 	}
@@ -285,6 +287,40 @@ function checksumMatches(filePath: string, expected?: string): boolean {
 function isPluginSuppliedLegacyPath(pathValue: string): boolean {
 	const normalized = normalizeLegacyPath(pathValue).replace(/^\.claude\//, "");
 	return PLUGIN_SUPPLIED_LEGACY_PREFIXES.some((prefix) => normalized.startsWith(prefix));
+}
+
+function resolveSafePluginSuppliedLegacyPath(
+	claudeDir: string,
+	pathValue: string,
+): { absolutePath: string; relativePath: string } | null {
+	const normalized = normalizeLegacyPath(pathValue).replace(/^\.\/+/, "");
+	if (!isPluginSuppliedLegacyPath(normalized)) return null;
+	const safe = resolveSafeChildPath(claudeDir, normalized);
+	if (!safe) return null;
+
+	const relativePath = normalizeLegacyPath(relative(resolve(claudeDir), safe));
+	if (!isPluginSuppliedLegacyPath(relativePath)) return null;
+	return { absolutePath: safe, relativePath };
+}
+
+function resolveSafeChildPath(baseDir: string, pathValue: string): string | null {
+	const normalized = normalizeLegacyPath(pathValue);
+	if (!normalized || hasPathTraversal(normalized) || isAbsoluteLike(normalized)) return null;
+
+	const resolvedBase = resolve(baseDir);
+	const resolvedTarget = resolve(resolvedBase, normalized);
+	const relativePath = normalizeLegacyPath(relative(resolvedBase, resolvedTarget));
+	if (!relativePath || relativePath === ".." || relativePath.startsWith("../")) return null;
+	if (isAbsoluteLike(relativePath)) return null;
+	return resolvedTarget;
+}
+
+function hasPathTraversal(pathValue: string): boolean {
+	return pathValue.split("/").some((segment) => segment === "..");
+}
+
+function isAbsoluteLike(pathValue: string): boolean {
+	return pathValue.startsWith("/") || pathValue.startsWith("//") || /^[A-Za-z]:/.test(pathValue);
 }
 
 function normalizeLegacyPath(pathValue: string): string {

@@ -158,6 +158,7 @@ describe("handlePluginInstall (init Phase 7.5)", () => {
 		const uninstallResult: UninstallPluginResult = {
 			uninstalled: true,
 			staleCacheRemoved: true,
+			pluginStillInstalled: false,
 		};
 		const removeCodexResult: RemoveCodexPluginResult = {
 			removed: true,
@@ -188,6 +189,30 @@ describe("handlePluginInstall (init Phase 7.5)", () => {
 		expect(codexInstalled).toBe(false);
 		expect(claudeUninstalls).toEqual([claudeDir]);
 		expect(codexRemovals).toEqual(["codex"]);
+		expect(existsSync(stageBase)).toBe(false);
+	});
+
+	test("explicit legacy mode fails when Claude plugin cleanup does not verify", async () => {
+		let codexRemoved = false;
+		const uninstallResult: UninstallPluginResult = {
+			uninstalled: true,
+			staleCacheRemoved: false,
+			pluginStillInstalled: true,
+			error: "plugin remains registered after cleanup",
+		};
+
+		await expect(
+			handlePluginInstall(ctxOf({ installMode: "legacy" }), {
+				uninstallClaudePlugin: async () => uninstallResult,
+				removeCodexPlugin: async () => {
+					codexRemoved = true;
+					return { removed: true, marketplaceRemoved: true };
+				},
+				stageBaseDir: stageBase,
+			}),
+		).rejects.toThrow("Claude plugin cleanup failed");
+
+		expect(codexRemoved).toBe(true);
 		expect(existsSync(stageBase)).toBe(false);
 	});
 

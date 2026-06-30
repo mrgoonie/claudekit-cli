@@ -1,5 +1,6 @@
+import { createHash } from "node:crypto";
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
-import { join } from "node:path";
+import { join, relative, resolve } from "node:path";
 import { PathResolver } from "@/shared/path-resolver.js";
 
 /**
@@ -225,12 +226,10 @@ export function hasTrackedPluginSuppliedLegacyFiles(
 	if (!isRecord(metadata)) return false;
 
 	for (const file of collectTrackedFiles(metadata)) {
-		if (file.ownership === "user") continue;
-		const normalized = file.path.replace(/\\/g, "/").replace(/^\.claude\//, "");
-		if (!PLUGIN_SUPPLIED_LEGACY_PREFIXES.some((prefix) => normalized.startsWith(prefix))) {
-			continue;
-		}
-		if (existsSync(join(claudeDir, normalized))) return true;
+		const resolvedPath = resolveSafePluginSuppliedLegacyPath(claudeDir, file.path);
+		if (!resolvedPath || !existsSync(resolvedPath)) continue;
+		if (file.ownership === "user" && !checksumMatches(resolvedPath, file.checksum)) continue;
+		return true;
 	}
 
 	return false;
@@ -239,6 +238,7 @@ export function hasTrackedPluginSuppliedLegacyFiles(
 interface TrackedFile {
 	path: string;
 	ownership: "ck" | "ck-modified" | "user";
+	checksum?: string;
 }
 
 function collectTrackedFiles(metadata: Record<string, unknown>): TrackedFile[] {
@@ -249,7 +249,11 @@ function collectTrackedFiles(metadata: Record<string, unknown>): TrackedFile[] {
 			if (!isRecord(file) || typeof file.path !== "string") continue;
 			const ownership =
 				file.ownership === "user" || file.ownership === "ck-modified" ? file.ownership : "ck";
-			tracked.push({ path: file.path, ownership });
+			tracked.push({
+				path: file.path,
+				ownership,
+				checksum: typeof file.checksum === "string" ? file.checksum : undefined,
+			});
 		}
 	};
 
@@ -261,6 +265,56 @@ function collectTrackedFiles(metadata: Record<string, unknown>): TrackedFile[] {
 	}
 
 	return tracked;
+}
+
+function resolveSafePluginSuppliedLegacyPath(claudeDir: string, pathValue: string): string | null {
+	const normalized = normalizeLegacyPath(pathValue).replace(/^\.\/+/, "");
+	if (!isPluginSuppliedLegacyPath(normalized)) return null;
+	const safe = resolveSafeChildPath(claudeDir, normalized);
+	if (!safe) return null;
+
+	const relativePath = normalizeLegacyPath(relative(resolve(claudeDir), safe));
+	if (!isPluginSuppliedLegacyPath(relativePath)) return null;
+	return safe;
+}
+
+function resolveSafeChildPath(baseDir: string, pathValue: string): string | null {
+	const normalized = normalizeLegacyPath(pathValue);
+	if (!normalized || hasPathTraversal(normalized) || isAbsoluteLike(normalized)) return null;
+
+	const resolvedBase = resolve(baseDir);
+	const resolvedTarget = resolve(resolvedBase, normalized);
+	const relativePath = normalizeLegacyPath(relative(resolvedBase, resolvedTarget));
+	if (!relativePath || relativePath === ".." || relativePath.startsWith("../")) return null;
+	if (isAbsoluteLike(relativePath)) return null;
+	return resolvedTarget;
+}
+
+function isPluginSuppliedLegacyPath(pathValue: string): boolean {
+	const normalized = normalizeLegacyPath(pathValue).replace(/^\.claude\//, "");
+	return PLUGIN_SUPPLIED_LEGACY_PREFIXES.some((prefix) => normalized.startsWith(prefix));
+}
+
+function checksumMatches(filePath: string, expected?: string): boolean {
+	if (!expected || !/^[a-f0-9]{64}$/i.test(expected)) return false;
+	try {
+		const actual = createHash("sha256").update(readFileSync(filePath)).digest("hex");
+		return actual.toLowerCase() === expected.toLowerCase();
+	} catch {
+		return false;
+	}
+}
+
+function hasPathTraversal(pathValue: string): boolean {
+	return pathValue.split("/").some((segment) => segment === "..");
+}
+
+function isAbsoluteLike(pathValue: string): boolean {
+	return pathValue.startsWith("/") || pathValue.startsWith("//") || /^[A-Za-z]:/.test(pathValue);
+}
+
+function normalizeLegacyPath(pathValue: string): string {
+	return pathValue.replace(/\\/g, "/");
 }
 
 function safeReaddir(dir: string): string[] {

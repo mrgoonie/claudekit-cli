@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { createHash } from "node:crypto";
 import { mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -11,6 +12,10 @@ import {
 	resolveInstalledPluginCacheRoot,
 	resolveInstalledPluginCacheSubpath,
 } from "@/domains/installation/plugin/install-mode-detector.js";
+
+function sha256(content: string): string {
+	return createHash("sha256").update(content).digest("hex");
+}
 
 describe("install-mode-detector", () => {
 	let claudeDir: string;
@@ -168,6 +173,63 @@ describe("install-mode-detector", () => {
 		});
 
 		expect(hasTrackedPluginSuppliedLegacyFiles(claudeDir)).toBe(true);
+	});
+
+	test("detects unmodified user-owned plugin payloads from manifestless installs", async () => {
+		const skillContent = "# cook\n";
+		await mkdir(join(claudeDir, "skills", "cook"), { recursive: true });
+		await writeFile(join(claudeDir, "skills", "cook", "SKILL.md"), skillContent, "utf-8");
+		await writeMetadata({
+			kits: {
+				engineer: {
+					version: "local",
+					files: [
+						{
+							path: "skills/cook/SKILL.md",
+							ownership: "user",
+							checksum: sha256(skillContent),
+						},
+					],
+				},
+			},
+		});
+
+		expect(hasTrackedPluginSuppliedLegacyFiles(claudeDir)).toBe(true);
+	});
+
+	test("ignores modified user-owned plugin payloads from manifestless installs", async () => {
+		await mkdir(join(claudeDir, "skills", "cook"), { recursive: true });
+		await writeFile(join(claudeDir, "skills", "cook", "SKILL.md"), "# edited\n", "utf-8");
+		await writeMetadata({
+			kits: {
+				engineer: {
+					version: "local",
+					files: [
+						{
+							path: "skills/cook/SKILL.md",
+							ownership: "user",
+							checksum: sha256("# original\n"),
+						},
+					],
+				},
+			},
+		});
+
+		expect(hasTrackedPluginSuppliedLegacyFiles(claudeDir)).toBe(false);
+	});
+
+	test("ignores unsafe tracked plugin payload paths", async () => {
+		await writeFile(join(claudeDir, "settings.json"), "settings", "utf-8");
+		await writeMetadata({
+			kits: {
+				engineer: {
+					version: "2.19.0",
+					files: [{ path: "skills/../settings.json", ownership: "ck" }],
+				},
+			},
+		});
+
+		expect(hasTrackedPluginSuppliedLegacyFiles(claudeDir)).toBe(false);
 	});
 
 	test("ignores mixed installs after plugin-supplied legacy files are gone", async () => {

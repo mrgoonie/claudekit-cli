@@ -23,6 +23,11 @@ export interface CodexRunOptions {
 
 export type CodexRunner = (args: string[], opts?: CodexRunOptions) => Promise<CodexRunResult>;
 
+export interface CodexExecutableCandidate {
+	command: string;
+	argsPrefix: string[];
+}
+
 export function resolveCodexExecutable(_platformName: NodeJS.Platform = process.platform): string {
 	return "codex";
 }
@@ -31,32 +36,64 @@ export function shouldRunCodexInShell(_platformName: NodeJS.Platform = process.p
 	return false;
 }
 
+export function resolveCodexExecutableCandidates(
+	platformName: NodeJS.Platform = process.platform,
+): CodexExecutableCandidate[] {
+	if (platformName === "win32") {
+		return [
+			{ command: "codex", argsPrefix: [] },
+			{ command: "cmd.exe", argsPrefix: ["/d", "/s", "/c", "codex.cmd"] },
+		];
+	}
+	return [{ command: resolveCodexExecutable(platformName), argsPrefix: [] }];
+}
+
 export const defaultCodexRunner: CodexRunner = async (args, opts) => {
 	const env = { ...process.env };
 	if (opts?.codexHome) env.CODEX_HOME = opts.codexHome;
-	try {
-		const { stdout, stderr } = await execFileAsync(resolveCodexExecutable(), args, {
-			env,
-			shell: shouldRunCodexInShell(),
-			timeout: opts?.timeoutMs ?? DEFAULT_TIMEOUT_MS,
-			maxBuffer: 10 * 1024 * 1024,
-		});
-		return { ok: true, stdout: String(stdout), stderr: String(stderr), code: 0 };
-	} catch (err) {
-		const e = err as {
-			stdout?: string | Buffer;
-			stderr?: string | Buffer;
-			code?: number;
-			message?: string;
-		};
-		return {
-			ok: false,
-			stdout: e.stdout ? String(e.stdout) : "",
-			stderr: e.stderr ? String(e.stderr) : (e.message ?? ""),
-			code: typeof e.code === "number" ? e.code : null,
-		};
+
+	let lastError: unknown = null;
+	const candidates = resolveCodexExecutableCandidates();
+	for (const [index, candidate] of candidates.entries()) {
+		try {
+			const { stdout, stderr } = await execFileAsync(
+				candidate.command,
+				[...candidate.argsPrefix, ...args],
+				{
+					env,
+					shell: shouldRunCodexInShell(),
+					timeout: opts?.timeoutMs ?? DEFAULT_TIMEOUT_MS,
+					maxBuffer: 10 * 1024 * 1024,
+				},
+			);
+			return { ok: true, stdout: String(stdout), stderr: String(stderr), code: 0 };
+		} catch (err) {
+			lastError = err;
+			if (index < candidates.length - 1 && isSpawnResolutionError(err)) {
+				continue;
+			}
+			break;
+		}
 	}
+
+	const e = lastError as {
+		stdout?: string | Buffer;
+		stderr?: string | Buffer;
+		code?: number | string;
+		message?: string;
+	};
+	return {
+		ok: false,
+		stdout: e?.stdout ? String(e.stdout) : "",
+		stderr: e?.stderr ? String(e.stderr) : (e?.message ?? ""),
+		code: typeof e?.code === "number" ? e.code : null,
+	};
 };
+
+function isSpawnResolutionError(err: unknown): boolean {
+	const code = (err as { code?: unknown })?.code;
+	return code === "ENOENT" || code === "EACCES" || code === "EINVAL";
+}
 
 export type CodexPluginInstallAction = "installed" | "skipped-codex-unsupported" | "install-failed";
 

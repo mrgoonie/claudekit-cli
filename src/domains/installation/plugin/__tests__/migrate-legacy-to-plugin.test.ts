@@ -196,15 +196,20 @@ describe("migrateLegacyToPlugin (orchestration)", () => {
 describe("defaultLegacyRemover", () => {
 	let claudeDir: string;
 	let backupDir: string;
+	let extraCleanupPaths: string[];
 	beforeEach(async () => {
 		claudeDir = join(tmpdir(), `ck-rm-${Date.now()}-${Math.round(performance.now())}`);
 		backupDir = join(claudeDir, "backup");
+		extraCleanupPaths = [];
 		await mkdir(join(claudeDir, "skills", "cook"), { recursive: true });
 		await mkdir(join(claudeDir, "skills", "mine"), { recursive: true });
 		await mkdir(backupDir, { recursive: true });
 	});
 	afterEach(async () => {
 		await rm(claudeDir, { recursive: true, force: true });
+		for (const cleanupPath of extraCleanupPaths) {
+			await rm(cleanupPath, { recursive: true, force: true });
+		}
 	});
 
 	test("removes ck-owned files, backs them up, preserves user-owned", async () => {
@@ -377,6 +382,55 @@ describe("defaultLegacyRemover", () => {
 		expect(removed).toEqual([]);
 		expect(existsSync(join(claudeDir, "skills", "cook", "SKILL.md"))).toBe(true);
 		expect(existsSync(join(backupDir, "skills", "cook", "SKILL.md"))).toBe(false);
+	});
+
+	test("does not remove metadata paths that escape the Claude directory", async () => {
+		const outsideName = `ck-outside-${Date.now()}-${Math.round(performance.now())}.txt`;
+		const outsidePath = join(claudeDir, "..", outsideName);
+		extraCleanupPaths.push(outsidePath);
+		await writeFile(outsidePath, "outside", "utf-8");
+		await writeFile(
+			join(claudeDir, "metadata.json"),
+			JSON.stringify({
+				kits: {
+					engineer: {
+						version: "2.19.0",
+						installedAt: "x",
+						files: [{ path: `skills/../../${outsideName}`, ownership: "ck" }],
+					},
+				},
+			}),
+			"utf-8",
+		);
+
+		const removed = defaultLegacyRemover(claudeDir, backupDir);
+
+		expect(removed).toEqual([]);
+		expect(existsSync(outsidePath)).toBe(true);
+		expect(existsSync(join(backupDir, outsideName))).toBe(false);
+	});
+
+	test("does not remove paths that resolve outside plugin-supplied legacy roots", async () => {
+		await writeFile(join(claudeDir, "settings.json"), "settings", "utf-8");
+		await writeFile(
+			join(claudeDir, "metadata.json"),
+			JSON.stringify({
+				kits: {
+					engineer: {
+						version: "2.19.0",
+						installedAt: "x",
+						files: [{ path: "skills/../settings.json", ownership: "ck" }],
+					},
+				},
+			}),
+			"utf-8",
+		);
+
+		const removed = defaultLegacyRemover(claudeDir, backupDir);
+
+		expect(removed).toEqual([]);
+		expect(existsSync(join(claudeDir, "settings.json"))).toBe(true);
+		expect(existsSync(join(backupDir, "settings.json"))).toBe(false);
 	});
 
 	test("preserves runtime files that the plugin format does not supply yet", async () => {
