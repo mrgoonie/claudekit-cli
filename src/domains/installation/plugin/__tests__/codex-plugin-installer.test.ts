@@ -18,9 +18,9 @@ function fail(stderr = "failed"): CodexRunResult {
 }
 
 describe("CodexPluginInstaller", () => {
-	test("uses the Windows command shim through a shell", () => {
-		expect(resolveCodexExecutable("win32")).toBe("codex.cmd");
-		expect(shouldRunCodexInShell("win32")).toBe(true);
+	test("resolves Codex without a shell on Windows", () => {
+		expect(resolveCodexExecutable("win32")).toBe("codex");
+		expect(shouldRunCodexInShell("win32")).toBe(false);
 		expect(resolveCodexExecutable("linux")).toBe("codex");
 		expect(shouldRunCodexInShell("linux")).toBe(false);
 	});
@@ -62,6 +62,62 @@ describe("CodexPluginInstaller", () => {
 			["plugin", "add", "ck@claudekit"],
 			["plugin", "list", "--json"],
 		]);
+	});
+
+	test("verifies installed plugin from current Codex text list output when JSON is unsupported", async () => {
+		const calls: string[][] = [];
+		const installer = new CodexPluginInstaller(async (args) => {
+			calls.push(args);
+			if (args.join(" ") === "--version") return ok("codex-cli 0.135.0");
+			if (args.join(" ") === "plugin --help") return ok("plugin marketplace add");
+			if (args.join(" ") === "plugin marketplace add /tmp/plugin-source") return ok();
+			if (args.join(" ") === "plugin add ck@claudekit") return ok();
+			if (args.join(" ") === "plugin list --json") {
+				return fail("error: unexpected argument '--json' found");
+			}
+			if (args.join(" ") === "plugin list") {
+				return ok(`Marketplace \`claudekit\`
+
+PLUGIN        STATUS              VERSION        PATH
+ck@claudekit  installed, enabled  2.20.1-beta.6  C:\\\\Users\\\\kaidu\\\\.codex\\\\plugins\\\\ck
+`);
+			}
+			return fail(`unexpected command: ${args.join(" ")}`);
+		});
+
+		const result = await installCodexPlugin({
+			pluginSourceDir: "/tmp/plugin-source",
+			installer,
+		});
+
+		expect(result).toEqual({ action: "installed", pluginVerified: true });
+		expect(calls).toEqual([
+			["--version"],
+			["plugin", "--help"],
+			["plugin", "marketplace", "add", "/tmp/plugin-source"],
+			["plugin", "add", "ck@claudekit"],
+			["plugin", "list", "--json"],
+			["plugin", "list"],
+		]);
+	});
+
+	test("does not verify text list output unless ck is installed and enabled", async () => {
+		const installer = new CodexPluginInstaller(async (args) => {
+			if (args.join(" ") === "--version") return ok("codex-cli 0.135.0");
+			if (args.join(" ") === "plugin --help") return ok("plugin marketplace add");
+			if (args.join(" ") === "plugin list --json") {
+				return fail("error: unexpected argument '--json' found");
+			}
+			if (args.join(" ") === "plugin list") {
+				return ok(`PLUGIN        STATUS
+ck@claudekit  installed, disabled
+other@market  installed, enabled
+`);
+			}
+			return fail("unexpected");
+		});
+
+		await expect(shouldRefreshCodexPlugin(installer)).resolves.toBe(true);
 	});
 
 	test("skips when Codex lacks plugin support", async () => {

@@ -1,5 +1,14 @@
-import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { createHash } from "node:crypto";
+import {
+	cpSync,
+	existsSync,
+	mkdirSync,
+	readFileSync,
+	readdirSync,
+	rmSync,
+	writeFileSync,
+} from "node:fs";
+import { dirname, join, relative } from "node:path";
 import {
 	ENGINEER_KIT_KEY,
 	type InstallMode,
@@ -135,6 +144,7 @@ function base(
 }
 
 const PLUGIN_SUPPLIED_LEGACY_PREFIXES = ["agents/", "skills/"];
+const LEGACY_SENTINEL_FILENAMES = new Set([".gitignore"]);
 
 /**
  * Default legacy remover: backs up and removes ck-owned engineer kit files that
@@ -146,28 +156,145 @@ export function defaultLegacyRemover(claudeDir: string, backupDir: string): stri
 	const files = collectTrackedFiles(meta);
 	const removed: string[] = [];
 	for (const file of files) {
-		if (file.ownership === "user") continue; // never delete user-owned content
 		if (!isPluginSuppliedLegacyPath(file.path)) continue;
 		const abs = join(claudeDir, file.path);
 		if (!existsSync(abs)) continue;
+		if (!isSafeToRemovePluginSuppliedLegacyFile(file, abs)) continue;
 		// Back up before removing.
-		const backupTarget = join(backupDir, file.path);
-		mkdirSync(dirname(backupTarget), { recursive: true });
-		cpSync(abs, backupTarget, { recursive: true });
-		rmSync(abs, { recursive: true, force: true });
+		backupAndRemove(backupDir, file.path, abs);
 		removed.push(file.path);
+	}
+	removed.push(...removeOrphanLegacySentinels(claudeDir, backupDir, removed));
+	return removed;
+}
+
+function backupAndRemove(backupDir: string, relativePath: string, abs: string): void {
+	const backupTarget = join(backupDir, relativePath);
+	mkdirSync(dirname(backupTarget), { recursive: true });
+	cpSync(abs, backupTarget, { recursive: true });
+	rmSync(abs, { recursive: true, force: true });
+}
+
+function removeOrphanLegacySentinels(
+	claudeDir: string,
+	backupDir: string,
+	removedTrackedPaths: string[],
+): string[] {
+	const normalizedRemoved = removedTrackedPaths.map(normalizeLegacyPath);
+	const rootsToSweep = new Set<string>();
+	for (const pathValue of normalizedRemoved) {
+		const [root] = pathValue.split("/");
+		if (root && PLUGIN_SUPPLIED_LEGACY_PREFIXES.includes(`${root}/`)) {
+			rootsToSweep.add(root);
+		}
+	}
+
+	const removed: string[] = [];
+	for (const root of rootsToSweep) {
+		const rootAbs = join(claudeDir, root);
+		if (!existsSync(rootAbs)) continue;
+		for (const sentinelAbs of findLegacySentinels(rootAbs)) {
+			const sentinelPath = normalizeLegacyPath(relative(claudeDir, sentinelAbs));
+			if (!isSafeToRemoveLegacySentinel(sentinelPath, sentinelAbs, normalizedRemoved)) continue;
+			backupAndRemove(backupDir, sentinelPath, sentinelAbs);
+			removed.push(sentinelPath);
+		}
 	}
 	return removed;
 }
 
+function findLegacySentinels(dir: string): string[] {
+	const out: string[] = [];
+	let entries;
+	try {
+		entries = readdirSync(dir, { withFileTypes: true });
+	} catch {
+		return out;
+	}
+
+	for (const entry of entries) {
+		const abs = join(dir, entry.name);
+		if (entry.isDirectory()) {
+			out.push(...findLegacySentinels(abs));
+		} else if (entry.isFile() && LEGACY_SENTINEL_FILENAMES.has(entry.name)) {
+			out.push(abs);
+		}
+	}
+	return out;
+}
+
+function isSafeToRemoveLegacySentinel(
+	sentinelPath: string,
+	sentinelAbs: string,
+	removedTrackedPaths: string[],
+): boolean {
+	if (!isPluginSuppliedLegacyPath(sentinelPath)) return false;
+	if (!LEGACY_SENTINEL_FILENAMES.has(sentinelPath.split("/").pop() ?? "")) return false;
+
+	const sentinelDir = dirname(sentinelPath).replace(/\\/g, "/");
+	if (!removedTrackedPaths.some((removedPath) => removedPath.startsWith(`${sentinelDir}/`))) {
+		return false;
+	}
+
+	return directoryContainsOnlySentinels(dirname(sentinelAbs));
+}
+
+function directoryContainsOnlySentinels(dir: string): boolean {
+	let entries;
+	try {
+		entries = readdirSync(dir, { withFileTypes: true });
+	} catch {
+		return false;
+	}
+
+	for (const entry of entries) {
+		const abs = join(dir, entry.name);
+		if (entry.isDirectory()) {
+			if (!directoryContainsOnlySentinels(abs)) return false;
+		} else if (!entry.isFile() || !LEGACY_SENTINEL_FILENAMES.has(entry.name)) {
+			return false;
+		}
+	}
+	return true;
+}
+
+function isSafeToRemovePluginSuppliedLegacyFile(file: TrackedFile, abs: string): boolean {
+	if (file.ownership !== "user") {
+		return true;
+	}
+
+	// Offline/local kit installs can lack release-manifest.json, so files are
+	// tracked as user-owned even though the installer just copied them. Remove
+	// only when the tracked checksum still matches disk; edited or untracked
+	// user files stay protected.
+	return checksumMatches(abs, file.checksum);
+}
+
+function checksumMatches(filePath: string, expected?: string): boolean {
+	if (!expected || !/^[a-f0-9]{64}$/i.test(expected)) {
+		return false;
+	}
+	try {
+		const actual = createHash("sha256").update(readFileSync(filePath)).digest("hex");
+		return actual.toLowerCase() === expected.toLowerCase();
+	} catch {
+		return false;
+	}
+}
+
 function isPluginSuppliedLegacyPath(pathValue: string): boolean {
-	const normalized = pathValue.replace(/\\/g, "/").replace(/^\.claude\//, "");
+	const normalized = normalizeLegacyPath(pathValue).replace(/^\.claude\//, "");
 	return PLUGIN_SUPPLIED_LEGACY_PREFIXES.some((prefix) => normalized.startsWith(prefix));
+}
+
+function normalizeLegacyPath(pathValue: string): string {
+	return pathValue.replace(/\\/g, "/");
 }
 
 interface TrackedFile {
 	path: string;
 	ownership: "ck" | "ck-modified" | "user";
+	checksum?: string;
 }
 
 function collectTrackedFiles(meta: unknown): TrackedFile[] {
@@ -179,7 +306,11 @@ function collectTrackedFiles(meta: unknown): TrackedFile[] {
 			if (isRecord(f) && typeof f.path === "string") {
 				const ownership =
 					f.ownership === "user" || f.ownership === "ck-modified" ? f.ownership : "ck";
-				out.push({ path: f.path, ownership });
+				out.push({
+					path: f.path,
+					ownership,
+					checksum: typeof f.checksum === "string" ? f.checksum : undefined,
+				});
 			}
 		}
 	};

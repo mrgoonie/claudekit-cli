@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { createHash } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import { mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -17,6 +18,10 @@ const TS = "2026-06-16T00:00:00.000Z";
 
 function ok(stdout: string, success = true): ClaudeRunResult {
 	return { ok: success, stdout, stderr: "", code: success ? 0 : 1 };
+}
+
+function sha256(content: string): string {
+	return createHash("sha256").update(content).digest("hex");
 }
 
 /** Fake installer scripted by command; records argv. */
@@ -233,6 +238,145 @@ describe("defaultLegacyRemover", () => {
 		expect(existsSync(join(claudeDir, "skills", "mine", "SKILL.md"))).toBe(true); // user preserved
 		expect(existsSync(join(backupDir, "skills", "cook", "SKILL.md"))).toBe(true); // backed up
 		expect(existsSync(join(backupDir, "agents", "planner.md"))).toBe(true); // backed up
+	});
+
+	test("removes unmodified plugin-supplied files marked user-owned by manifestless installs", async () => {
+		const skillContent = "offline skill";
+		const agentContent = "offline agent";
+		await writeFile(join(claudeDir, "skills", "cook", "SKILL.md"), skillContent, "utf-8");
+		await mkdir(join(claudeDir, "agents"), { recursive: true });
+		await writeFile(join(claudeDir, "agents", "planner.md"), agentContent, "utf-8");
+		await writeFile(
+			join(claudeDir, "metadata.json"),
+			JSON.stringify({
+				kits: {
+					engineer: {
+						version: "local",
+						installedAt: "x",
+						files: [
+							{
+								path: "skills/cook/SKILL.md",
+								ownership: "user",
+								checksum: sha256(skillContent),
+							},
+							{
+								path: "agents/planner.md",
+								ownership: "user",
+								checksum: sha256(agentContent),
+							},
+						],
+					},
+				},
+			}),
+			"utf-8",
+		);
+
+		const removed = defaultLegacyRemover(claudeDir, backupDir);
+
+		expect(removed).toEqual(["skills/cook/SKILL.md", "agents/planner.md"]);
+		expect(existsSync(join(claudeDir, "skills", "cook", "SKILL.md"))).toBe(false);
+		expect(existsSync(join(claudeDir, "agents", "planner.md"))).toBe(false);
+		expect(existsSync(join(backupDir, "skills", "cook", "SKILL.md"))).toBe(true);
+		expect(existsSync(join(backupDir, "agents", "planner.md"))).toBe(true);
+	});
+
+	test("removes orphaned legacy sentinels after plugin-supplied files are removed", async () => {
+		await mkdir(join(claudeDir, "skills", "cook", "scripts"), { recursive: true });
+		await writeFile(join(claudeDir, "skills", ".gitignore"), "sentinel", "utf-8");
+		await writeFile(
+			join(claudeDir, "skills", "cook", "scripts", ".gitignore"),
+			"sentinel",
+			"utf-8",
+		);
+		await writeFile(join(claudeDir, "skills", "cook", "SKILL.md"), "ck skill", "utf-8");
+		await writeFile(join(claudeDir, "skills", "cook", "scripts", "tool.js"), "tool", "utf-8");
+		await writeFile(
+			join(claudeDir, "metadata.json"),
+			JSON.stringify({
+				kits: {
+					engineer: {
+						version: "2.19.0",
+						installedAt: "x",
+						files: [
+							{ path: "skills/cook/SKILL.md", ownership: "ck" },
+							{ path: "skills/cook/scripts/tool.js", ownership: "ck" },
+						],
+					},
+				},
+			}),
+			"utf-8",
+		);
+
+		const removed = defaultLegacyRemover(claudeDir, backupDir);
+
+		expect(removed).toEqual([
+			"skills/cook/SKILL.md",
+			"skills/cook/scripts/tool.js",
+			"skills/.gitignore",
+			"skills/cook/scripts/.gitignore",
+		]);
+		expect(existsSync(join(claudeDir, "skills", ".gitignore"))).toBe(false);
+		expect(existsSync(join(claudeDir, "skills", "cook", "scripts", ".gitignore"))).toBe(false);
+		expect(existsSync(join(backupDir, "skills", ".gitignore"))).toBe(true);
+		expect(existsSync(join(backupDir, "skills", "cook", "scripts", ".gitignore"))).toBe(true);
+	});
+
+	test("preserves legacy sentinels when user content remains in the same subtree", async () => {
+		await writeFile(join(claudeDir, "skills", ".gitignore"), "sentinel", "utf-8");
+		await writeFile(join(claudeDir, "skills", "cook", "SKILL.md"), "ck skill", "utf-8");
+		await writeFile(join(claudeDir, "skills", "mine", "SKILL.md"), "user skill", "utf-8");
+		await writeFile(
+			join(claudeDir, "metadata.json"),
+			JSON.stringify({
+				kits: {
+					engineer: {
+						version: "2.19.0",
+						installedAt: "x",
+						files: [
+							{ path: "skills/cook/SKILL.md", ownership: "ck" },
+							{ path: "skills/mine/SKILL.md", ownership: "user" },
+						],
+					},
+				},
+			}),
+			"utf-8",
+		);
+
+		const removed = defaultLegacyRemover(claudeDir, backupDir);
+
+		expect(removed).toEqual(["skills/cook/SKILL.md"]);
+		expect(existsSync(join(claudeDir, "skills", ".gitignore"))).toBe(true);
+		expect(existsSync(join(claudeDir, "skills", "mine", "SKILL.md"))).toBe(true);
+		expect(existsSync(join(backupDir, "skills", ".gitignore"))).toBe(false);
+	});
+
+	test("preserves modified user-owned plugin-supplied files", async () => {
+		await writeFile(join(claudeDir, "skills", "cook", "SKILL.md"), "edited skill", "utf-8");
+		await writeFile(
+			join(claudeDir, "metadata.json"),
+			JSON.stringify({
+				kits: {
+					engineer: {
+						version: "local",
+						installedAt: "x",
+						files: [
+							{
+								path: "skills/cook/SKILL.md",
+								ownership: "user",
+								checksum: sha256("original skill"),
+							},
+						],
+					},
+				},
+			}),
+			"utf-8",
+		);
+
+		const removed = defaultLegacyRemover(claudeDir, backupDir);
+
+		expect(removed).toEqual([]);
+		expect(existsSync(join(claudeDir, "skills", "cook", "SKILL.md"))).toBe(true);
+		expect(existsSync(join(backupDir, "skills", "cook", "SKILL.md"))).toBe(false);
 	});
 
 	test("preserves runtime files that the plugin format does not supply yet", async () => {

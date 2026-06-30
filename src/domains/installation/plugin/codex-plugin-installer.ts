@@ -23,12 +23,12 @@ export interface CodexRunOptions {
 
 export type CodexRunner = (args: string[], opts?: CodexRunOptions) => Promise<CodexRunResult>;
 
-export function resolveCodexExecutable(platformName: NodeJS.Platform = process.platform): string {
-	return platformName === "win32" ? "codex.cmd" : "codex";
+export function resolveCodexExecutable(_platformName: NodeJS.Platform = process.platform): string {
+	return "codex";
 }
 
-export function shouldRunCodexInShell(platformName: NodeJS.Platform = process.platform): boolean {
-	return platformName === "win32";
+export function shouldRunCodexInShell(_platformName: NodeJS.Platform = process.platform): boolean {
+	return false;
 }
 
 export const defaultCodexRunner: CodexRunner = async (args, opts) => {
@@ -117,9 +117,16 @@ export class CodexPluginInstaller {
 		return this.run(["plugin", "list", "--json"], this.opts(15_000));
 	}
 
+	async listText(): Promise<CodexRunResult> {
+		return this.run(["plugin", "list"], this.opts(15_000));
+	}
+
 	async verifyInstalled(): Promise<boolean> {
 		const r = await this.listJson();
-		if (!r.ok) return false;
+		if (!r.ok) {
+			const text = await this.listText();
+			return text.ok && parseTextPluginList(text.stdout + text.stderr);
+		}
 		try {
 			const parsed = JSON.parse(r.stdout) as {
 				installed?: Array<{ pluginId?: string; enabled?: boolean; installed?: boolean }>;
@@ -131,9 +138,19 @@ export class CodexPluginInstaller {
 					plugin.enabled === true,
 			);
 		} catch {
-			return false;
+			const text = await this.listText();
+			return text.ok && parseTextPluginList(text.stdout + text.stderr);
 		}
 	}
+}
+
+function parseTextPluginList(output: string): boolean {
+	const pluginId = `${CK_PLUGIN_NAME}@${CK_MARKETPLACE_NAME}`.replace(
+		/[.*+?^${}()|[\]\\]/g,
+		"\\$&",
+	);
+	const row = new RegExp(`^\\s*${pluginId}\\s+.*\\binstalled\\b.*\\benabled\\b`, "im");
+	return row.test(output);
 }
 
 export async function installCodexPlugin(
