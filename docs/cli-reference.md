@@ -612,6 +612,7 @@ Initialize or update ClaudeKit project (with interactive version selection)
 | `-y, --yes` | Non-interactive mode with sensible defaults (kit: engineer, dir: ., version: latest) | — |
 | `--use-git` | Use git clone instead of GitHub API (uses SSH/HTTPS credentials) | — |
 | `--sync` | Sync config files from upstream with interactive hunk-by-hunk merge | — |
+| `--install-mode <mode>` | Engineer global install mode: auto, plugin, or legacy (default: auto) | — |
 | `--archive <path>` | Use local archive file instead of downloading (zip/tar.gz) | — |
 | `--kit-path <path>` | Use local kit directory instead of downloading | — |
 | `--dir <directory>` | Target directory to initialize/update | `.` |
@@ -1075,4 +1076,4 @@ Watch GitHub issues and auto-respond with AI analysis
 - `ck watch --interval 60000` — Poll every 60 seconds instead of default 30s
 
 
-<!-- generated: 2026-06-15T17:47:28.452Z -->
+<!-- generated: 2026-06-30T16:03:20.133Z -->

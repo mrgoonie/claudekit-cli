@@ -45,6 +45,7 @@ export async function resolveOptions(ctx: InitContext): Promise<InitContext> {
 		useGit: parsed.useGit ?? false,
 		archive: parsed.archive,
 		kitPath: parsed.kitPath,
+		installMode: parsed.installMode ?? "auto",
 	};
 
 	// Set global flag for ConfigManager

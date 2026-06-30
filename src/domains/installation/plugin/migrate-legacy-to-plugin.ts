@@ -1,5 +1,14 @@
-import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { createHash } from "node:crypto";
+import {
+	cpSync,
+	existsSync,
+	mkdirSync,
+	readFileSync,
+	readdirSync,
+	rmSync,
+	writeFileSync,
+} from "node:fs";
+import { dirname, join, relative, resolve } from "node:path";
 import {
 	ENGINEER_KIT_KEY,
 	type InstallMode,
@@ -69,20 +78,15 @@ export async function migrateLegacyToPlugin(opts: MigrateOptions): Promise<Migra
 		return base("skipped-cc-unsupported", before.mode, false);
 	}
 
-	// Non-destructive: register marketplace + install + verify. Surface command
-	// failures early (before the destructive step) instead of relying on verify alone.
-	const added = await installer.marketplaceAdd(opts.pluginSourceDir);
-	if (!added.ok) {
+	// Non-destructive: register/refresh marketplace + install/update + verify. Surface
+	// command failures early before removing the legacy copy.
+	const prepared = before.plugin.installed
+		? await refreshExistingPlugin(installer, opts.pluginSourceDir, before.plugin.enabled)
+		: await installPlugin(installer, opts.pluginSourceDir);
+	if (!prepared.ok) {
 		return {
 			...base("install-failed", before.mode, false),
-			error: `marketplace add failed: ${added.stderr.trim()}`,
-		};
-	}
-	const installed = await installer.install("user");
-	if (!installed.ok) {
-		return {
-			...base("install-failed", before.mode, false),
-			error: `plugin install failed: ${installed.stderr.trim()}`,
+			error: prepared.error,
 		};
 	}
 	const verified = await installer.verifyInstalled();
@@ -140,6 +144,7 @@ function base(
 }
 
 const PLUGIN_SUPPLIED_LEGACY_PREFIXES = ["agents/", "skills/"];
+const LEGACY_SENTINEL_FILENAMES = new Set([".gitignore"]);
 
 /**
  * Default legacy remover: backs up and removes ck-owned engineer kit files that
@@ -151,28 +156,192 @@ export function defaultLegacyRemover(claudeDir: string, backupDir: string): stri
 	const files = collectTrackedFiles(meta);
 	const removed: string[] = [];
 	for (const file of files) {
-		if (file.ownership === "user") continue; // never delete user-owned content
-		if (!isPluginSuppliedLegacyPath(file.path)) continue;
-		const abs = join(claudeDir, file.path);
-		if (!existsSync(abs)) continue;
+		const legacyPath = resolveSafePluginSuppliedLegacyPath(claudeDir, file.path);
+		if (!legacyPath) continue;
+		if (!existsSync(legacyPath.absolutePath)) continue;
+		if (!isSafeToRemovePluginSuppliedLegacyFile(file, legacyPath.absolutePath)) continue;
 		// Back up before removing.
-		const backupTarget = join(backupDir, file.path);
-		mkdirSync(dirname(backupTarget), { recursive: true });
-		cpSync(abs, backupTarget, { recursive: true });
-		rmSync(abs, { recursive: true, force: true });
-		removed.push(file.path);
+		if (!backupAndRemove(backupDir, legacyPath.relativePath, legacyPath.absolutePath)) continue;
+		removed.push(legacyPath.relativePath);
+	}
+	removed.push(...removeOrphanLegacySentinels(claudeDir, backupDir, removed));
+	return removed;
+}
+
+function backupAndRemove(backupDir: string, relativePath: string, abs: string): boolean {
+	const backupTarget = resolveSafeChildPath(backupDir, relativePath);
+	if (!backupTarget) return false;
+	mkdirSync(dirname(backupTarget), { recursive: true });
+	cpSync(abs, backupTarget, { recursive: true });
+	rmSync(abs, { recursive: true, force: true });
+	return true;
+}
+
+function removeOrphanLegacySentinels(
+	claudeDir: string,
+	backupDir: string,
+	removedTrackedPaths: string[],
+): string[] {
+	const normalizedRemoved = removedTrackedPaths.map(normalizeLegacyPath);
+	const rootsToSweep = new Set<string>();
+	for (const pathValue of normalizedRemoved) {
+		const [root] = pathValue.split("/");
+		if (root && PLUGIN_SUPPLIED_LEGACY_PREFIXES.includes(`${root}/`)) {
+			rootsToSweep.add(root);
+		}
+	}
+
+	const removed: string[] = [];
+	for (const root of [...rootsToSweep].sort(compareLegacyPaths)) {
+		const rootAbs = join(claudeDir, root);
+		if (!existsSync(rootAbs)) continue;
+		const sentinels = findLegacySentinels(rootAbs).sort((a, b) =>
+			compareLegacyPaths(relative(claudeDir, a), relative(claudeDir, b)),
+		);
+		for (const sentinelAbs of sentinels) {
+			const sentinelPath = normalizeLegacyPath(relative(claudeDir, sentinelAbs));
+			if (!isSafeToRemoveLegacySentinel(sentinelPath, sentinelAbs, normalizedRemoved)) continue;
+			if (!backupAndRemove(backupDir, sentinelPath, sentinelAbs)) continue;
+			removed.push(sentinelPath);
+		}
 	}
 	return removed;
 }
 
+function findLegacySentinels(dir: string): string[] {
+	const out: string[] = [];
+	let entries;
+	try {
+		entries = readdirSync(dir, { withFileTypes: true });
+	} catch {
+		return out;
+	}
+
+	for (const entry of entries.sort((a, b) => compareLegacyPaths(a.name, b.name))) {
+		const abs = join(dir, entry.name);
+		if (entry.isDirectory()) {
+			out.push(...findLegacySentinels(abs));
+		} else if (entry.isFile() && LEGACY_SENTINEL_FILENAMES.has(entry.name)) {
+			out.push(abs);
+		}
+	}
+	return out;
+}
+
+function isSafeToRemoveLegacySentinel(
+	sentinelPath: string,
+	sentinelAbs: string,
+	removedTrackedPaths: string[],
+): boolean {
+	if (!isPluginSuppliedLegacyPath(sentinelPath)) return false;
+	if (!LEGACY_SENTINEL_FILENAMES.has(sentinelPath.split("/").pop() ?? "")) return false;
+
+	const sentinelDir = dirname(sentinelPath).replace(/\\/g, "/");
+	if (!removedTrackedPaths.some((removedPath) => removedPath.startsWith(`${sentinelDir}/`))) {
+		return false;
+	}
+
+	return directoryContainsOnlySentinels(dirname(sentinelAbs));
+}
+
+function directoryContainsOnlySentinels(dir: string): boolean {
+	let entries;
+	try {
+		entries = readdirSync(dir, { withFileTypes: true });
+	} catch {
+		return false;
+	}
+
+	for (const entry of entries) {
+		const abs = join(dir, entry.name);
+		if (entry.isDirectory()) {
+			if (!directoryContainsOnlySentinels(abs)) return false;
+		} else if (!entry.isFile() || !LEGACY_SENTINEL_FILENAMES.has(entry.name)) {
+			return false;
+		}
+	}
+	return true;
+}
+
+function isSafeToRemovePluginSuppliedLegacyFile(file: TrackedFile, abs: string): boolean {
+	if (file.ownership !== "user") {
+		return true;
+	}
+
+	// Offline/local kit installs can lack release-manifest.json, so files are
+	// tracked as user-owned even though the installer just copied them. Remove
+	// only when the tracked checksum still matches disk; edited or untracked
+	// user files stay protected.
+	return checksumMatches(abs, file.checksum);
+}
+
+function checksumMatches(filePath: string, expected?: string): boolean {
+	if (!expected || !/^[a-f0-9]{64}$/i.test(expected)) {
+		return false;
+	}
+	try {
+		const actual = createHash("sha256").update(readFileSync(filePath)).digest("hex");
+		return actual.toLowerCase() === expected.toLowerCase();
+	} catch {
+		return false;
+	}
+}
+
 function isPluginSuppliedLegacyPath(pathValue: string): boolean {
-	const normalized = pathValue.replace(/\\/g, "/").replace(/^\.claude\//, "");
+	const normalized = normalizeLegacyPath(pathValue).replace(/^\.claude\//, "");
 	return PLUGIN_SUPPLIED_LEGACY_PREFIXES.some((prefix) => normalized.startsWith(prefix));
+}
+
+function resolveSafePluginSuppliedLegacyPath(
+	claudeDir: string,
+	pathValue: string,
+): { absolutePath: string; relativePath: string } | null {
+	const normalized = normalizeLegacyPath(pathValue).replace(/^\.\/+/, "");
+	if (!isPluginSuppliedLegacyPath(normalized)) return null;
+	const safe = resolveSafeChildPath(claudeDir, normalized);
+	if (!safe) return null;
+
+	const relativePath = normalizeLegacyPath(relative(resolve(claudeDir), safe));
+	if (!isPluginSuppliedLegacyPath(relativePath)) return null;
+	return { absolutePath: safe, relativePath };
+}
+
+function resolveSafeChildPath(baseDir: string, pathValue: string): string | null {
+	const normalized = normalizeLegacyPath(pathValue);
+	if (!normalized || hasPathTraversal(normalized) || isAbsoluteLike(normalized)) return null;
+
+	const resolvedBase = resolve(baseDir);
+	const resolvedTarget = resolve(resolvedBase, normalized);
+	const relativePath = normalizeLegacyPath(relative(resolvedBase, resolvedTarget));
+	if (!relativePath || relativePath === ".." || relativePath.startsWith("../")) return null;
+	if (isAbsoluteLike(relativePath)) return null;
+	return resolvedTarget;
+}
+
+function hasPathTraversal(pathValue: string): boolean {
+	return pathValue.split("/").some((segment) => segment === "..");
+}
+
+function isAbsoluteLike(pathValue: string): boolean {
+	return pathValue.startsWith("/") || pathValue.startsWith("//") || /^[A-Za-z]:/.test(pathValue);
+}
+
+function normalizeLegacyPath(pathValue: string): string {
+	return pathValue.replace(/\\/g, "/");
+}
+
+function compareLegacyPaths(a: string, b: string): number {
+	const normalizedA = normalizeLegacyPath(a);
+	const normalizedB = normalizeLegacyPath(b);
+	if (normalizedA < normalizedB) return -1;
+	if (normalizedA > normalizedB) return 1;
+	return 0;
 }
 
 interface TrackedFile {
 	path: string;
 	ownership: "ck" | "ck-modified" | "user";
+	checksum?: string;
 }
 
 function collectTrackedFiles(meta: unknown): TrackedFile[] {
@@ -184,7 +353,11 @@ function collectTrackedFiles(meta: unknown): TrackedFile[] {
 			if (isRecord(f) && typeof f.path === "string") {
 				const ownership =
 					f.ownership === "user" || f.ownership === "ck-modified" ? f.ownership : "ck";
-				out.push({ path: f.path, ownership });
+				out.push({
+					path: f.path,
+					ownership,
+					checksum: typeof f.checksum === "string" ? f.checksum : undefined,
+				});
 			}
 		}
 	};
@@ -226,6 +399,56 @@ function readJsonSafe(filePath: string): unknown {
 	} catch {
 		return null;
 	}
+}
+
+interface PluginPrepareResult {
+	ok: boolean;
+	error?: string;
+}
+
+async function installPlugin(
+	installer: PluginInstaller,
+	pluginSourceDir: string,
+): Promise<PluginPrepareResult> {
+	const added = await installer.marketplaceAdd(pluginSourceDir);
+	if (!added.ok) {
+		return { ok: false, error: `marketplace add failed: ${added.stderr.trim()}` };
+	}
+	const installed = await installer.install("user");
+	if (!installed.ok) {
+		return { ok: false, error: `plugin install failed: ${installed.stderr.trim()}` };
+	}
+	return { ok: true };
+}
+
+async function refreshExistingPlugin(
+	installer: PluginInstaller,
+	pluginSourceDir: string,
+	enabled: boolean,
+): Promise<PluginPrepareResult> {
+	const added = await installer.marketplaceAdd(pluginSourceDir);
+	if (!added.ok) {
+		const updatedMarketplace = await installer.marketplaceUpdate();
+		if (!updatedMarketplace.ok) {
+			return {
+				ok: false,
+				error: `marketplace refresh failed: ${updatedMarketplace.stderr.trim() || added.stderr.trim()}`,
+			};
+		}
+	}
+
+	if (!enabled) {
+		const enabledResult = await installer.enable();
+		if (!enabledResult.ok) {
+			return { ok: false, error: `plugin enable failed: ${enabledResult.stderr.trim()}` };
+		}
+	}
+
+	const updated = await installer.update();
+	if (!updated.ok) {
+		return { ok: false, error: `plugin update failed: ${updated.stderr.trim()}` };
+	}
+	return { ok: true };
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

@@ -39,6 +39,10 @@ export const initCommandHelp: CommandHelp = {
 					description: "Sync config files from upstream with interactive hunk-by-hunk merge",
 				},
 				{
+					flags: "--install-mode <mode>",
+					description: "Engineer global install mode: auto, plugin, or legacy (default: auto)",
+				},
+				{
 					flags: "--archive <path>",
 					description: "Use local archive file instead of downloading (zip/tar.gz)",
 				},

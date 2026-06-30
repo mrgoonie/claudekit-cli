@@ -8,8 +8,12 @@ import {
 	stagePluginSource,
 } from "@/commands/init/phases/plugin-install-handler.js";
 import type { InitContext } from "@/commands/init/types.js";
-import type { CodexPluginInstallResult } from "@/domains/installation/plugin/codex-plugin-installer.js";
+import type {
+	CodexPluginInstallResult,
+	RemoveCodexPluginResult,
+} from "@/domains/installation/plugin/codex-plugin-installer.js";
 import type { MigrateResult } from "@/domains/installation/plugin/migrate-legacy-to-plugin.js";
+import type { UninstallPluginResult } from "@/domains/installation/plugin/uninstall-plugin.js";
 
 const okResult: MigrateResult = {
 	action: "installed-fresh",
@@ -22,6 +26,15 @@ const okResult: MigrateResult = {
 const okCodexResult: CodexPluginInstallResult = {
 	action: "installed",
 	pluginVerified: true,
+};
+const failedInstallResult: MigrateResult = {
+	action: "install-failed",
+	modeBefore: "legacy",
+	pluginVerified: false,
+	backupDir: null,
+	removedPaths: [],
+	receiptPath: null,
+	error: "plugin did not verify after install",
 };
 
 describe("handlePluginInstall (init Phase 7.5)", () => {
@@ -48,10 +61,12 @@ describe("handlePluginInstall (init Phase 7.5)", () => {
 		await rm(root, { recursive: true, force: true });
 	});
 
-	function ctxOf(over: Partial<{ kitType: string; global: boolean }> = {}): InitContext {
+	function ctxOf(
+		over: Partial<{ kitType: string; global: boolean; installMode: string }> = {},
+	): InitContext {
 		return {
 			kitType: over.kitType ?? "engineer",
-			options: { global: over.global ?? true },
+			options: { global: over.global ?? true, installMode: over.installMode ?? "auto" },
 			extractDir,
 			claudeDir,
 		} as unknown as InitContext;
@@ -104,6 +119,101 @@ describe("handlePluginInstall (init Phase 7.5)", () => {
 		expect(existsSync(join(stageBase, ".claude", ".codex-plugin", "plugin.json"))).toBe(true);
 		expect(existsSync(join(stageBase, ".claude-plugin", "marketplace.json"))).toBe(true);
 		expect(existsSync(join(stageBase, ".agents", "plugins", "marketplace.json"))).toBe(true);
+	});
+
+	test("explicit plugin mode stages source and installs Claude and Codex plugins", async () => {
+		const calls: string[] = [];
+		const codexCalls: string[] = [];
+		await handlePluginInstall(ctxOf({ installMode: "plugin" }), {
+			migrate: async (o) => {
+				calls.push(o.pluginSourceDir);
+				return okResult;
+			},
+			installCodex: async (o) => {
+				codexCalls.push(o.pluginSourceDir);
+				return okCodexResult;
+			},
+			stageBaseDir: stageBase,
+		});
+
+		expect(calls).toEqual([stageBase]);
+		expect(codexCalls).toEqual([stageBase]);
+	});
+
+	test("explicit plugin mode fails instead of silently keeping legacy when migration fails", async () => {
+		await expect(
+			handlePluginInstall(ctxOf({ installMode: "plugin" }), {
+				migrate: async () => failedInstallResult,
+				installCodex: async () => okCodexResult,
+				stageBaseDir: stageBase,
+			}),
+		).rejects.toThrow("Claude plugin install failed");
+	});
+
+	test("explicit legacy mode removes plugin state and skips plugin migration", async () => {
+		let migrated = false;
+		let codexInstalled = false;
+		const claudeUninstalls: string[] = [];
+		const codexRemovals: string[] = [];
+		const uninstallResult: UninstallPluginResult = {
+			uninstalled: true,
+			staleCacheRemoved: true,
+			pluginStillInstalled: false,
+		};
+		const removeCodexResult: RemoveCodexPluginResult = {
+			removed: true,
+			marketplaceRemoved: true,
+		};
+
+		await handlePluginInstall(ctxOf({ installMode: "legacy" }), {
+			migrate: async () => {
+				migrated = true;
+				return okResult;
+			},
+			installCodex: async () => {
+				codexInstalled = true;
+				return okCodexResult;
+			},
+			uninstallClaudePlugin: async (o) => {
+				claudeUninstalls.push(o?.claudeDir ?? "");
+				return uninstallResult;
+			},
+			removeCodexPlugin: async () => {
+				codexRemovals.push("codex");
+				return removeCodexResult;
+			},
+			stageBaseDir: stageBase,
+		});
+
+		expect(migrated).toBe(false);
+		expect(codexInstalled).toBe(false);
+		expect(claudeUninstalls).toEqual([claudeDir]);
+		expect(codexRemovals).toEqual(["codex"]);
+		expect(existsSync(stageBase)).toBe(false);
+	});
+
+	test("explicit legacy mode fails when Claude plugin cleanup does not verify", async () => {
+		let codexRemoved = false;
+		const uninstallResult: UninstallPluginResult = {
+			uninstalled: true,
+			staleCacheRemoved: false,
+			pluginStillInstalled: true,
+			error: "plugin remains registered after cleanup",
+		};
+
+		await expect(
+			handlePluginInstall(ctxOf({ installMode: "legacy" }), {
+				uninstallClaudePlugin: async () => uninstallResult,
+				removeCodexPlugin: async () => {
+					codexRemoved = true;
+					return { removed: true, marketplaceRemoved: true };
+				},
+				stageBaseDir: stageBase,
+			}),
+		).rejects.toThrow("Claude plugin cleanup failed");
+
+		expect(codexRemoved).toBe(true);
+		expect(existsSync(stageBase)).toBe(false);
 	});
 
 	test("migrate throwing never fails init (legacy copy retained)", async () => {

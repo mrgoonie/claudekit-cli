@@ -41,6 +41,7 @@ export interface ValidatedOptions {
 	useGit: boolean;
 	archive?: string;
 	kitPath?: string;
+	installMode: "auto" | "plugin" | "legacy";
 }
 
 /**

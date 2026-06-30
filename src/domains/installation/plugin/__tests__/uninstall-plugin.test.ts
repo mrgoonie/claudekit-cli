@@ -10,10 +10,11 @@ import {
 } from "@/domains/installation/plugin/plugin-installer.js";
 import { uninstallEnginePlugin } from "@/domains/installation/plugin/uninstall-plugin.js";
 
-function recordingInstaller() {
+function recordingInstaller(onCall?: (args: string[]) => Promise<void> | void) {
 	const calls: string[][] = [];
 	const runner: ClaudeRunner = async (args): Promise<ClaudeRunResult> => {
 		calls.push(args);
+		await onCall?.(args);
 		return { ok: true, stdout: "", stderr: "", code: 0 };
 	};
 	return { installer: new PluginInstaller(runner), calls };
@@ -38,12 +39,18 @@ describe("uninstallEnginePlugin", () => {
 			"utf-8",
 		);
 		await mkdir(join(cacheDir(), "v1"), { recursive: true });
-		const { installer, calls } = recordingInstaller();
+		const { installer, calls } = recordingInstaller(async (args) => {
+			if (args.join(" ") === "plugin uninstall ck") {
+				await writeFile(join(claudeDir, "settings.json"), JSON.stringify({ enabledPlugins: {} }));
+			}
+		});
 
 		const r = await uninstallEnginePlugin({ claudeDir, installer });
 
 		expect(r.uninstalled).toBe(true);
 		expect(r.staleCacheRemoved).toBe(true);
+		expect(r.pluginStillInstalled).toBe(false);
+		expect(r.error).toBeUndefined();
 		expect(calls).toContainEqual(["plugin", "uninstall", "ck"]);
 		expect(calls).toContainEqual(["plugin", "marketplace", "remove", "claudekit"]);
 		expect(existsSync(cacheDir())).toBe(false);
@@ -52,7 +59,12 @@ describe("uninstallEnginePlugin", () => {
 	test("nothing installed: no-op, no claude calls", async () => {
 		const { installer, calls } = recordingInstaller();
 		const r = await uninstallEnginePlugin({ claudeDir, installer });
-		expect(r).toEqual({ uninstalled: false, staleCacheRemoved: false });
+		expect(r).toEqual({
+			uninstalled: false,
+			staleCacheRemoved: false,
+			pluginStillInstalled: false,
+			error: undefined,
+		});
 		expect(calls).toHaveLength(0);
 	});
 
@@ -62,7 +74,23 @@ describe("uninstallEnginePlugin", () => {
 		const r = await uninstallEnginePlugin({ claudeDir, installer });
 		expect(r.uninstalled).toBe(false);
 		expect(r.staleCacheRemoved).toBe(true);
+		expect(r.pluginStillInstalled).toBe(false);
 		expect(calls).toHaveLength(0); // not registered -> no uninstall command
 		expect(existsSync(cacheDir())).toBe(false);
+	});
+
+	test("reports when the plugin remains registered after cleanup commands", async () => {
+		await writeFile(
+			join(claudeDir, "settings.json"),
+			JSON.stringify({ enabledPlugins: { "ck@claudekit": true } }),
+			"utf-8",
+		);
+		const { installer } = recordingInstaller();
+
+		const r = await uninstallEnginePlugin({ claudeDir, installer });
+
+		expect(r.uninstalled).toBe(true);
+		expect(r.pluginStillInstalled).toBe(true);
+		expect(r.error).toContain("plugin remains registered");
 	});
 });

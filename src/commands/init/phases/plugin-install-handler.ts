@@ -3,12 +3,18 @@ import { join } from "node:path";
 import type { InitContext } from "@/commands/init/types.js";
 import {
 	type CodexPluginInstallResult,
+	type RemoveCodexPluginResult,
 	installCodexPlugin,
+	removeCodexPlugin,
 } from "@/domains/installation/plugin/codex-plugin-installer.js";
 import {
 	type MigrateResult,
 	migrateLegacyToPlugin,
 } from "@/domains/installation/plugin/migrate-legacy-to-plugin.js";
+import {
+	type UninstallPluginResult,
+	uninstallEnginePlugin,
+} from "@/domains/installation/plugin/uninstall-plugin.js";
 import { logger } from "@/shared/logger.js";
 import { PathResolver } from "@/shared/path-resolver.js";
 
@@ -19,6 +25,10 @@ export interface PluginInstallDeps {
 	migrate?: typeof migrateLegacyToPlugin;
 	/** Injectable for tests; defaults to the real Codex plugin install flow. */
 	installCodex?: typeof installCodexPlugin;
+	/** Injectable for tests; defaults to the real Claude plugin removal flow. */
+	uninstallClaudePlugin?: typeof uninstallEnginePlugin;
+	/** Injectable for tests; defaults to the real Codex plugin removal flow. */
+	removeCodexPlugin?: typeof removeCodexPlugin;
 	/** Override the staged-source base dir (tests). */
 	stageBaseDir?: string;
 }
@@ -43,12 +53,49 @@ export async function handlePluginInstall(
 
 	const migrate = deps.migrate ?? migrateLegacyToPlugin;
 	const installCodex = deps.installCodex ?? installCodexPlugin;
+	const uninstallClaude = deps.uninstallClaudePlugin ?? uninstallEnginePlugin;
+	const removeCodex = deps.removeCodexPlugin ?? removeCodexPlugin;
+
+	if (ctx.options.installMode === "legacy") {
+		let cleanupError: Error | null = null;
+		try {
+			const result = await uninstallClaude({ claudeDir: ctx.claudeDir });
+			logLegacyPluginCleanup(result);
+			if (result.pluginStillInstalled) {
+				cleanupError = new Error(
+					`Claude plugin cleanup failed for legacy install mode: ${
+						result.error ?? "plugin remains registered"
+					}`,
+				);
+			}
+		} catch (err) {
+			logger.verbose(`Claude plugin cleanup skipped: ${(err as Error).message}`);
+			cleanupError = err as Error;
+		}
+		try {
+			const result = await removeCodex();
+			logCodexPluginCleanup(result);
+		} catch (err) {
+			logger.verbose(`Codex plugin cleanup skipped: ${(err as Error).message}`);
+		}
+		if (cleanupError) {
+			throw cleanupError;
+		}
+		return ctx;
+	}
+
 	try {
 		const pluginSourceDir = stagePluginSource(ctx.extractDir, deps.stageBaseDir);
 		try {
 			const result = await migrate({ pluginSourceDir, claudeDir: ctx.claudeDir });
 			logPluginResult(result);
+			if (ctx.options.installMode === "plugin" && !result.pluginVerified) {
+				throw new Error(`Claude plugin install failed: ${result.error ?? result.action}`);
+			}
 		} catch (err) {
+			if (ctx.options.installMode === "plugin") {
+				throw err;
+			}
 			logger.verbose(
 				`Claude plugin install skipped (legacy copy retained): ${(err as Error).message}`,
 			);
@@ -60,10 +107,21 @@ export async function handlePluginInstall(
 			logger.verbose(`Codex plugin install skipped: ${(err as Error).message}`);
 		}
 	} catch (err) {
+		if (ctx.options.installMode === "plugin") {
+			throw err;
+		}
 		// Never fail init over the plugin path — the legacy copy from handleMerge stands.
 		logger.verbose(`Plugin staging skipped (legacy copy retained): ${(err as Error).message}`);
 	}
 	return ctx;
+}
+
+function logLegacyPluginCleanup(result: UninstallPluginResult): void {
+	if (result.uninstalled || result.staleCacheRemoved) {
+		logger.info("Removed ClaudeKit Engineer plugin state for legacy install mode.");
+	} else {
+		logger.verbose("No ClaudeKit Engineer Claude plugin state found for legacy install mode.");
+	}
 }
 
 /**
@@ -213,5 +271,13 @@ function logCodexPluginResult(result: CodexPluginInstallResult): void {
 		case "install-failed":
 			logger.verbose(`Codex plugin install did not verify. ${result.error ?? ""}`);
 			break;
+	}
+}
+
+function logCodexPluginCleanup(result: RemoveCodexPluginResult): void {
+	if (result.removed || result.marketplaceRemoved) {
+		logger.info("Removed ClaudeKit Engineer Codex plugin state for legacy install mode.");
+	} else {
+		logger.verbose("No ClaudeKit Engineer Codex plugin state found for legacy install mode.");
 	}
 }

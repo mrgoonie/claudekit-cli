@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { createHash } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import { mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -19,9 +20,22 @@ function ok(stdout: string, success = true): ClaudeRunResult {
 	return { ok: success, stdout, stderr: "", code: success ? 0 : 1 };
 }
 
+function sha256(content: string): string {
+	return createHash("sha256").update(content).digest("hex");
+}
+
 /** Fake installer scripted by command; records argv. */
 function fakeInstaller(
-	opts: { claudeAvailable?: boolean; pluginSupported?: boolean; verified?: boolean } = {},
+	opts: {
+		claudeAvailable?: boolean;
+		pluginSupported?: boolean;
+		verified?: boolean;
+		installOk?: boolean;
+		updateOk?: boolean;
+		marketplaceAddOk?: boolean;
+		marketplaceUpdateOk?: boolean;
+		enableOk?: boolean;
+	} = {},
 ) {
 	const calls: string[][] = [];
 	const runner: ClaudeRunner = async (args) => {
@@ -32,6 +46,13 @@ function fakeInstaller(
 			return ok(opts.pluginSupported !== false ? "Manage marketplaces" : "no plugins");
 		if (a === "plugin list")
 			return ok(opts.verified !== false ? "ck@claudekit Status: enabled" : "No plugins installed.");
+		if (a === "plugin marketplace add /src" || a === "plugin marketplace add /staged/kit")
+			return ok("", opts.marketplaceAddOk !== false);
+		if (a === "plugin marketplace update claudekit")
+			return ok("", opts.marketplaceUpdateOk !== false);
+		if (a === "plugin install ck@claudekit --scope user") return ok("", opts.installOk !== false);
+		if (a === "plugin update ck") return ok("", opts.updateOk !== false);
+		if (a === "plugin enable ck") return ok("", opts.enableOk !== false);
 		return ok("");
 	};
 	return { installer: new PluginInstaller(runner), calls };
@@ -140,20 +161,55 @@ describe("migrateLegacyToPlugin (orchestration)", () => {
 		expect(receipt[0].fromMode).toBe("legacy");
 		expect(receipt[0].toMode).toBe("plugin");
 	});
+
+	test("mixed already-installed plugin refreshes plugin and still cleans legacy skills", async () => {
+		await mkdir(join(claudeDir, "skills", "cook"), { recursive: true });
+		await writeFile(join(claudeDir, "skills", "cook", "SKILL.md"), "legacy skill", "utf-8");
+		await writeSettings({ "ck@claudekit": true });
+		await writeMetadata({
+			kits: {
+				engineer: {
+					version: "2.19.0",
+					installedAt: "x",
+					files: [{ path: "skills/cook/SKILL.md", ownership: "ck" }],
+				},
+			},
+		});
+		const { installer, calls } = fakeInstaller({ installOk: false, marketplaceAddOk: false });
+
+		const r = await migrateLegacyToPlugin({
+			pluginSourceDir: "/src",
+			claudeDir,
+			installer,
+			now: TS,
+		});
+
+		expect(r.action).toBe("migrated-from-legacy");
+		expect(r.removedPaths).toEqual(["skills/cook/SKILL.md"]);
+		expect(existsSync(join(claudeDir, "skills", "cook", "SKILL.md"))).toBe(false);
+		expect(calls).toContainEqual(["plugin", "marketplace", "update", "claudekit"]);
+		expect(calls).toContainEqual(["plugin", "update", "ck"]);
+		expect(calls).not.toContainEqual(["plugin", "install", "ck@claudekit", "--scope", "user"]);
+	});
 });
 
 describe("defaultLegacyRemover", () => {
 	let claudeDir: string;
 	let backupDir: string;
+	let extraCleanupPaths: string[];
 	beforeEach(async () => {
 		claudeDir = join(tmpdir(), `ck-rm-${Date.now()}-${Math.round(performance.now())}`);
 		backupDir = join(claudeDir, "backup");
+		extraCleanupPaths = [];
 		await mkdir(join(claudeDir, "skills", "cook"), { recursive: true });
 		await mkdir(join(claudeDir, "skills", "mine"), { recursive: true });
 		await mkdir(backupDir, { recursive: true });
 	});
 	afterEach(async () => {
 		await rm(claudeDir, { recursive: true, force: true });
+		for (const cleanupPath of extraCleanupPaths) {
+			await rm(cleanupPath, { recursive: true, force: true });
+		}
 	});
 
 	test("removes ck-owned files, backs them up, preserves user-owned", async () => {
@@ -187,6 +243,194 @@ describe("defaultLegacyRemover", () => {
 		expect(existsSync(join(claudeDir, "skills", "mine", "SKILL.md"))).toBe(true); // user preserved
 		expect(existsSync(join(backupDir, "skills", "cook", "SKILL.md"))).toBe(true); // backed up
 		expect(existsSync(join(backupDir, "agents", "planner.md"))).toBe(true); // backed up
+	});
+
+	test("removes unmodified plugin-supplied files marked user-owned by manifestless installs", async () => {
+		const skillContent = "offline skill";
+		const agentContent = "offline agent";
+		await writeFile(join(claudeDir, "skills", "cook", "SKILL.md"), skillContent, "utf-8");
+		await mkdir(join(claudeDir, "agents"), { recursive: true });
+		await writeFile(join(claudeDir, "agents", "planner.md"), agentContent, "utf-8");
+		await writeFile(
+			join(claudeDir, "metadata.json"),
+			JSON.stringify({
+				kits: {
+					engineer: {
+						version: "local",
+						installedAt: "x",
+						files: [
+							{
+								path: "skills/cook/SKILL.md",
+								ownership: "user",
+								checksum: sha256(skillContent),
+							},
+							{
+								path: "agents/planner.md",
+								ownership: "user",
+								checksum: sha256(agentContent),
+							},
+						],
+					},
+				},
+			}),
+			"utf-8",
+		);
+
+		const removed = defaultLegacyRemover(claudeDir, backupDir);
+
+		expect(removed).toEqual(["skills/cook/SKILL.md", "agents/planner.md"]);
+		expect(existsSync(join(claudeDir, "skills", "cook", "SKILL.md"))).toBe(false);
+		expect(existsSync(join(claudeDir, "agents", "planner.md"))).toBe(false);
+		expect(existsSync(join(backupDir, "skills", "cook", "SKILL.md"))).toBe(true);
+		expect(existsSync(join(backupDir, "agents", "planner.md"))).toBe(true);
+	});
+
+	test("removes orphaned legacy sentinels after plugin-supplied files are removed", async () => {
+		await mkdir(join(claudeDir, "skills", "cook", "scripts"), { recursive: true });
+		await writeFile(join(claudeDir, "skills", ".gitignore"), "sentinel", "utf-8");
+		await writeFile(
+			join(claudeDir, "skills", "cook", "scripts", ".gitignore"),
+			"sentinel",
+			"utf-8",
+		);
+		await writeFile(join(claudeDir, "skills", "cook", "SKILL.md"), "ck skill", "utf-8");
+		await writeFile(join(claudeDir, "skills", "cook", "scripts", "tool.js"), "tool", "utf-8");
+		await writeFile(
+			join(claudeDir, "metadata.json"),
+			JSON.stringify({
+				kits: {
+					engineer: {
+						version: "2.19.0",
+						installedAt: "x",
+						files: [
+							{ path: "skills/cook/SKILL.md", ownership: "ck" },
+							{ path: "skills/cook/scripts/tool.js", ownership: "ck" },
+						],
+					},
+				},
+			}),
+			"utf-8",
+		);
+
+		const removed = defaultLegacyRemover(claudeDir, backupDir);
+
+		expect(removed).toEqual([
+			"skills/cook/SKILL.md",
+			"skills/cook/scripts/tool.js",
+			"skills/.gitignore",
+			"skills/cook/scripts/.gitignore",
+		]);
+		expect(existsSync(join(claudeDir, "skills", ".gitignore"))).toBe(false);
+		expect(existsSync(join(claudeDir, "skills", "cook", "scripts", ".gitignore"))).toBe(false);
+		expect(existsSync(join(backupDir, "skills", ".gitignore"))).toBe(true);
+		expect(existsSync(join(backupDir, "skills", "cook", "scripts", ".gitignore"))).toBe(true);
+	});
+
+	test("preserves legacy sentinels when user content remains in the same subtree", async () => {
+		await writeFile(join(claudeDir, "skills", ".gitignore"), "sentinel", "utf-8");
+		await writeFile(join(claudeDir, "skills", "cook", "SKILL.md"), "ck skill", "utf-8");
+		await writeFile(join(claudeDir, "skills", "mine", "SKILL.md"), "user skill", "utf-8");
+		await writeFile(
+			join(claudeDir, "metadata.json"),
+			JSON.stringify({
+				kits: {
+					engineer: {
+						version: "2.19.0",
+						installedAt: "x",
+						files: [
+							{ path: "skills/cook/SKILL.md", ownership: "ck" },
+							{ path: "skills/mine/SKILL.md", ownership: "user" },
+						],
+					},
+				},
+			}),
+			"utf-8",
+		);
+
+		const removed = defaultLegacyRemover(claudeDir, backupDir);
+
+		expect(removed).toEqual(["skills/cook/SKILL.md"]);
+		expect(existsSync(join(claudeDir, "skills", ".gitignore"))).toBe(true);
+		expect(existsSync(join(claudeDir, "skills", "mine", "SKILL.md"))).toBe(true);
+		expect(existsSync(join(backupDir, "skills", ".gitignore"))).toBe(false);
+	});
+
+	test("preserves modified user-owned plugin-supplied files", async () => {
+		await writeFile(join(claudeDir, "skills", "cook", "SKILL.md"), "edited skill", "utf-8");
+		await writeFile(
+			join(claudeDir, "metadata.json"),
+			JSON.stringify({
+				kits: {
+					engineer: {
+						version: "local",
+						installedAt: "x",
+						files: [
+							{
+								path: "skills/cook/SKILL.md",
+								ownership: "user",
+								checksum: sha256("original skill"),
+							},
+						],
+					},
+				},
+			}),
+			"utf-8",
+		);
+
+		const removed = defaultLegacyRemover(claudeDir, backupDir);
+
+		expect(removed).toEqual([]);
+		expect(existsSync(join(claudeDir, "skills", "cook", "SKILL.md"))).toBe(true);
+		expect(existsSync(join(backupDir, "skills", "cook", "SKILL.md"))).toBe(false);
+	});
+
+	test("does not remove metadata paths that escape the Claude directory", async () => {
+		const outsideName = `ck-outside-${Date.now()}-${Math.round(performance.now())}.txt`;
+		const outsidePath = join(claudeDir, "..", outsideName);
+		extraCleanupPaths.push(outsidePath);
+		await writeFile(outsidePath, "outside", "utf-8");
+		await writeFile(
+			join(claudeDir, "metadata.json"),
+			JSON.stringify({
+				kits: {
+					engineer: {
+						version: "2.19.0",
+						installedAt: "x",
+						files: [{ path: `skills/../../${outsideName}`, ownership: "ck" }],
+					},
+				},
+			}),
+			"utf-8",
+		);
+
+		const removed = defaultLegacyRemover(claudeDir, backupDir);
+
+		expect(removed).toEqual([]);
+		expect(existsSync(outsidePath)).toBe(true);
+		expect(existsSync(join(backupDir, outsideName))).toBe(false);
+	});
+
+	test("does not remove paths that resolve outside plugin-supplied legacy roots", async () => {
+		await writeFile(join(claudeDir, "settings.json"), "settings", "utf-8");
+		await writeFile(
+			join(claudeDir, "metadata.json"),
+			JSON.stringify({
+				kits: {
+					engineer: {
+						version: "2.19.0",
+						installedAt: "x",
+						files: [{ path: "skills/../settings.json", ownership: "ck" }],
+					},
+				},
+			}),
+			"utf-8",
+		);
+
+		const removed = defaultLegacyRemover(claudeDir, backupDir);
+
+		expect(removed).toEqual([]);
+		expect(existsSync(join(claudeDir, "settings.json"))).toBe(true);
+		expect(existsSync(join(backupDir, "settings.json"))).toBe(false);
 	});
 
 	test("preserves runtime files that the plugin format does not supply yet", async () => {

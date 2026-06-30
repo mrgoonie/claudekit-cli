@@ -116,6 +116,10 @@ export function registerCommands(cli: ReturnType<typeof cac>): void {
 		.option("--plans-dir <name>", "Custom plans folder name (default: plans)")
 		.option("-y, --yes", "Non-interactive mode with sensible defaults (skip all prompts)")
 		.option("--sync", "Sync config files from upstream with interactive hunk-by-hunk merge")
+		.option(
+			"--install-mode <mode>",
+			"Engineer global install mode: auto, plugin, or legacy (default: auto)",
+		)
 		.option("--use-git", "Use git clone instead of GitHub API (uses SSH/HTTPS credentials)")
 		.option("--archive <path>", "Use local archive file instead of downloading (zip/tar.gz)")
 		.option("--kit-path <path>", "Use local kit directory instead of downloading")

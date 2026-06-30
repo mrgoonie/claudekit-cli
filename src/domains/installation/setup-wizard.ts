@@ -1,6 +1,10 @@
 import { join } from "node:path";
 import { generateEnvFile } from "@/domains/config/config-generator.js";
-import { VALIDATION_PATTERNS, validateApiKey } from "@/domains/config/config-validator.js";
+import {
+	VALIDATION_PATTERNS,
+	normalizeApiKeyInput,
+	validateApiKey,
+} from "@/domains/config/config-validator.js";
 import { logger } from "@/shared/logger.js";
 import { PathResolver } from "@/shared/path-resolver.js";
 import * as clack from "@clack/prompts";
@@ -238,7 +242,8 @@ async function parseEnvFile(path: string): Promise<Record<string, string>> {
 					value = value.slice(1, -1);
 				}
 				// Trim final value to handle whitespace-only values like `KEY=" "`
-				env[key.trim()] = value.trim();
+				const normalizedKey = key.trim();
+				env[normalizedKey] = normalizeParsedEnvValue(normalizedKey, value);
 			}
 		}
 
@@ -247,6 +252,19 @@ async function parseEnvFile(path: string): Promise<Record<string, string>> {
 		logger.debug(`Failed to parse .env file at ${path}: ${error}`);
 		return {};
 	}
+}
+
+function normalizeParsedEnvValue(key: string, value: string): string {
+	const trimmed = value.trim();
+	if (
+		key === "GEMINI_API_KEY" ||
+		key.startsWith("GEMINI_API_KEY_") ||
+		key === "OPENROUTER_API_KEY" ||
+		key === "MINIMAX_API_KEY"
+	) {
+		return normalizeApiKeyInput(trimmed);
+	}
+	return trimmed;
 }
 
 /**
@@ -343,8 +361,9 @@ export async function runSetupWizard(options: SetupWizardOptions): Promise<boole
 		}
 
 		// Type guard: after isCancel check, result is string
-		if (typeof result === "string" && result) {
-			values[config.key] = result;
+		if (typeof result === "string") {
+			const normalized = normalizeApiKeyInput(result);
+			if (normalized) values[config.key] = normalized;
 		}
 	}
 
@@ -451,7 +470,7 @@ async function promptForAdditionalGeminiKeys(primaryKey: string): Promise<string
 				// Empty = done adding keys
 				if (!value) return;
 				// Trim whitespace (handles copy-paste issues)
-				const trimmed = value.trim();
+				const trimmed = normalizeApiKeyInput(value);
 				if (!trimmed) return;
 				// Validate format
 				if (!validateApiKey(trimmed, VALIDATION_PATTERNS.GEMINI_API_KEY)) {
@@ -471,13 +490,13 @@ async function promptForAdditionalGeminiKeys(primaryKey: string): Promise<string
 		}
 
 		// Empty string means done
-		if (!result || result.trim() === "") {
+		const normalized = typeof result === "string" ? normalizeApiKeyInput(result) : "";
+		if (!normalized) {
 			break;
 		}
 
-		const trimmedKey = result.trim();
-		additionalKeys.push(trimmedKey);
-		allKeys.add(trimmedKey);
+		additionalKeys.push(normalized);
+		allKeys.add(normalized);
 		keyNumber++;
 	}
 
