@@ -108,11 +108,11 @@ export class PluginInstaller {
 	}
 
 	async enable(): Promise<ClaudeRunResult> {
-		return this.run(["plugin", "enable", CK_PLUGIN_NAME], this.opts());
+		return this.run(["plugin", "enable", `${CK_PLUGIN_NAME}@${CK_MARKETPLACE_NAME}`], this.opts());
 	}
 
 	async update(): Promise<ClaudeRunResult> {
-		return this.run(["plugin", "update", CK_PLUGIN_NAME], this.opts());
+		return this.run(["plugin", "update", `${CK_PLUGIN_NAME}@${CK_MARKETPLACE_NAME}`], this.opts());
 	}
 
 	async uninstall(): Promise<ClaudeRunResult> {

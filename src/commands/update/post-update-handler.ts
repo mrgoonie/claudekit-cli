@@ -17,19 +17,29 @@ import {
 	repairLegacyHookPrompts,
 	repairMissingHookFileReferences,
 } from "@/domains/health-checks/checkers/hook-health-checker.js";
-import { shouldRefreshCodexPlugin } from "@/domains/installation/plugin/codex-plugin-installer.js";
+import {
+	type CodexPluginStateOptions,
+	shouldRefreshCodexPlugin,
+} from "@/domains/installation/plugin/codex-plugin-installer.js";
 import {
 	type InstallModeReport,
 	detectInstallMode,
 	hasTrackedPluginSuppliedLegacyFiles,
 } from "@/domains/installation/plugin/install-mode-detector.js";
+import { resolveInstallModePreferenceForUpdate } from "@/domains/installation/plugin/install-mode-preference.js";
 import { getInstalledKits } from "@/domains/migration/metadata-migration.js";
 import { versionsMatch } from "@/domains/versioning/checking/version-utils.js";
 import { getClaudeKitSetup } from "@/services/file-operations/claudekit-scanner.js";
 import { parseJsonContent } from "@/shared/json-content.js";
 import { logger } from "@/shared/logger.js";
 import { confirm, isCancel, log, spinner } from "@/shared/safe-prompts.js";
-import { AVAILABLE_KITS, type KitType, type Metadata, MetadataSchema } from "@/types";
+import {
+	AVAILABLE_KITS,
+	type InstallModePreference,
+	type KitType,
+	type Metadata,
+	MetadataSchema,
+} from "@/types";
 import type { MigrateScopeConfig } from "@/types/ck-config.js";
 import { pathExists, readFile } from "fs-extra";
 import { renderCodexSyncNotice, shouldShowCodexSyncNotice } from "./codex-sync-notice.js";
@@ -72,6 +82,13 @@ interface ManagedHooksManifest {
 
 interface HookRegistrationStatus {
 	hasCorrectScope: boolean;
+}
+
+class StrictPluginUpdateError extends Error {
+	constructor(message: string) {
+		super(message);
+		this.name = "StrictPluginUpdateError";
+	}
 }
 
 // ─── Kit selection ────────────────────────────────────────────────────────────
@@ -280,12 +297,14 @@ export function buildInitCommand(
 	beta?: boolean,
 	yes?: boolean,
 	restoreCkHooks?: boolean,
+	installMode?: InstallModePreference,
 ): string {
 	const parts = ["ck init"];
 	if (isGlobal) parts.push("-g");
 	if (kit) parts.push(`--kit ${kit}`);
 	if (yes) parts.push("--yes");
 	if (restoreCkHooks) parts.push("--restore-ck-hooks");
+	if (installMode && isGlobal && kit === "engineer") parts.push(`--install-mode ${installMode}`);
 	parts.push("--install-skills");
 	if (beta) parts.push("--beta");
 	return parts.join(" ");
@@ -375,7 +394,7 @@ export interface PromptKitUpdateDeps {
 	countMissingHookFileReferencesFn?: (projectDir: string) => Promise<number>;
 	detectInstallModeFn?: (claudeDir: string) => InstallModeReport;
 	hasTrackedPluginSuppliedLegacyFilesFn?: (claudeDir: string) => boolean;
-	shouldRefreshCodexPluginFn?: () => Promise<boolean>;
+	shouldRefreshCodexPluginFn?: (options?: CodexPluginStateOptions) => Promise<boolean>;
 }
 
 async function findMissingHookDependencies(claudeDir: string): Promise<string[]> {
@@ -432,7 +451,9 @@ export async function promptKitUpdate(
 		const detectInstallModeFn = deps?.detectInstallModeFn ?? detectInstallMode;
 		const hasTrackedPluginSuppliedLegacyFilesFn =
 			deps?.hasTrackedPluginSuppliedLegacyFilesFn ?? hasTrackedPluginSuppliedLegacyFiles;
-		const shouldRefreshCodexPluginFn = deps?.shouldRefreshCodexPluginFn ?? shouldRefreshCodexPlugin;
+		const shouldRefreshCodexPluginFn =
+			deps?.shouldRefreshCodexPluginFn ??
+			((options?: CodexPluginStateOptions) => shouldRefreshCodexPlugin(undefined, options));
 		const setup = await getSetupFn();
 		const hasLocal = !!setup.project.metadata;
 		const hasGlobal = !!setup.global.metadata;
@@ -496,6 +517,14 @@ export async function promptKitUpdate(
 			}
 		}
 
+		let kitVersion = selection.kit
+			? selection.isGlobal
+				? globalMetadata?.kits?.[selection.kit]?.version
+				: localMetadata?.kits?.[selection.kit]?.version
+			: undefined;
+		let installModePreference: InstallModePreference | undefined = selection.isGlobal
+			? resolveInstallModePreferenceForUpdate(globalMetadata, selection.kit)
+			: undefined;
 		const selectedClaudeDir = selection.isGlobal ? setup.global.path : setup.project.path;
 		if (selectedClaudeDir) {
 			try {
@@ -541,19 +570,31 @@ export async function promptKitUpdate(
 			try {
 				if (selection.isGlobal && selection.kit === "engineer") {
 					const installMode = detectInstallModeFn(selectedClaudeDir);
-					const needsPluginMigration =
-						installMode.mode === "legacy" ||
-						(installMode.mode === "mixed" &&
-							hasTrackedPluginSuppliedLegacyFilesFn(selectedClaudeDir));
-					if (needsPluginMigration) {
-						logger.warning(
-							`Detected ${installMode.mode} global Engineer install; migrating to plugin format`,
-						);
-						forceKitReinstall = true;
+					if (installModePreference === "legacy") {
+						if (installMode.plugin.installed || installMode.plugin.staleCache) {
+							logger.warning(
+								"Detected plugin state for legacy global Engineer preference; reinstalling legacy mode",
+							);
+							forceKitReinstall = true;
+						}
+					} else {
+						const needsPluginMigration =
+							installMode.mode === "legacy" ||
+							(installMode.mode === "mixed" &&
+								hasTrackedPluginSuppliedLegacyFilesFn(selectedClaudeDir));
+						if (needsPluginMigration) {
+							logger.warning(
+								`Detected ${installMode.mode} global Engineer install; migrating to plugin format`,
+							);
+							forceKitReinstall = true;
+						}
 					}
-					if (await shouldRefreshCodexPluginFn()) {
+					if (
+						installModePreference !== "legacy" &&
+						(await shouldRefreshCodexPluginFn({ expectedVersion: kitVersion }))
+					) {
 						logger.warning(
-							"Detected missing Codex ClaudeKit plugin; reinstalling global Engineer content",
+							"Detected Codex ClaudeKit plugin state requiring refresh; reinstalling global Engineer content",
 						);
 						forceKitReinstall = true;
 					}
@@ -567,11 +608,6 @@ export async function promptKitUpdate(
 			}
 		}
 
-		let kitVersion = selection.kit
-			? selection.isGlobal
-				? globalMetadata?.kits?.[selection.kit]?.version
-				: localMetadata?.kits?.[selection.kit]?.version
-			: undefined;
 		const isBetaInstalled = isBetaVersion(kitVersion);
 
 		const promptMessage = selection.promptMessage;
@@ -636,6 +672,7 @@ export async function promptKitUpdate(
 							}?`,
 						};
 						kitVersion = selection.kit ? localMetadata?.kits?.[selection.kit]?.version : undefined;
+						installModePreference = undefined;
 					}
 				}
 			} catch (error) {
@@ -687,6 +724,7 @@ export async function promptKitUpdate(
 				useBeta,
 				true,
 				forceKitReinstall,
+				installModePreference,
 			);
 			logger.info(`Running: ${initCmd}`);
 			const s = (deps?.spinnerFn ?? spinner)();
@@ -716,6 +754,9 @@ export async function promptKitUpdate(
 			} catch (error) {
 				s.stop("Kit update finished");
 				const errorMsg = error instanceof Error ? error.message : "unknown";
+				if (installModePreference === "plugin") {
+					throw new StrictPluginUpdateError(`Strict plugin kit update failed: ${errorMsg}`);
+				}
 				if (errorMsg.includes("exit code") && !errorMsg.includes("exit code 0")) {
 					logger.warning("Kit content update may have encountered issues");
 					logger.verbose(`Error: ${errorMsg}`);
@@ -727,7 +768,9 @@ export async function promptKitUpdate(
 			// Interactive: spawn ck init with inherited stdio
 			const args = ["init"];
 			if (selection.isGlobal) args.push("-g");
+			if (selection.kit) args.push("--kit", selection.kit);
 			if (forceKitReinstall) args.push("--restore-ck-hooks");
+			if (installModePreference) args.push("--install-mode", installModePreference);
 			args.push("--install-skills");
 			if (useBeta) args.push("--beta");
 
@@ -749,10 +792,16 @@ export async function promptKitUpdate(
 
 			const exitCode = await spawnFn(args);
 			if (exitCode !== 0) {
+				if (installModePreference === "plugin") {
+					throw new StrictPluginUpdateError(
+						`Strict plugin kit update failed with exit code ${exitCode}`,
+					);
+				}
 				logger.warning("Kit content update may have encountered issues");
 			}
 		}
 	} catch (error) {
+		if (error instanceof StrictPluginUpdateError) throw error;
 		// Non-fatal: log warning and continue
 		logger.verbose(
 			`Failed to prompt for kit update: ${error instanceof Error ? error.message : "unknown error"}`,

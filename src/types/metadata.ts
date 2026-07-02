@@ -7,6 +7,8 @@ import { KitType } from "./kit.js";
 
 // File ownership tracking types
 export type FileOwnership = "ck" | "user" | "ck-modified";
+export const InstallModePreferenceSchema = z.enum(["auto", "plugin", "legacy"]);
+export type InstallModePreference = z.infer<typeof InstallModePreferenceSchema>;
 
 export interface TrackedFile {
 	path: string; // Relative to .claude directory
@@ -51,6 +53,8 @@ export const KitMetadataSchema = z.object({
 	files: z.array(TrackedFileSchema).optional(),
 	// Skill roots intentionally removed by the user and skipped on future updates.
 	ignoredSkills: z.array(z.string()).optional(),
+	// User-selected global Engineer install shape. Missing means older metadata; update treats it as auto.
+	installModePreference: InstallModePreferenceSchema.optional(),
 	// Sync feature fields
 	lastUpdateCheck: z.string().optional(), // ISO timestamp of last update check
 	dismissedVersion: z.string().optional(), // Version user dismissed (don't nag)

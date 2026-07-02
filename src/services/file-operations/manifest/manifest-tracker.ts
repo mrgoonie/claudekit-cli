@@ -6,7 +6,7 @@ import {
 import { getOptimalConcurrency } from "@/shared/environment.js";
 import { logger } from "@/shared/logger.js";
 import { createSpinner } from "@/shared/safe-spinner.js";
-import type { FileOwnership, KitType, TrackedFile } from "@/types";
+import type { FileOwnership, InstallModePreference, KitType, TrackedFile } from "@/types";
 import pLimit from "p-limit";
 import { OwnershipChecker } from "../ownership-checker.js";
 import { writeManifest } from "./manifest-updater.js";
@@ -248,6 +248,8 @@ export interface WriteManifestOptions {
 	kitType?: KitType;
 	/** Skill roots intentionally skipped because the user removed them */
 	ignoredSkills?: string[];
+	/** Persisted Engineer global install shape preference. */
+	installModePreference?: InstallModePreference;
 }
 
 /**
@@ -330,6 +332,7 @@ export async function trackFilesWithProgress(
 		tracker.getTrackedFiles(),
 		tracker.getUserConfigFiles(),
 		manifestOptions.ignoredSkills,
+		manifestOptions.installModePreference,
 	);
 
 	return trackResult;

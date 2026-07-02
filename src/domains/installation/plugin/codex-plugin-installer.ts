@@ -4,6 +4,7 @@ import {
 	CK_MARKETPLACE_NAME,
 	CK_PLUGIN_NAME,
 } from "@/domains/installation/plugin/install-mode-detector.js";
+import { versionsMatch } from "@/domains/versioning/checking/version-utils.js";
 
 const execFileAsync = promisify(execFile);
 const DEFAULT_TIMEOUT_MS = 120_000;
@@ -97,6 +98,37 @@ function isSpawnResolutionError(err: unknown): boolean {
 
 export type CodexPluginInstallAction = "installed" | "skipped-codex-unsupported" | "install-failed";
 
+export type CodexPluginStatus =
+	| "codex-unavailable"
+	| "plugins-unsupported"
+	| "missing"
+	| "disabled"
+	| "installed-current"
+	| "installed-stale-version"
+	| "installed-stale-source"
+	| "unknown";
+
+export interface CodexPluginStateOptions {
+	expectedVersion?: string | null;
+	expectedMarketplace?: string | null;
+	expectedSource?: string | null;
+}
+
+export interface CodexPluginState {
+	status: CodexPluginStatus;
+	pluginId: string;
+	enabled: boolean;
+	installed: boolean;
+	installedVersion: string | null;
+	expectedVersion: string | null;
+	marketplace: string | null;
+	expectedMarketplace: string | null;
+	source: string | null;
+	expectedSource: string | null;
+	shouldRefresh: boolean;
+	error?: string;
+}
+
 export interface CodexPluginInstallResult {
 	action: CodexPluginInstallAction;
 	pluginVerified: boolean;
@@ -106,6 +138,8 @@ export interface CodexPluginInstallResult {
 export interface RemoveCodexPluginResult {
 	removed: boolean;
 	marketplaceRemoved: boolean;
+	pluginStillInstalled?: boolean;
+	error?: string;
 }
 
 export interface InstallCodexPluginOptions {
@@ -159,35 +193,199 @@ export class CodexPluginInstaller {
 	}
 
 	async verifyInstalled(): Promise<boolean> {
-		const r = await this.listJson();
-		if (!r.ok) {
-			const text = await this.listText();
-			return text.ok && parseTextPluginList(text.stdout + text.stderr);
-		}
-		try {
-			const parsed = JSON.parse(r.stdout) as {
-				installed?: Array<{ pluginId?: string; enabled?: boolean; installed?: boolean }>;
-			};
-			return (parsed.installed ?? []).some(
-				(plugin) =>
-					plugin.pluginId === `${CK_PLUGIN_NAME}@${CK_MARKETPLACE_NAME}` &&
-					plugin.installed === true &&
-					plugin.enabled === true,
-			);
-		} catch {
-			const text = await this.listText();
-			return text.ok && parseTextPluginList(text.stdout + text.stderr);
-		}
+		const state = await detectCodexPluginListState(this);
+		return (
+			state.status === "installed-current" ||
+			state.status === "installed-stale-version" ||
+			state.status === "installed-stale-source"
+		);
 	}
 }
 
-function parseTextPluginList(output: string): boolean {
+interface CodexPluginListEntry {
+	pluginId: string | null;
+	installed: boolean;
+	enabled: boolean;
+	version: string | null;
+	marketplace: string | null;
+	source: string | null;
+}
+
+function createState(
+	status: CodexPluginStatus,
+	entry: CodexPluginListEntry | null,
+	options: CodexPluginStateOptions = {},
+	error?: string,
+): CodexPluginState {
+	const pluginId = `${CK_PLUGIN_NAME}@${CK_MARKETPLACE_NAME}`;
+	return {
+		status,
+		pluginId,
+		enabled: entry?.enabled ?? false,
+		installed: entry?.installed ?? false,
+		installedVersion: entry?.version ?? null,
+		expectedVersion: options.expectedVersion ?? null,
+		marketplace: entry?.marketplace ?? null,
+		expectedMarketplace: options.expectedMarketplace ?? CK_MARKETPLACE_NAME,
+		source: entry?.source ?? null,
+		expectedSource: options.expectedSource ?? null,
+		shouldRefresh:
+			status === "missing" ||
+			status === "disabled" ||
+			status === "installed-stale-version" ||
+			status === "installed-stale-source",
+		...(error ? { error } : {}),
+	};
+}
+
+function classifyCodexPluginEntry(
+	entry: CodexPluginListEntry | null,
+	options: CodexPluginStateOptions = {},
+): CodexPluginState {
+	if (!entry) return createState("missing", null, options);
+	if (!entry.enabled || !entry.installed) return createState("disabled", entry, options);
+
+	const expectedMarketplace = options.expectedMarketplace ?? CK_MARKETPLACE_NAME;
+	if (entry.marketplace && entry.marketplace !== expectedMarketplace) {
+		return createState("installed-stale-source", entry, options);
+	}
+	if (options.expectedSource && entry.source && entry.source !== options.expectedSource) {
+		return createState("installed-stale-source", entry, options);
+	}
+	if (
+		options.expectedVersion &&
+		entry.version &&
+		!versionsMatch(entry.version, options.expectedVersion)
+	) {
+		return createState("installed-stale-version", entry, options);
+	}
+
+	return createState("installed-current", entry, options);
+}
+
+function parseTextPluginList(output: string): CodexPluginListEntry | null {
 	const pluginId = `${CK_PLUGIN_NAME}@${CK_MARKETPLACE_NAME}`.replace(
 		/[.*+?^${}()|[\]\\]/g,
 		"\\$&",
 	);
-	const row = new RegExp(`^\\s*${pluginId}\\s+.*\\binstalled\\b.*\\benabled\\b`, "im");
-	return row.test(output);
+	const row = new RegExp(`^\\s*(${pluginId})\\s+(.*)$`, "im").exec(output);
+	if (!row) return null;
+	const details = row[2] ?? "";
+	const versionMatch = details.match(/\b(v?\d+\.\d+\.\d+(?:[-+][^\s]+)?)\b/);
+	return {
+		pluginId: `${CK_PLUGIN_NAME}@${CK_MARKETPLACE_NAME}`,
+		installed: /\binstalled\b/i.test(details),
+		enabled: /\benabled\b/i.test(details) && !/\bdisabled\b/i.test(details),
+		version: versionMatch?.[1] ?? null,
+		marketplace: CK_MARKETPLACE_NAME,
+		source: null,
+	};
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+	return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function stringField(source: Record<string, unknown>, keys: string[]): string | null {
+	for (const key of keys) {
+		const value = source[key];
+		if (typeof value === "string" && value.trim() !== "") return value;
+	}
+	return null;
+}
+
+function sourceField(source: Record<string, unknown>, keys: string[]): string | null {
+	for (const key of keys) {
+		const value = source[key];
+		if (typeof value === "string" && value.trim() !== "") return value;
+		if (isRecord(value)) {
+			const nested = stringField(value, ["path", "sourcePath", "url"]);
+			if (nested) return nested;
+		}
+	}
+	return null;
+}
+
+function booleanField(
+	source: Record<string, unknown>,
+	key: string,
+	defaultValue: boolean,
+): boolean {
+	const value = source[key];
+	return typeof value === "boolean" ? value : defaultValue;
+}
+
+function parseJsonPluginList(output: string): CodexPluginListEntry[] | null {
+	let parsed: unknown;
+	try {
+		parsed = JSON.parse(output);
+	} catch {
+		return null;
+	}
+
+	const rawEntries = Array.isArray(parsed)
+		? parsed
+		: isRecord(parsed)
+			? (parsed.installed ?? parsed.plugins ?? parsed.entries)
+			: null;
+	if (!Array.isArray(rawEntries)) return null;
+
+	return rawEntries.flatMap((entry) => {
+		if (!isRecord(entry)) return [];
+		const pluginId =
+			stringField(entry, ["pluginId", "id"]) ??
+			(stringField(entry, ["name"]) === CK_PLUGIN_NAME
+				? `${CK_PLUGIN_NAME}@${stringField(entry, ["marketplace", "marketplaceName"]) ?? CK_MARKETPLACE_NAME}`
+				: null);
+		if (pluginId !== `${CK_PLUGIN_NAME}@${CK_MARKETPLACE_NAME}`) return [];
+
+		return [
+			{
+				pluginId,
+				installed: booleanField(entry, "installed", true),
+				enabled: booleanField(entry, "enabled", false),
+				version: stringField(entry, ["version", "pluginVersion", "manifestVersion"]),
+				marketplace: stringField(entry, ["marketplace", "marketplaceName"]),
+				source: sourceField(entry, ["source", "path", "sourcePath"]),
+			},
+		];
+	});
+}
+
+export async function detectCodexPluginState(
+	installer: CodexPluginInstaller = new CodexPluginInstaller(),
+	options: CodexPluginStateOptions = {},
+): Promise<CodexPluginState> {
+	if (!(await installer.isCodexAvailable())) {
+		return createState("codex-unavailable", null, options);
+	}
+	if (!(await installer.isPluginSupported())) {
+		return createState("plugins-unsupported", null, options);
+	}
+
+	return detectCodexPluginListState(installer, options);
+}
+
+async function detectCodexPluginListState(
+	installer: CodexPluginInstaller,
+	options: CodexPluginStateOptions = {},
+): Promise<CodexPluginState> {
+	const json = await installer.listJson();
+	if (json.ok) {
+		const entries = parseJsonPluginList(json.stdout);
+		if (entries) return classifyCodexPluginEntry(entries[0] ?? null, options);
+	}
+
+	const text = await installer.listText();
+	if (text.ok)
+		return classifyCodexPluginEntry(parseTextPluginList(text.stdout + text.stderr), options);
+
+	return createState(
+		"unknown",
+		null,
+		options,
+		json.stderr || text.stderr || "codex plugin list failed",
+	);
 }
 
 export async function installCodexPlugin(
@@ -199,12 +397,12 @@ export async function installCodexPlugin(
 		return { action: "skipped-codex-unsupported", pluginVerified: false };
 	}
 
-	const added = await installer.marketplaceAdd(opts.pluginSourceDir);
+	const added = await addOrReplaceMarketplace(installer, opts.pluginSourceDir);
 	if (!added.ok) {
 		return {
 			action: "install-failed",
 			pluginVerified: false,
-			error: `codex marketplace add failed: ${added.stderr.trim()}`,
+			error: added.error,
 		};
 	}
 
@@ -229,6 +427,32 @@ export async function installCodexPlugin(
 	return { action: "installed", pluginVerified: true };
 }
 
+async function addOrReplaceMarketplace(
+	installer: CodexPluginInstaller,
+	pluginSourceDir: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+	const added = await installer.marketplaceAdd(pluginSourceDir);
+	if (added.ok) return { ok: true };
+
+	const error = added.stderr.trim();
+	if (!isReplaceableMarketplaceAddFailure(error)) {
+		return { ok: false, error: `codex marketplace add failed: ${error}` };
+	}
+
+	await installer.marketplaceRemove(CK_MARKETPLACE_NAME);
+	const readded = await installer.marketplaceAdd(pluginSourceDir);
+	if (readded.ok) return { ok: true };
+
+	return {
+		ok: false,
+		error: `codex marketplace refresh failed: ${readded.stderr.trim() || error}`,
+	};
+}
+
+function isReplaceableMarketplaceAddFailure(error: string): boolean {
+	return /\balready\b/i.test(error) && /\bmarketplace\b/i.test(error);
+}
+
 export async function removeCodexPlugin(
 	opts: { installer?: CodexPluginInstaller; codexHome?: string } = {},
 ): Promise<RemoveCodexPluginResult> {
@@ -240,17 +464,20 @@ export async function removeCodexPlugin(
 
 	const removed = await installer.remove();
 	const marketplaceRemoved = await installer.marketplaceRemove();
+	const state = await detectCodexPluginListState(installer);
 	return {
 		removed: removed.ok,
 		marketplaceRemoved: marketplaceRemoved.ok,
+		pluginStillInstalled: state.installed,
+		...(state.installed
+			? { error: `codex plugin still installed after removal (${state.status})` }
+			: {}),
 	};
 }
 
 export async function shouldRefreshCodexPlugin(
 	installer: CodexPluginInstaller = new CodexPluginInstaller(),
+	options: CodexPluginStateOptions = {},
 ): Promise<boolean> {
-	if (!(await installer.isCodexAvailable()) || !(await installer.isPluginSupported())) {
-		return false;
-	}
-	return !(await installer.verifyInstalled());
+	return (await detectCodexPluginState(installer, options)).shouldRefresh;
 }

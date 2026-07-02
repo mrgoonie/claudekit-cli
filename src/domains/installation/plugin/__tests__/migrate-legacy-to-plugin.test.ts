@@ -51,8 +51,8 @@ function fakeInstaller(
 		if (a === "plugin marketplace update claudekit")
 			return ok("", opts.marketplaceUpdateOk !== false);
 		if (a === "plugin install ck@claudekit --scope user") return ok("", opts.installOk !== false);
-		if (a === "plugin update ck") return ok("", opts.updateOk !== false);
-		if (a === "plugin enable ck") return ok("", opts.enableOk !== false);
+		if (a === "plugin update ck@claudekit") return ok("", opts.updateOk !== false);
+		if (a === "plugin enable ck@claudekit") return ok("", opts.enableOk !== false);
 		return ok("");
 	};
 	return { installer: new PluginInstaller(runner), calls };
@@ -142,7 +142,17 @@ describe("migrateLegacyToPlugin (orchestration)", () => {
 	});
 
 	test("legacy -> migrated, remover invoked, backup dir + receipt created", async () => {
-		await writeMetadata({ kits: { engineer: { version: "2.19.0", installedAt: "x", files: [] } } });
+		await mkdir(join(claudeDir, "skills", "cook"), { recursive: true });
+		await writeFile(join(claudeDir, "skills", "cook", "SKILL.md"), "legacy skill", "utf-8");
+		await writeMetadata({
+			kits: {
+				engineer: {
+					version: "2.19.0",
+					installedAt: "x",
+					files: [{ path: "skills/cook/SKILL.md", ownership: "ck" }],
+				},
+			},
+		});
 		const { installer, calls } = fakeInstaller();
 		const r = await migrateLegacyToPlugin({
 			pluginSourceDir: "/staged/kit",
@@ -188,7 +198,7 @@ describe("migrateLegacyToPlugin (orchestration)", () => {
 		expect(r.removedPaths).toEqual(["skills/cook/SKILL.md"]);
 		expect(existsSync(join(claudeDir, "skills", "cook", "SKILL.md"))).toBe(false);
 		expect(calls).toContainEqual(["plugin", "marketplace", "update", "claudekit"]);
-		expect(calls).toContainEqual(["plugin", "update", "ck"]);
+		expect(calls).toContainEqual(["plugin", "update", "ck@claudekit"]);
 		expect(calls).not.toContainEqual(["plugin", "install", "ck@claudekit", "--scope", "user"]);
 	});
 });

@@ -102,6 +102,11 @@ describe("update-cli", () => {
 			);
 		});
 
+		it("includes install mode when preserving global Engineer install intent", () => {
+			const result = (buildInitCommand as any)(true, "engineer", false, true, false, "legacy");
+			expect(result).toBe("ck init -g --kit engineer --yes --install-mode legacy --install-skills");
+		});
+
 		it("does not include --beta flag when beta is false", () => {
 			const result = buildInitCommand(false, "engineer", false);
 			expect(result).toBe("ck init --kit engineer --install-skills");

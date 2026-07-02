@@ -3,6 +3,21 @@ import { mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { PluginInstallModeChecker } from "@/domains/health-checks/plugin-install-mode-checker.js";
+import type { CodexPluginState } from "@/domains/installation/plugin/codex-plugin-installer.js";
+
+const codexUnavailable: CodexPluginState = {
+	status: "codex-unavailable",
+	pluginId: "ck@claudekit",
+	enabled: false,
+	installed: false,
+	installedVersion: null,
+	expectedVersion: null,
+	marketplace: null,
+	expectedMarketplace: "claudekit",
+	source: null,
+	expectedSource: null,
+	shouldRefresh: false,
+};
 
 describe("PluginInstallModeChecker", () => {
 	let claudeDir: string;
@@ -21,8 +36,10 @@ describe("PluginInstallModeChecker", () => {
 	const writeMetadata = (obj: unknown) =>
 		writeFile(join(claudeDir, "metadata.json"), JSON.stringify(obj), "utf-8");
 
-	async function single() {
-		const results = await new PluginInstallModeChecker(claudeDir).run();
+	async function single(codexState: CodexPluginState = codexUnavailable) {
+		const results = await new PluginInstallModeChecker(claudeDir, {
+			detectCodexPluginState: async () => codexState,
+		}).run();
 		expect(results).toHaveLength(1);
 		return results[0];
 	}
@@ -36,11 +53,35 @@ describe("PluginInstallModeChecker", () => {
 	});
 
 	test("legacy -> pass with version", async () => {
-		await writeMetadata({ kits: { engineer: { version: "2.19.0", installedAt: "x" } } });
+		await mkdir(join(claudeDir, "skills", "cook"), { recursive: true });
+		await writeFile(join(claudeDir, "skills", "cook", "SKILL.md"), "# cook\n", "utf-8");
+		await writeMetadata({
+			kits: {
+				engineer: {
+					version: "2.19.0",
+					installedAt: "x",
+					files: [{ path: "skills/cook/SKILL.md", ownership: "ck" }],
+				},
+			},
+		});
 		const r = await single();
 		expect(r.status).toBe("pass");
 		expect(r.message).toContain("legacy");
 		expect(r.message).toContain("2.19.0");
+	});
+
+	test("reports persisted install mode preference", async () => {
+		await writeMetadata({
+			kits: {
+				engineer: {
+					version: "2.19.0",
+					installedAt: "x",
+					installModePreference: "legacy",
+				},
+			},
+		});
+		const r = await single();
+		expect(r.message).toContain("preference: legacy");
 	});
 
 	test("plugin enabled -> pass", async () => {
@@ -59,11 +100,91 @@ describe("PluginInstallModeChecker", () => {
 	});
 
 	test("mixed -> warn with migrate hint", async () => {
-		await writeMetadata({ kits: { engineer: { version: "2.19.0", installedAt: "x" } } });
+		await mkdir(join(claudeDir, "skills", "cook"), { recursive: true });
+		await writeFile(join(claudeDir, "skills", "cook", "SKILL.md"), "# cook\n", "utf-8");
+		await writeMetadata({
+			kits: {
+				engineer: {
+					version: "2.19.0",
+					installedAt: "x",
+					files: [{ path: "skills/cook/SKILL.md", ownership: "ck" }],
+				},
+			},
+		});
 		await writeSettings({ "ck@claudekit": true });
 		const r = await single();
 		expect(r.status).toBe("warn");
 		expect(r.message).toContain("mixed");
 		expect(r.message).toContain("ck update");
+	});
+
+	test("warns when Codex plugin is stale while preference is plugin-capable", async () => {
+		await writeSettings({ "ck@claudekit": true });
+
+		const r = await single({
+			...codexUnavailable,
+			status: "installed-stale-version",
+			installed: true,
+			enabled: true,
+			installedVersion: "2.20.1-beta.6",
+			expectedVersion: "2.20.1-beta.7",
+			shouldRefresh: true,
+		});
+
+		expect(r.status).toBe("warn");
+		expect(r.message).toContain("Codex plugin requires refresh");
+		expect(r.message).toContain("Codex plugin: installed-stale-version, 2.20.1-beta.6");
+	});
+
+	test("passes expected kit version and source to Codex state detection", async () => {
+		await writeSettings({ "ck@claudekit": true });
+		await writeMetadata({
+			kits: {
+				engineer: {
+					version: "2.20.1-beta.7",
+					installedAt: "x",
+					installModePreference: "plugin",
+				},
+			},
+		});
+
+		const seen: unknown[] = [];
+		const results = await new PluginInstallModeChecker(claudeDir, {
+			detectCodexPluginState: async (options) => {
+				seen.push(options);
+				return codexUnavailable;
+			},
+		}).run();
+
+		expect(results[0].status).toBe("pass");
+		expect(seen).toHaveLength(1);
+		expect(seen[0]).toMatchObject({
+			expectedVersion: "2.20.1-beta.7",
+			expectedMarketplace: "claudekit",
+		});
+		expect((seen[0] as { expectedSource?: string }).expectedSource).toContain("ck-plugin-source");
+	});
+
+	test("warns when legacy preference still has an active Codex plugin", async () => {
+		await writeMetadata({
+			kits: {
+				engineer: {
+					version: "2.19.0",
+					installedAt: "x",
+					installModePreference: "legacy",
+				},
+			},
+		});
+
+		const r = await single({
+			...codexUnavailable,
+			status: "installed-current",
+			installed: true,
+			enabled: true,
+			shouldRefresh: false,
+		});
+
+		expect(r.status).toBe("warn");
+		expect(r.message).toContain("preference is legacy");
 	});
 });

@@ -7,7 +7,14 @@
  * - manifest/manifest-updater.ts: writeManifest, removeKitFromManifest
  */
 
-import type { FileOwnership, KitMetadata, KitType, Metadata, TrackedFile } from "@/types";
+import type {
+	FileOwnership,
+	InstallModePreference,
+	KitMetadata,
+	KitType,
+	Metadata,
+	TrackedFile,
+} from "@/types";
 import {
 	type BatchTrackOptions,
 	type BatchTrackResult,
@@ -106,6 +113,7 @@ export class ManifestWriter {
 		scope: "local" | "global",
 		kitType?: KitType,
 		ignoredSkills?: string[],
+		installModePreference?: InstallModePreference,
 	): Promise<void> {
 		return writeManifest(
 			claudeDir,
@@ -116,6 +124,7 @@ export class ManifestWriter {
 			this.getTrackedFiles(),
 			this.getUserConfigFiles(),
 			ignoredSkills,
+			installModePreference,
 		);
 	}
 

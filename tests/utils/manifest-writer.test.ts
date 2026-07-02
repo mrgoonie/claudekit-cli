@@ -225,6 +225,31 @@ describe("ManifestWriter", () => {
 			expect(metadata.kits?.engineer?.version).toBe("1.1.0");
 		});
 
+		test("should persist and preserve global engineer install mode preference", async () => {
+			writer.addInstalledFile("skills/cook/SKILL.md");
+			await writer.writeManifest(
+				testClaudeDir,
+				"engineer",
+				"1.0.0",
+				"global",
+				"engineer",
+				[],
+				"legacy",
+			);
+
+			let metadata: Metadata = JSON.parse(
+				await Bun.file(join(testClaudeDir, "metadata.json")).text(),
+			);
+			expect(metadata.kits?.engineer?.installModePreference).toBe("legacy");
+
+			const nextWriter = new ManifestWriter();
+			nextWriter.addInstalledFile("skills/fix/SKILL.md");
+			await nextWriter.writeManifest(testClaudeDir, "engineer", "1.1.0", "global", "engineer");
+
+			metadata = JSON.parse(await Bun.file(join(testClaudeDir, "metadata.json")).text());
+			expect(metadata.kits?.engineer?.installModePreference).toBe("legacy");
+		});
+
 		test("should handle empty installed files", async () => {
 			await writer.writeManifest(testClaudeDir, "engineer", "1.0.0", "local");
 

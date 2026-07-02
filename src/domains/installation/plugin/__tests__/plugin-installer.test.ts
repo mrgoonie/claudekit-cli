@@ -42,8 +42,8 @@ describe("PluginInstaller command construction", () => {
 		await inst.enable();
 		expect(calls).toEqual([
 			["plugin", "uninstall", "ck"],
-			["plugin", "update", "ck"],
-			["plugin", "enable", "ck"],
+			["plugin", "update", "ck@claudekit"],
+			["plugin", "enable", "ck@claudekit"],
 		]);
 	});
 

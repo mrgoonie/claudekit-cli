@@ -133,11 +133,15 @@ export function detectPluginState(claudeDir: string): PluginState {
 export function detectLegacyState(claudeDir: string): LegacyState {
 	const metadata = readJsonSafe(join(claudeDir, "metadata.json"));
 	if (!isRecord(metadata)) return { installed: false, version: null };
+	const hasLegacyPayload = hasTrackedPluginSuppliedLegacyFiles(claudeDir);
 
 	// Multi-kit format: kits.engineer
 	if (isRecord(metadata.kits) && isRecord(metadata.kits[ENGINEER_KIT_KEY])) {
 		const kit = metadata.kits[ENGINEER_KIT_KEY] as Record<string, unknown>;
-		return { installed: true, version: typeof kit.version === "string" ? kit.version : null };
+		return {
+			installed: hasLegacyPayload,
+			version: hasLegacyPayload && typeof kit.version === "string" ? kit.version : null,
+		};
 	}
 
 	// Legacy single-kit format: root-level name/version with installed files
@@ -146,7 +150,7 @@ export function detectLegacyState(claudeDir: string): LegacyState {
 			((metadata as Record<string, unknown>).files as unknown[]).length > 0) ||
 		(Array.isArray((metadata as Record<string, unknown>).installedFiles) &&
 			((metadata as Record<string, unknown>).installedFiles as unknown[]).length > 0);
-	if (typeof metadata.version === "string" && hasFiles) {
+	if (typeof metadata.version === "string" && hasFiles && hasLegacyPayload) {
 		return { installed: true, version: metadata.version };
 	}
 

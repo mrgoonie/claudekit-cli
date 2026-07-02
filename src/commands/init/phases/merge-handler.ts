@@ -21,6 +21,29 @@ import type { ClaudeKitMetadata } from "@/types";
 import { pathExists, readFile } from "fs-extra";
 import type { InitContext } from "../types.js";
 
+function normalizeManifestPath(path: string): string {
+	return path.replace(/\\/g, "/").replace(/^\/+/, "").replace(/\/+$/, "");
+}
+
+export function filterDeletedInstalledFiles(
+	installedFiles: string[],
+	deletedPaths: string[],
+): string[] {
+	if (deletedPaths.length === 0) return installedFiles;
+
+	const deleted = deletedPaths.map((path) => normalizeManifestPath(path)).filter(Boolean);
+	return installedFiles.filter((file) => {
+		const normalized = normalizeManifestPath(file);
+		return !deleted.some(
+			(path) =>
+				normalized === path ||
+				normalized.startsWith(`${path}/`) ||
+				normalized === `.claude/${path}` ||
+				normalized.startsWith(`.claude/${path}/`),
+		);
+	});
+}
+
 /**
  * Merge files and track ownership
  */
@@ -185,9 +208,11 @@ export async function handleMerge(ctx: InitContext): Promise<InitContext> {
 	}
 
 	// Handle deletions from source kit metadata (cleanup deprecated files)
+	let deletedPaths: string[] = [];
 	try {
 		if (sourceMetadata?.deletions && sourceMetadata.deletions.length > 0) {
 			const deletionResult = await handleDeletions(sourceMetadata, ctx.claudeDir, ctx.kitType);
+			deletedPaths = deletionResult.deletedPaths;
 
 			if (deletionResult.deletedPaths.length > 0) {
 				logger.info(`Removed ${deletionResult.deletedPaths.length} deprecated file(s)`);
@@ -206,7 +231,7 @@ export async function handleMerge(ctx: InitContext): Promise<InitContext> {
 	}
 
 	// Build file tracking list and track with progress
-	const installedFiles = merger.getAllInstalledFiles();
+	const installedFiles = filterDeletedInstalledFiles(merger.getAllInstalledFiles(), deletedPaths);
 	const filesToTrack = buildFileTrackingList({
 		installedFiles,
 		claudeDir: ctx.claudeDir,
@@ -222,6 +247,8 @@ export async function handleMerge(ctx: InitContext): Promise<InitContext> {
 		mode: ctx.options.global ? "global" : "local",
 		kitType: ctx.kitType,
 		ignoredSkills: merger.getIgnoredSkillDirectories(),
+		installModePreference:
+			ctx.options.global && ctx.kitType === "engineer" ? ctx.options.installMode : undefined,
 	});
 
 	return {

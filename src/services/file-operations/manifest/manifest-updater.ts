@@ -2,7 +2,7 @@ import { join } from "node:path";
 import { migrateToMultiKit } from "@/domains/migration/metadata-migration.js";
 import { acquireInstallationStateLock } from "@/services/file-operations/installation-state-lock.js";
 import { logger } from "@/shared/logger.js";
-import type { KitMetadata, KitType, Metadata, TrackedFile } from "@/types";
+import type { InstallModePreference, KitMetadata, KitType, Metadata, TrackedFile } from "@/types";
 import { MetadataSchema, USER_CONFIG_PATTERNS } from "@/types";
 import { ensureFile, pathExists, readFile, remove, writeFile } from "fs-extra";
 import { readManifest } from "./manifest-reader.js";
@@ -27,6 +27,7 @@ export async function writeManifest(
 	trackedFiles: TrackedFile[],
 	userConfigFiles: string[],
 	ignoredSkills: string[] = [],
+	installModePreference?: InstallModePreference,
 ): Promise<void> {
 	const metadataPath = join(claudeDir, "metadata.json");
 
@@ -65,6 +66,7 @@ export async function writeManifest(
 		const existingKits = existingMetadata.kits || {};
 		const normalizedTrackedPaths = trackedFiles.map((file) => normalizeMetadataPath(file.path));
 		const existingIgnoredSkills = existingKits[kit]?.ignoredSkills ?? [];
+		const existingInstallModePreference = existingKits[kit]?.installModePreference;
 		const mergedIgnoredSkills = uniqueNormalizedSkillRoots([
 			...existingIgnoredSkills,
 			...ignoredSkills,
@@ -82,6 +84,7 @@ export async function writeManifest(
 			installedAt,
 			files: trackedFiles.length > 0 ? trackedFiles : undefined,
 			ignoredSkills: mergedIgnoredSkills.length > 0 ? mergedIgnoredSkills : undefined,
+			installModePreference: installModePreference ?? existingInstallModePreference,
 		};
 
 		// Detect multi-kit scenario: are there OTHER kits besides the one being installed?

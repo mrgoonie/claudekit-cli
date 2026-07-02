@@ -22,12 +22,22 @@ const loadFullConfigMock = mock(
 		},
 );
 
-async function writeMetadata(dir: string, version = "1.0.0") {
+async function writeMetadata(
+	dir: string,
+	version = "1.0.0",
+	installModePreference?: "auto" | "plugin" | "legacy",
+) {
 	await writeFile(
 		join(dir, "metadata.json"),
 		JSON.stringify({
 			version: "1.0.0",
-			kits: { engineer: { version, installedAt: "2025-01-01T00:00:00Z" } },
+			kits: {
+				engineer: {
+					version,
+					installedAt: "2025-01-01T00:00:00Z",
+					...(installModePreference ? { installModePreference } : {}),
+				},
+			},
 		}),
 	);
 }
@@ -197,15 +207,16 @@ describe("promptKitUpdate auto-init behavior", () => {
 		expect(capturedSpawnArgs()).toContain("init");
 		expect(capturedSpawnArgs()).toContain("-g");
 		expect(capturedSpawnArgs()).toContain("--install-skills");
-		expect(capturedSpawnArgs()).not.toContain("--kit");
+		expect(capturedSpawnArgs()).toContain("--kit");
+		expect(capturedSpawnArgs()).toContain("engineer");
 		expect(capturedSpawnArgs()).not.toContain("--yes");
 	});
 
-	test("interactive mode does NOT pass --kit, letting ck init show kit picker", async () => {
+	test("interactive mode passes install mode intent to ck init", async () => {
 		const { deps, capturedSpawnArgs } = makeDeps();
 		await promptKitUpdate(false, false, deps);
-		expect(capturedSpawnArgs()).not.toContain("--kit");
-		expect(capturedSpawnArgs()).not.toContain("engineer");
+		expect(capturedSpawnArgs()).toContain("--install-mode");
+		expect(capturedSpawnArgs()).toContain("auto");
 	});
 
 	test("autoInitAfterUpdate uses spawn (interactive kit selection)", async () => {
@@ -222,14 +233,17 @@ describe("promptKitUpdate auto-init behavior", () => {
 		expect(execCount()).toBe(0);
 	});
 
-	test("autoInitAfterUpdate does NOT pass --yes or --kit via spawn", async () => {
+	test("autoInitAfterUpdate does not pass --yes but preserves kit and install mode via spawn", async () => {
 		loadFullConfigMock.mockResolvedValue({
 			config: { updatePipeline: { autoInitAfterUpdate: true } },
 		});
 		const { deps, capturedSpawnArgs } = makeDeps();
 		await promptKitUpdate(false, false, deps);
 		expect(capturedSpawnArgs()).not.toContain("--yes");
-		expect(capturedSpawnArgs()).not.toContain("--kit");
+		expect(capturedSpawnArgs()).toContain("--kit");
+		expect(capturedSpawnArgs()).toContain("engineer");
+		expect(capturedSpawnArgs()).toContain("--install-mode");
+		expect(capturedSpawnArgs()).toContain("auto");
 		expect(capturedSpawnArgs()).toContain("--install-skills");
 	});
 
@@ -324,6 +338,56 @@ describe("promptKitUpdate auto-init behavior", () => {
 		expect(capturedExecCmd()).toContain("ck init -g");
 		expect(capturedExecCmd()).toContain("--kit engineer");
 		expect(capturedExecCmd()).toContain("--restore-ck-hooks");
+	});
+
+	test("preserves explicit legacy preference and skips same-version plugin migration", async () => {
+		await writeMetadata(tempDir, "1.0.0", "legacy");
+		const { deps, execCount, spawnCount } = makeDeps();
+		deps.getLatestReleaseTagFn = async () => "v1.0.0";
+		deps.detectInstallModeFn = () => makeInstallModeReport(tempDir, "legacy");
+		deps.hasTrackedPluginSuppliedLegacyFilesFn = () => true;
+
+		await promptKitUpdate(false, true, deps);
+
+		expect(execCount()).toBe(0);
+		expect(spawnCount()).toBe(0);
+	});
+
+	test("passes explicit legacy preference through version updates without plugin self-heal", async () => {
+		await writeMetadata(tempDir, "1.0.0", "legacy");
+		const { deps, execCount, capturedExecCmd } = makeDeps();
+		deps.getLatestReleaseTagFn = async () => "v2.0.0";
+		deps.detectInstallModeFn = () => makeInstallModeReport(tempDir, "legacy");
+		deps.hasTrackedPluginSuppliedLegacyFilesFn = () => true;
+
+		await promptKitUpdate(false, true, deps);
+
+		expect(execCount()).toBe(1);
+		expect(capturedExecCmd()).toContain("--install-mode legacy");
+		expect(capturedExecCmd()).not.toContain("--restore-ck-hooks");
+	});
+
+	test("strict plugin preference propagates failed non-interactive init", async () => {
+		await writeMetadata(tempDir, "1.0.0", "plugin");
+		const { deps } = makeDeps();
+		deps.getLatestReleaseTagFn = async () => "v2.0.0";
+		deps.execAsyncFn = async () => {
+			throw new Error("Command failed with exit code 1");
+		};
+
+		await expect(promptKitUpdate(false, true, deps)).rejects.toThrow(
+			"Strict plugin kit update failed",
+		);
+	});
+
+	test("strict plugin preference propagates failed interactive init", async () => {
+		await writeMetadata(tempDir, "1.0.0", "plugin");
+		const { deps } = makeDeps();
+		deps.spawnInitFn = async () => 1;
+
+		await expect(promptKitUpdate(false, false, deps)).rejects.toThrow(
+			"Strict plugin kit update failed with exit code 1",
+		);
 	});
 
 	test("reinstalls latest mixed install only when plugin-supplied legacy files remain", async () => {

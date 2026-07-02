@@ -51,7 +51,17 @@ describe("install-mode-detector", () => {
 	});
 
 	test("legacy: multi-kit metadata with kits.engineer", async () => {
-		await writeMetadata({ kits: { engineer: { version: "2.19.0", installedAt: "x", files: [] } } });
+		await mkdir(join(claudeDir, "skills", "cook"), { recursive: true });
+		await writeFile(join(claudeDir, "skills", "cook", "SKILL.md"), "# cook\n", "utf-8");
+		await writeMetadata({
+			kits: {
+				engineer: {
+					version: "2.19.0",
+					installedAt: "x",
+					files: [{ path: "skills/cook/SKILL.md", ownership: "ck" }],
+				},
+			},
+		});
 		const legacy = detectLegacyState(claudeDir);
 		expect(legacy.installed).toBe(true);
 		expect(legacy.version).toBe("2.19.0");
@@ -59,6 +69,8 @@ describe("install-mode-detector", () => {
 	});
 
 	test("legacy: single-kit format with version + files", async () => {
+		await mkdir(join(claudeDir, "skills", "cook"), { recursive: true });
+		await writeFile(join(claudeDir, "skills", "cook", "SKILL.md"), "# cook\n", "utf-8");
 		await writeMetadata({
 			name: "claudekit-engineer",
 			version: "2.18.0",
@@ -100,7 +112,17 @@ describe("install-mode-detector", () => {
 	});
 
 	test("legacy + orphaned plugin cache classifies as legacy (matches claude plugin list)", async () => {
-		await writeMetadata({ kits: { engineer: { version: "2.19.0", installedAt: "x" } } });
+		await mkdir(join(claudeDir, "skills", "cook"), { recursive: true });
+		await writeFile(join(claudeDir, "skills", "cook", "SKILL.md"), "# cook\n", "utf-8");
+		await writeMetadata({
+			kits: {
+				engineer: {
+					version: "2.19.0",
+					installedAt: "x",
+					files: [{ path: "skills/cook/SKILL.md", ownership: "ck" }],
+				},
+			},
+		});
 		await makePluginCache("claudekit", "87a174162601");
 		const report = detectInstallMode(claudeDir);
 		expect(report.mode).toBe("legacy");
@@ -144,14 +166,42 @@ describe("install-mode-detector", () => {
 		expect(detectInstallMode(claudeDir).mode).toBe("fresh");
 	});
 
-	test("mixed: legacy metadata AND plugin cache present", async () => {
-		await writeMetadata({ kits: { engineer: { version: "2.19.0", installedAt: "x" } } });
+	test("mixed: legacy payload AND plugin registration present", async () => {
+		await mkdir(join(claudeDir, "skills", "cook"), { recursive: true });
+		await writeFile(join(claudeDir, "skills", "cook", "SKILL.md"), "# cook\n", "utf-8");
+		await writeMetadata({
+			kits: {
+				engineer: {
+					version: "2.19.0",
+					installedAt: "x",
+					files: [{ path: "skills/cook/SKILL.md", ownership: "ck" }],
+				},
+			},
+		});
 		await writeSettings({ "ck@claudekit": true });
 		await makePluginCache("claudekit", "abc123def456");
 		const report = detectInstallMode(claudeDir);
 		expect(report.mode).toBe("mixed");
 		expect(report.plugin.installed).toBe(true);
 		expect(report.legacy.installed).toBe(true);
+	});
+
+	test("plugin migration receipt metadata without legacy payload does not stay mixed forever", async () => {
+		await writeMetadata({
+			kits: {
+				engineer: {
+					version: "2.19.0",
+					installedAt: "x",
+					files: [{ path: "skills/cook/SKILL.md", ownership: "ck" }],
+				},
+			},
+		});
+		await writeSettings({ "ck@claudekit": true });
+
+		const report = detectInstallMode(claudeDir);
+		expect(report.mode).toBe("plugin");
+		expect(report.plugin.installed).toBe(true);
+		expect(report.legacy.installed).toBe(false);
 	});
 
 	test("detects tracked legacy agent/skill payloads that still need plugin cleanup", async () => {

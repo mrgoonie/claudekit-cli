@@ -150,6 +150,22 @@ describe("handlePluginInstall (init Phase 7.5)", () => {
 		).rejects.toThrow("Claude plugin install failed");
 	});
 
+	test("explicit plugin mode fails when supported Codex plugin install cannot verify", async () => {
+		const failedCodexResult: CodexPluginInstallResult = {
+			action: "install-failed",
+			pluginVerified: false,
+			error: "codex plugin did not verify after install",
+		};
+
+		await expect(
+			handlePluginInstall(ctxOf({ installMode: "plugin" }), {
+				migrate: async () => okResult,
+				installCodex: async () => failedCodexResult,
+				stageBaseDir: stageBase,
+			}),
+		).rejects.toThrow("Codex plugin install failed");
+	});
+
 	test("explicit legacy mode removes plugin state and skips plugin migration", async () => {
 		let migrated = false;
 		let codexInstalled = false;
@@ -189,6 +205,29 @@ describe("handlePluginInstall (init Phase 7.5)", () => {
 		expect(codexInstalled).toBe(false);
 		expect(claudeUninstalls).toEqual([claudeDir]);
 		expect(codexRemovals).toEqual(["codex"]);
+		expect(existsSync(stageBase)).toBe(false);
+	});
+
+	test("explicit legacy mode fails when Codex plugin cleanup does not verify", async () => {
+		const uninstallResult: UninstallPluginResult = {
+			uninstalled: false,
+			staleCacheRemoved: false,
+			pluginStillInstalled: false,
+		};
+
+		await expect(
+			handlePluginInstall(ctxOf({ installMode: "legacy" }), {
+				uninstallClaudePlugin: async () => uninstallResult,
+				removeCodexPlugin: async () => ({
+					removed: false,
+					marketplaceRemoved: false,
+					pluginStillInstalled: true,
+					error: "codex plugin still installed after removal",
+				}),
+				stageBaseDir: stageBase,
+			}),
+		).rejects.toThrow("Codex plugin cleanup failed");
+
 		expect(existsSync(stageBase)).toBe(false);
 	});
 

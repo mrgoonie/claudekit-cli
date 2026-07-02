@@ -51,6 +51,8 @@ export {
 // Metadata types
 export {
 	type FileOwnership,
+	InstallModePreferenceSchema,
+	type InstallModePreference,
 	type TrackedFile,
 	TrackedFileSchema,
 	InstalledSettingsSchema,

@@ -75,8 +75,16 @@ export async function handlePluginInstall(
 		try {
 			const result = await removeCodex();
 			logCodexPluginCleanup(result);
+			if (result.pluginStillInstalled) {
+				cleanupError = new Error(
+					`Codex plugin cleanup failed for legacy install mode: ${
+						result.error ?? "plugin remains registered"
+					}`,
+				);
+			}
 		} catch (err) {
 			logger.verbose(`Codex plugin cleanup skipped: ${(err as Error).message}`);
+			cleanupError = err as Error;
 		}
 		if (cleanupError) {
 			throw cleanupError;
@@ -103,7 +111,13 @@ export async function handlePluginInstall(
 		try {
 			const result = await installCodex({ pluginSourceDir });
 			logCodexPluginResult(result);
+			if (ctx.options.installMode === "plugin" && result.action === "install-failed") {
+				throw new Error(`Codex plugin install failed: ${result.error ?? result.action}`);
+			}
 		} catch (err) {
+			if (ctx.options.installMode === "plugin") {
+				throw err;
+			}
 			logger.verbose(`Codex plugin install skipped: ${(err as Error).message}`);
 		}
 	} catch (err) {
