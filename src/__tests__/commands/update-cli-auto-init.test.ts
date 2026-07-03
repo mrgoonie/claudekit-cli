@@ -87,7 +87,7 @@ describe("promptKitUpdate auto-init behavior", () => {
 		await rm(tempDir, { recursive: true, force: true });
 	});
 
-	/** Create test deps with exec mock (for -y mode) and spawn mock (for interactive mode) */
+	/** Create test deps with exec mock (for migrate/update commands) and spawn mock (for ck init) */
 	function makeDeps() {
 		let execCount = 0;
 		let spawnCount = 0;
@@ -191,32 +191,37 @@ describe("promptKitUpdate auto-init behavior", () => {
 		expect(capturedSpawnArgs()).toContain("--install-skills");
 	});
 
-	// --- Non-interactive mode (exec) tests ---
+	// --- Non-interactive mode (spawn) tests ---
 
-	test("explicit -y flag uses exec with --yes and --kit (non-interactive)", async () => {
-		const { deps, capturedExecCmd, execCount, spawnCount } = makeDeps();
+	test("explicit -y flag uses spawn with inherited stdio, --yes, and --kit", async () => {
+		const { deps, capturedSpawnArgs, execCount, spawnCount } = makeDeps();
 		deps.getLatestReleaseTagFn = async () => "v2.0.0";
 		await promptKitUpdate(false, true, deps);
-		expect(execCount()).toBe(1);
-		expect(spawnCount()).toBe(0);
-		expect(capturedExecCmd()).toContain("--yes");
-		expect(capturedExecCmd()).toContain("--kit engineer");
+		expect(spawnCount()).toBe(1);
+		expect(execCount()).toBe(0);
+		expect(capturedSpawnArgs()).toContain("init");
+		expect(capturedSpawnArgs()).toContain("-g");
+		expect(capturedSpawnArgs()).toContain("--yes");
+		expect(capturedSpawnArgs()).toContain("--kit");
+		expect(capturedSpawnArgs()).toContain("engineer");
+		expect(capturedSpawnArgs()).toContain("--install-skills");
 	});
 
-	test("-y flag overrides autoInit: uses exec even when autoInitAfterUpdate is enabled", async () => {
-		// When both -y and autoInit are set, -y wins: fully non-interactive via exec.
-		// autoInit only matters when yes=false (it skips the confirmation prompt
-		// but keeps ck init interactive via spawn). With yes=true, exec handles everything.
+	test("-y flag overrides autoInit: uses non-interactive spawn even when autoInitAfterUpdate is enabled", async () => {
+		// When both -y and autoInit are set, -y wins: fully non-interactive via spawn.
+		// autoInit only matters when yes=false; with yes=true, ck init inherits stdio
+		// while still receiving --yes and the detected kit.
 		loadFullConfigMock.mockResolvedValue({
 			config: { updatePipeline: { autoInitAfterUpdate: true } },
 		});
-		const { deps, execCount, spawnCount, capturedExecCmd } = makeDeps();
+		const { deps, execCount, spawnCount, capturedSpawnArgs } = makeDeps();
 		deps.getLatestReleaseTagFn = async () => "v1.0.0";
 		await promptKitUpdate(false, true, deps);
-		expect(execCount()).toBe(1);
-		expect(spawnCount()).toBe(0);
-		expect(capturedExecCmd()).toContain("--yes");
-		expect(capturedExecCmd()).toContain("--kit engineer");
+		expect(spawnCount()).toBe(1);
+		expect(execCount()).toBe(0);
+		expect(capturedSpawnArgs()).toContain("--yes");
+		expect(capturedSpawnArgs()).toContain("--kit");
+		expect(capturedSpawnArgs()).toContain("engineer");
 	});
 
 	// --- Shared behavior tests ---
@@ -264,26 +269,29 @@ describe("promptKitUpdate auto-init behavior", () => {
 			"const quota = require('./usage-quota-cache-refresh.cjs');\nconsole.log(quota);\n",
 		);
 
-		const { deps, execCount, spawnCount, capturedExecCmd } = makeDeps();
+		const { deps, execCount, spawnCount, capturedSpawnArgs } = makeDeps();
 		deps.getLatestReleaseTagFn = async () => "v1.0.0";
 		await promptKitUpdate(false, true, deps);
-		expect(execCount()).toBe(1);
-		expect(spawnCount()).toBe(0);
-		expect(capturedExecCmd()).toContain("--yes");
-		expect(capturedExecCmd()).toContain("--kit engineer");
+		expect(spawnCount()).toBe(1);
+		expect(execCount()).toBe(0);
+		expect(capturedSpawnArgs()).toContain("--yes");
+		expect(capturedSpawnArgs()).toContain("--kit");
+		expect(capturedSpawnArgs()).toContain("engineer");
+		expect(capturedSpawnArgs()).toContain("--restore-ck-hooks");
 	});
 
 	test("restores missing global hook registrations during a kit update (--yes mode)", async () => {
 		await writeGlobalHookState(tempDir, { includeSessionState: false });
 
-		const { deps, execCount, spawnCount, capturedExecCmd } = makeDeps();
+		const { deps, execCount, spawnCount, capturedSpawnArgs } = makeDeps();
 		deps.getLatestReleaseTagFn = async () => "v2.0.0";
 		await promptKitUpdate(false, true, deps);
 
-		expect(execCount()).toBe(1);
-		expect(spawnCount()).toBe(0);
-		expect(capturedExecCmd()).toContain("ck init -g");
-		expect(capturedExecCmd()).toContain("--restore-ck-hooks");
+		expect(spawnCount()).toBe(1);
+		expect(execCount()).toBe(0);
+		expect(capturedSpawnArgs()).toContain("init");
+		expect(capturedSpawnArgs()).toContain("-g");
+		expect(capturedSpawnArgs()).toContain("--restore-ck-hooks");
 	});
 
 	test("does not force global hook restore for hooks explicitly disabled in .ck.json", async () => {
@@ -292,13 +300,15 @@ describe("promptKitUpdate auto-init behavior", () => {
 			includeSessionState: false,
 		});
 
-		const { deps, execCount, capturedExecCmd } = makeDeps();
+		const { deps, execCount, spawnCount, capturedSpawnArgs } = makeDeps();
 		deps.getLatestReleaseTagFn = async () => "v2.0.0";
 		await promptKitUpdate(false, true, deps);
 
-		expect(execCount()).toBe(1);
-		expect(capturedExecCmd()).toContain("ck init -g");
-		expect(capturedExecCmd()).not.toContain("--restore-ck-hooks");
+		expect(spawnCount()).toBe(1);
+		expect(execCount()).toBe(0);
+		expect(capturedSpawnArgs()).toContain("init");
+		expect(capturedSpawnArgs()).toContain("-g");
+		expect(capturedSpawnArgs()).not.toContain("--restore-ck-hooks");
 	});
 
 	// Helpers for the kit-shipped managed-hooks manifest model.
@@ -407,7 +417,7 @@ describe("promptKitUpdate auto-init behavior", () => {
 		await mkdir(localClaudeDir, { recursive: true });
 		await writeMetadata(localClaudeDir);
 
-		const { deps, execCount, spawnCount, capturedExecCmd } = makeDeps();
+		const { deps, execCount, spawnCount, capturedSpawnArgs } = makeDeps();
 		deps.getLatestReleaseTagFn = async () => "v1.0.0";
 		deps.getSetupFn = async () => ({
 			global: {
@@ -438,12 +448,14 @@ describe("promptKitUpdate auto-init behavior", () => {
 
 		await promptKitUpdate(false, true, deps);
 
-		expect(execCount()).toBe(1);
-		expect(spawnCount()).toBe(0);
-		expect(capturedExecCmd()).toContain("ck init");
-		expect(capturedExecCmd()).not.toContain("-g");
-		expect(capturedExecCmd()).toContain("--yes");
-		expect(capturedExecCmd()).toContain("--kit engineer");
+		expect(spawnCount()).toBe(1);
+		expect(execCount()).toBe(0);
+		expect(capturedSpawnArgs()).toContain("init");
+		expect(capturedSpawnArgs()).not.toContain("-g");
+		expect(capturedSpawnArgs()).toContain("--yes");
+		expect(capturedSpawnArgs()).toContain("--kit");
+		expect(capturedSpawnArgs()).toContain("engineer");
+		expect(capturedSpawnArgs()).toContain("--restore-ck-hooks");
 	});
 
 	test("prefers local hook self-heal over global kit update when both are installed (--yes mode)", async () => {
@@ -452,7 +464,7 @@ describe("promptKitUpdate auto-init behavior", () => {
 		await mkdir(localClaudeDir, { recursive: true });
 		await writeMetadata(localClaudeDir);
 
-		const { deps, execCount, spawnCount, capturedExecCmd } = makeDeps();
+		const { deps, execCount, spawnCount, capturedSpawnArgs } = makeDeps();
 		deps.getLatestReleaseTagFn = async () => "v2.0.0";
 		deps.getSetupFn = async () => ({
 			global: {
@@ -483,14 +495,15 @@ describe("promptKitUpdate auto-init behavior", () => {
 
 		await promptKitUpdate(true, true, deps);
 
-		expect(execCount()).toBe(1);
-		expect(spawnCount()).toBe(0);
-		expect(capturedExecCmd()).toContain("ck init");
-		expect(capturedExecCmd()).not.toContain("-g");
-		expect(capturedExecCmd()).toContain("--yes");
-		expect(capturedExecCmd()).toContain("--kit engineer");
-		expect(capturedExecCmd()).toContain("--restore-ck-hooks");
-		expect(capturedExecCmd()).toContain("--beta");
+		expect(spawnCount()).toBe(1);
+		expect(execCount()).toBe(0);
+		expect(capturedSpawnArgs()).toContain("init");
+		expect(capturedSpawnArgs()).not.toContain("-g");
+		expect(capturedSpawnArgs()).toContain("--yes");
+		expect(capturedSpawnArgs()).toContain("--kit");
+		expect(capturedSpawnArgs()).toContain("engineer");
+		expect(capturedSpawnArgs()).toContain("--restore-ck-hooks");
+		expect(capturedSpawnArgs()).toContain("--beta");
 	});
 
 	test("interactive mode passes --beta when installed version is prerelease", async () => {
@@ -501,9 +514,9 @@ describe("promptKitUpdate auto-init behavior", () => {
 	});
 
 	test("-y mode passes --beta when beta flag is set", async () => {
-		const { deps, capturedExecCmd } = makeDeps();
+		const { deps, capturedSpawnArgs } = makeDeps();
 		deps.getLatestReleaseTagFn = async () => "v2.0.0";
 		await promptKitUpdate(true, true, deps);
-		expect(capturedExecCmd()).toContain("--beta");
+		expect(capturedSpawnArgs()).toContain("--beta");
 	});
 });
