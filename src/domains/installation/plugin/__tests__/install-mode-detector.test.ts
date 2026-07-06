@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { createHash } from "node:crypto";
-import { mkdir, rm, writeFile } from "node:fs/promises";
+import { mkdir, rm, utimes, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -137,6 +137,29 @@ describe("install-mode-detector", () => {
 		expect(plugin.installed).toBe(true);
 		expect(plugin.staleCache).toBe(false);
 		expect(plugin.version).toBe("87a174162601");
+	});
+
+	test("registered plugin cache prefers highest semver over newer stale mtime", async () => {
+		await writeSettings({ "ck@claudekit": true });
+		await makePluginCache("claudekit", "2.20.1-beta.5");
+		await makePluginCache("claudekit", "2.20.1-beta.7");
+		const ckDir = join(claudeDir, "plugins", "cache", "claudekit", "ck");
+		await utimes(join(ckDir, "2.20.1-beta.7"), new Date(1_000), new Date(1_000));
+		await utimes(join(ckDir, "2.20.1-beta.5"), new Date(2_000), new Date(2_000));
+
+		expect(detectPluginState(claudeDir).version).toBe("2.20.1-beta.7");
+		expect(resolveInstalledPluginCacheRoot(claudeDir)).toBe(join(ckDir, "2.20.1-beta.7"));
+	});
+
+	test("plugin cache uses mtime fallback for non-semver cache names", async () => {
+		await writeSettings({ "ck@claudekit": true });
+		await makePluginCache("claudekit", "aaa111");
+		await makePluginCache("claudekit", "bbb222");
+		const ckDir = join(claudeDir, "plugins", "cache", "claudekit", "ck");
+		await utimes(join(ckDir, "bbb222"), new Date(1_000), new Date(1_000));
+		await utimes(join(ckDir, "aaa111"), new Date(2_000), new Date(2_000));
+
+		expect(detectPluginState(claudeDir).version).toBe("aaa111");
 	});
 
 	test("registered plugin cache root resolves only for an installed plugin", async () => {

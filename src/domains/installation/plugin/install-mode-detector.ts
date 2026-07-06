@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { join, relative, resolve } from "node:path";
 import { PathResolver } from "@/shared/path-resolver.js";
+import { compareVersions } from "compare-versions";
 
 /**
  * Install-mode detection for the ClaudeKit Engineer kit.
@@ -109,10 +110,7 @@ export function detectPluginState(claudeDir: string): PluginState {
 				state.marketplace = state.marketplace ?? marketplace;
 				const versions = safeReaddir(ckDir).filter((v) => isDir(join(ckDir, v)));
 				if (versions.length > 0 && state.version === null) {
-					// Newest by mtime so a stale version dir does not win.
-					state.version = versions
-						.map((v) => ({ v, mtime: statMtime(join(ckDir, v)) }))
-						.sort((a, b) => b.mtime - a.mtime)[0].v;
+					state.version = selectPluginCacheVersion(versions, ckDir);
 				}
 				if (!state.installed) state.staleCache = true;
 				break;
@@ -121,6 +119,32 @@ export function detectPluginState(claudeDir: string): PluginState {
 	}
 
 	return state;
+}
+
+function selectPluginCacheVersion(versions: string[], ckDir: string): string {
+	const comparable = versions.filter(isComparableSemver);
+	if (comparable.length > 0) {
+		return comparable.sort((a, b) => compareVersions(normalizeVersion(b), normalizeVersion(a)))[0];
+	}
+
+	// Non-semver cache names are commonly git SHAs; newest by mtime remains the
+	// best filesystem-only signal in that shape.
+	return versions
+		.map((v) => ({ v, mtime: statMtime(join(ckDir, v)) }))
+		.sort((a, b) => b.mtime - a.mtime)[0].v;
+}
+
+function isComparableSemver(version: string): boolean {
+	try {
+		compareVersions(normalizeVersion(version), normalizeVersion(version));
+		return true;
+	} catch {
+		return false;
+	}
+}
+
+function normalizeVersion(version: string): string {
+	return version.replace(/^v/, "");
 }
 
 /**

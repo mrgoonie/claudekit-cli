@@ -70,6 +70,7 @@ export async function migrateLegacyToPlugin(opts: MigrateOptions): Promise<Migra
 	// Already plugin-only (no legacy copy left): nothing to do. "verified" reflects
 	// the detector's enable state, not an unconditional true.
 	if (before.mode === "plugin") {
+		prunePluginSuppliedLegacyFilesFromMetadata(claudeDir);
 		return base("noop-already-plugin", before.mode, before.plugin.enabled);
 	}
 
@@ -105,6 +106,7 @@ export async function migrateLegacyToPlugin(opts: MigrateOptions): Promise<Migra
 		backupDir = join(claudeDir, "backups", `ck-legacy-${ts.replace(/[:.]/g, "-")}`);
 		mkdirSync(backupDir, { recursive: true });
 		removedPaths = removeLegacy(claudeDir, backupDir);
+		prunePluginSuppliedLegacyFilesFromMetadata(claudeDir, removedPaths);
 	}
 
 	// Record the version that is now installed (post-install), not the pre-install one.
@@ -372,6 +374,56 @@ function collectTrackedFiles(meta: unknown): TrackedFile[] {
 		push(meta.files);
 	}
 	return out;
+}
+
+function prunePluginSuppliedLegacyFilesFromMetadata(
+	claudeDir: string,
+	removedPaths?: string[],
+): void {
+	const metadataPath = join(claudeDir, "metadata.json");
+	const meta = readJsonSafe(metadataPath);
+	if (!isRecord(meta)) return;
+
+	const removed = removedPaths
+		? new Set(removedPaths.map(normalizeComparableLegacyPath).filter(Boolean))
+		: null;
+	let changed = false;
+
+	const pruneFiles = (files: unknown): unknown => {
+		if (!Array.isArray(files)) return files;
+		const pruned = files.filter((file) => {
+			if (!isRecord(file) || typeof file.path !== "string") return true;
+			const normalizedPath = normalizeComparableLegacyPath(file.path);
+			const resolvedPath = resolveSafePluginSuppliedLegacyPath(claudeDir, normalizedPath);
+			const shouldPrune = removed
+				? removed.has(normalizedPath) ||
+					(resolvedPath !== null && !existsSync(resolvedPath.absolutePath))
+				: isPluginSuppliedLegacyPath(normalizedPath);
+			return !shouldPrune;
+		});
+		if (pruned.length !== files.length) changed = true;
+		return pruned;
+	};
+
+	if (isRecord(meta.kits)) {
+		const engineer = (meta.kits as Record<string, unknown>)[ENGINEER_KIT_KEY];
+		if (isRecord(engineer)) {
+			engineer.files = pruneFiles(engineer.files);
+		}
+	} else {
+		meta.files = pruneFiles(meta.files);
+		meta.installedFiles = pruneFiles(meta.installedFiles);
+	}
+
+	if (changed) {
+		writeFileSync(metadataPath, `${JSON.stringify(meta, null, 2)}\n`, "utf-8");
+	}
+}
+
+function normalizeComparableLegacyPath(pathValue: string): string {
+	return normalizeLegacyPath(pathValue)
+		.replace(/^\.\/+/, "")
+		.replace(/^\.claude\//, "");
 }
 
 function writeReceipt(

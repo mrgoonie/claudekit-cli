@@ -4,6 +4,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { detectInstallMode } from "@/domains/installation/plugin/install-mode-detector.js";
 import {
 	defaultLegacyRemover,
 	migrateLegacyToPlugin,
@@ -93,6 +94,57 @@ describe("migrateLegacyToPlugin (orchestration)", () => {
 		expect(removerCalled).toBe(false);
 	});
 
+	test("already plugin -> prunes stale plugin-supplied legacy metadata", async () => {
+		await mkdir(join(claudeDir, "hooks"), { recursive: true });
+		await writeFile(join(claudeDir, "hooks", "session-init.cjs"), "runtime hook", "utf-8");
+		await writeSettings({ "ck@claudekit": true });
+		await writeMetadata({
+			kits: {
+				engineer: {
+					version: "2.19.0",
+					installedAt: "x",
+					files: [
+						{
+							path: "skills/cook/SKILL.md",
+							ownership: "ck",
+							checksum: sha256("plugin materialized"),
+							installedVersion: "2.19.0",
+						},
+						{
+							path: "hooks/session-init.cjs",
+							ownership: "ck",
+							checksum: sha256("runtime hook"),
+							installedVersion: "2.19.0",
+						},
+					],
+				},
+			},
+		});
+
+		const { installer, calls } = fakeInstaller();
+		const r = await migrateLegacyToPlugin({
+			pluginSourceDir: "/src",
+			claudeDir,
+			installer,
+			removeLegacy: () => {
+				throw new Error("legacy remover should not run for plugin-only mode");
+			},
+			now: TS,
+		});
+
+		expect(r.action).toBe("noop-already-plugin");
+		expect(calls.length).toBe(0);
+		expect(existsSync(join(claudeDir, "skills", "cook", "SKILL.md"))).toBe(false);
+		expect(existsSync(join(claudeDir, "hooks", "session-init.cjs"))).toBe(true);
+		const updatedMetadata = JSON.parse(readFileSync(join(claudeDir, "metadata.json"), "utf-8"));
+		expect(updatedMetadata.kits.engineer.files.map((file: { path: string }) => file.path)).toEqual([
+			"hooks/session-init.cjs",
+		]);
+		await mkdir(join(claudeDir, "skills", "cook"), { recursive: true });
+		await writeFile(join(claudeDir, "skills", "cook", "SKILL.md"), "plugin materialized", "utf-8");
+		expect(detectInstallMode(claudeDir).mode).toBe("plugin");
+	});
+
 	test("cc without plugin support -> skipped (caller falls back to legacy copy)", async () => {
 		await writeMetadata({ kits: { engineer: { version: "2.19.0", installedAt: "x", files: [] } } });
 		const { installer } = fakeInstaller({ pluginSupported: false });
@@ -174,14 +226,20 @@ describe("migrateLegacyToPlugin (orchestration)", () => {
 
 	test("mixed already-installed plugin refreshes plugin and still cleans legacy skills", async () => {
 		await mkdir(join(claudeDir, "skills", "cook"), { recursive: true });
+		await mkdir(join(claudeDir, "hooks"), { recursive: true });
 		await writeFile(join(claudeDir, "skills", "cook", "SKILL.md"), "legacy skill", "utf-8");
+		await writeFile(join(claudeDir, "hooks", "session-init.cjs"), "runtime hook", "utf-8");
 		await writeSettings({ "ck@claudekit": true });
 		await writeMetadata({
 			kits: {
 				engineer: {
 					version: "2.19.0",
 					installedAt: "x",
-					files: [{ path: "skills/cook/SKILL.md", ownership: "ck" }],
+					files: [
+						{ path: "skills/cook/SKILL.md", ownership: "ck" },
+						{ path: "skills/missing/SKILL.md", ownership: "ck" },
+						{ path: "hooks/session-init.cjs", ownership: "ck" },
+					],
 				},
 			},
 		});
@@ -197,6 +255,14 @@ describe("migrateLegacyToPlugin (orchestration)", () => {
 		expect(r.action).toBe("migrated-from-legacy");
 		expect(r.removedPaths).toEqual(["skills/cook/SKILL.md"]);
 		expect(existsSync(join(claudeDir, "skills", "cook", "SKILL.md"))).toBe(false);
+		expect(existsSync(join(claudeDir, "hooks", "session-init.cjs"))).toBe(true);
+		const updatedMetadata = JSON.parse(readFileSync(join(claudeDir, "metadata.json"), "utf-8"));
+		expect(updatedMetadata.kits.engineer.files.map((file: { path: string }) => file.path)).toEqual([
+			"hooks/session-init.cjs",
+		]);
+		await mkdir(join(claudeDir, "skills", "cook"), { recursive: true });
+		await writeFile(join(claudeDir, "skills", "cook", "SKILL.md"), "plugin materialized", "utf-8");
+		expect(detectInstallMode(claudeDir).mode).toBe("plugin");
 		expect(calls).toContainEqual(["plugin", "marketplace", "update", "claudekit"]);
 		expect(calls).toContainEqual(["plugin", "update", "ck@claudekit"]);
 		expect(calls).not.toContainEqual(["plugin", "install", "ck@claudekit", "--scope", "user"]);
