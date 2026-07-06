@@ -50,6 +50,7 @@ function createSyncContext(overrides: {
 			exclude: [],
 			only: [],
 			installSkills: false,
+			packageManager: "auto",
 			withSudo: false,
 			skipSetup: false,
 			forceOverwrite: false,

@@ -46,6 +46,10 @@ export function registerCommands(cli: ReturnType<typeof cac>): void {
 		.option("--opencode", "Install OpenCode CLI package (non-interactive mode)")
 		.option("--gemini", "Install Google Gemini CLI package (non-interactive mode)")
 		.option("--install-skills", "Install skills dependencies (non-interactive mode)")
+		.option(
+			"--package-manager <manager>",
+			"Package manager for skills JavaScript dependencies: auto, npm, bun, pnpm, or yarn",
+		)
 		.option("--with-sudo", "Include system packages requiring sudo (Linux: ffmpeg, imagemagick)")
 		.option(
 			"--prefix",
@@ -94,6 +98,10 @@ export function registerCommands(cli: ReturnType<typeof cac>): void {
 			"Force reinstall even if already at latest version (use with --yes; re-onboards missing files without full reset)",
 		)
 		.option("--install-skills", "Install skills dependencies (non-interactive mode)")
+		.option(
+			"--package-manager <manager>",
+			"Package manager for skills JavaScript dependencies: auto, npm, bun, pnpm, or yarn",
+		)
 		.option("--with-sudo", "Include system packages requiring sudo (Linux: ffmpeg, imagemagick)")
 		.option(
 			"--prefix",

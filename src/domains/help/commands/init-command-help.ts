@@ -113,6 +113,11 @@ export const initCommandHelp: CommandHelp = {
 					description: "Install skills dependencies (non-interactive mode)",
 				},
 				{
+					flags: "--package-manager <manager>",
+					description:
+						"Package manager for skills JavaScript dependencies: auto, npm, bun, pnpm, or yarn",
+				},
+				{
 					flags: "--with-sudo",
 					description: "Include system packages requiring sudo (Linux: ffmpeg, imagemagick)",
 				},

@@ -1,6 +1,6 @@
 {
 	"version": "4.5.2-dev.3",
-	"generatedAt": "2026-07-06T11:49:03.646Z",
+	"generatedAt": "2026-07-06T12:47:14.613Z",
 	"commands": {
 		"agents": {
 			"name": "agents",
@@ -1170,6 +1170,10 @@
 							"description": "Install skills dependencies (non-interactive mode)"
 						},
 						{
+							"flags": "--package-manager <manager>",
+							"description": "Package manager for skills JavaScript dependencies: auto, npm, bun, pnpm, or yarn"
+						},
+						{
 							"flags": "--with-sudo",
 							"description": "Include system packages requiring sudo (Linux: ffmpeg, imagemagick)"
 						},
@@ -1439,6 +1443,10 @@
 						{
 							"flags": "--install-skills",
 							"description": "Install skills dependencies (non-interactive mode)"
+						},
+						{
+							"flags": "--package-manager <manager>",
+							"description": "Package manager for skills JavaScript dependencies: auto, npm, bun, pnpm, or yarn"
 						},
 						{
 							"flags": "--with-sudo",

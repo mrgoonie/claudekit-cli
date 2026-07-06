@@ -26,6 +26,8 @@ export {
 	DEFAULT_FOLDERS,
 	NewCommandOptionsSchema,
 	type NewCommandOptions,
+	SkillsPackageManagerSchema,
+	type SkillsPackageManager,
 	UpdateCommandOptionsSchema,
 	type UpdateCommandOptions,
 	VersionCommandOptionsSchema,

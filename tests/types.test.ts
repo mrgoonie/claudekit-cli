@@ -86,6 +86,7 @@ describe("Types and Schemas", () => {
 			expect(result.kit).toBeUndefined();
 			expect(result.release).toBeUndefined();
 			expect(result.exclude).toEqual([]);
+			expect(result.packageManager).toBe("auto");
 		});
 
 		test("should accept optional fields", () => {
@@ -136,6 +137,7 @@ describe("Types and Schemas", () => {
 				opencode: true,
 				gemini: true,
 				installSkills: true,
+				packageManager: "bun",
 				prefix: true,
 				beta: true,
 			});
@@ -144,7 +146,16 @@ describe("Types and Schemas", () => {
 			expect(result.opencode).toBe(true);
 			expect(result.gemini).toBe(true);
 			expect(result.installSkills).toBe(true);
+			expect(result.packageManager).toBe("bun");
 			expect(result.prefix).toBe(true);
+		});
+
+		test("should reject invalid package manager", () => {
+			expect(() =>
+				NewCommandOptionsSchema.parse({
+					packageManager: "pip",
+				}),
+			).toThrow();
 		});
 	});
 
@@ -164,6 +175,7 @@ describe("Types and Schemas", () => {
 			const result = UpdateCommandOptionsSchema.parse({});
 			expect(result.dir).toBe(".");
 			expect(result.exclude).toEqual([]);
+			expect(result.packageManager).toBe("auto");
 		});
 
 		test("should validate exclude patterns", () => {
@@ -208,6 +220,7 @@ describe("Types and Schemas", () => {
 				global: true,
 				fresh: true,
 				installSkills: true,
+				packageManager: "pnpm",
 				prefix: true,
 				beta: true,
 			});
@@ -215,7 +228,16 @@ describe("Types and Schemas", () => {
 			expect(result.global).toBe(true);
 			expect(result.fresh).toBe(true);
 			expect(result.installSkills).toBe(true);
+			expect(result.packageManager).toBe("pnpm");
 			expect(result.prefix).toBe(true);
+		});
+
+		test("should reject invalid package manager", () => {
+			expect(() =>
+				UpdateCommandOptionsSchema.parse({
+					packageManager: "pip",
+				}),
+			).toThrow();
 		});
 	});
 

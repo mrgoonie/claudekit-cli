@@ -1,12 +1,14 @@
 import { join } from "node:path";
 import { isCIEnvironment, isNonInteractive } from "@/shared/environment.js";
 import { logger } from "@/shared/logger.js";
+import type { SkillsPackageManager } from "@/types";
 import {
 	checkNeedsSudoPackages,
 	displayInstallErrors,
 	hasInstallState,
 } from "./install-error-handler.js";
 import { executeInteractiveScript } from "./process-executor.js";
+import { resolveSkillsPackageManager } from "./skills-package-manager.js";
 import {
 	EXIT_CODE_CRITICAL_FAILURE,
 	EXIT_CODE_PARTIAL_SUCCESS,
@@ -24,6 +26,19 @@ export interface SkillsInstallOptions {
 	 * When true, auto-confirms script execution and optional packages
 	 */
 	skipConfirm?: boolean;
+	/**
+	 * Package manager policy for JavaScript skill dependencies.
+	 * "auto" prefers project config, then the package manager that owns ck.
+	 */
+	packageManager?: SkillsPackageManager;
+	/**
+	 * Project root used to read .claude/.ck.json when resolving auto mode.
+	 */
+	projectDir?: string;
+	/**
+	 * Whether this installation targets the global Claude config directory.
+	 */
+	isGlobal?: boolean;
 	/**
 	 * Include system packages requiring sudo (Linux: ffmpeg, imagemagick)
 	 * When true, passes --with-sudo to install.sh script
@@ -45,8 +60,15 @@ export async function installSkillsDependencies(
 	skillsDir: string,
 	options: SkillsInstallOptions = {},
 ): Promise<PackageInstallResult> {
-	const { skipConfirm = false, withSudo = false } = options;
+	const {
+		skipConfirm = false,
+		packageManager = "auto",
+		projectDir,
+		isGlobal = false,
+		withSudo = false,
+	} = options;
 	const displayName = "Skills Dependencies";
+	let manualGlobalInstallCommand = "npm install -g pnpm wrangler repomix";
 
 	// Skip in CI environment
 	if (isCIEnvironment()) {
@@ -114,6 +136,20 @@ export async function installSkillsDependencies(
 		logger.info(`  Script: ${scriptPath}`);
 		logger.info(`  Platform: ${platform === "win32" ? "Windows (PowerShell)" : "Unix (bash)"}`);
 
+		const resolvedPackageManager = await resolveSkillsPackageManager({
+			requested: packageManager,
+			projectDir,
+			isGlobal,
+		});
+		logger.info(
+			`  JavaScript package manager: ${resolvedPackageManager.packageManager} (${resolvedPackageManager.source})`,
+		);
+		manualGlobalInstallCommand = buildGlobalInstallCommand(resolvedPackageManager.packageManager, [
+			"pnpm",
+			"wrangler",
+			"repomix",
+		]);
+
 		// Show script preview in verbose mode (security transparency)
 		if (logger.isVerbose()) {
 			try {
@@ -163,7 +199,7 @@ export async function installSkillsDependencies(
 		logger.info(`Running: ${scriptPath}`);
 
 		// Build script arguments
-		const scriptArgs = ["--yes"];
+		const scriptArgs = ["--yes", "--package-manager", resolvedPackageManager.packageManager];
 
 		// Check for existing state file (for resume)
 		// Auto-resume when skipConfirm is true or in non-interactive mode
@@ -243,6 +279,7 @@ export async function installSkillsDependencies(
 		// Set NON_INTERACTIVE=1 as secondary safety to skip all prompts
 		const scriptEnv = {
 			...process.env,
+			CK_SKILLS_PACKAGE_MANAGER: resolvedPackageManager.packageManager,
 			NON_INTERACTIVE: "1",
 		};
 
@@ -253,7 +290,16 @@ export async function installSkillsDependencies(
 			// -File: Execute the script file
 			await executeInteractiveScript(
 				"powershell.exe",
-				["-NoLogo", "-ExecutionPolicy", "Bypass", "-File", scriptPath, "-Y"],
+				[
+					"-NoLogo",
+					"-ExecutionPolicy",
+					"Bypass",
+					"-File",
+					scriptPath,
+					"-Y",
+					"-JsPackageManager",
+					resolvedPackageManager.packageManager,
+				],
 				{
 					timeout: 600000, // 10 minute timeout for skills installation
 					cwd: skillsDir,
@@ -325,7 +371,7 @@ export async function installSkillsDependencies(
 		logger.info("System tools (optional):");
 		logger.info("  macOS: brew install ffmpeg imagemagick");
 		logger.info("  Linux: sudo apt-get install ffmpeg imagemagick");
-		logger.info("  Node.js: npm install -g pnpm wrangler repomix");
+		logger.info(`  Node.js: ${manualGlobalInstallCommand}`);
 
 		return {
 			success: false,
@@ -333,6 +379,25 @@ export async function installSkillsDependencies(
 			error: errorMessage,
 		};
 	}
+}
+
+function buildGlobalInstallCommand(
+	packageManager: Exclude<SkillsPackageManager, "auto">,
+	packages: string[],
+): string {
+	const packageList = packages.join(" ");
+	switch (packageManager) {
+		case "bun":
+			return `bun add -g ${packageList}`;
+		case "pnpm":
+			return `pnpm add -g ${packageList}`;
+		case "yarn":
+			return `yarn global add ${packageList}`;
+		case "npm":
+			return `npm install -g ${packageList}`;
+	}
+	const exhaustive: never = packageManager;
+	return exhaustive;
 }
 
 /**

@@ -148,20 +148,23 @@ export async function updateCliCommand(
 			registryUrl,
 			spinnerStop: (msg) => s.stop(msg),
 		});
+		const skillsPackageManager = pm === "unknown" ? "auto" : pm;
+		const promptKitUpdateWithPackageManager = () =>
+			promptKitUpdateFn(targetIsPrerelease, opts.yes, { skillsPackageManager });
 
 		// ── Compare versions ────────────────────────────────────────────────
 		const outcome = compareCliVersions(currentVersion, targetVersion, opts);
 
 		if (outcome.status === "up-to-date") {
 			outro(`[+] Already on the latest CLI version (${currentVersion})`);
-			await promptKitUpdateFn(targetIsPrerelease, opts.yes);
+			await promptKitUpdateWithPackageManager();
 			await promptMigrateUpdateFn();
 			return;
 		}
 
 		if (outcome.status === "newer") {
 			outro(`[+] Current version (${currentVersion}) is newer than latest (${targetVersion})`);
-			await promptKitUpdateFn(targetIsPrerelease, opts.yes);
+			await promptKitUpdateWithPackageManager();
 			await promptMigrateUpdateFn();
 			return;
 		}
@@ -178,7 +181,7 @@ export async function updateCliCommand(
 				`CLI update available: ${currentVersion} -> ${targetVersion}\n\nRun 'ck update' to install`,
 				"Update Check",
 			);
-			await promptKitUpdateFn(targetIsPrerelease, opts.yes);
+			await promptKitUpdateWithPackageManager();
 			await promptMigrateUpdateFn();
 			outro("Check complete");
 			return;
@@ -218,7 +221,7 @@ export async function updateCliCommand(
 		});
 
 		outro(`[+] Successfully updated ClaudeKit CLI to ${activeVersion}`);
-		await promptKitUpdateFn(targetIsPrerelease, opts.yes);
+		await promptKitUpdateWithPackageManager();
 		await promptMigrateUpdateFn();
 	} catch (error) {
 		if (error instanceof CliUpdateError) {

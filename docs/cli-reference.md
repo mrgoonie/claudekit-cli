@@ -626,6 +626,7 @@ Initialize or update ClaudeKit project (with interactive version selection)
 | `--beta` | Show beta versions in selection prompt | — |
 | `--refresh` | Bypass release cache to fetch latest versions from GitHub | — |
 | `--install-skills` | Install skills dependencies (non-interactive mode) | — |
+| `--package-manager <manager>` | Package manager for skills JavaScript dependencies: auto, npm, bun, pnpm, or yarn | — |
 | `--with-sudo` | Include system packages requiring sudo (Linux: ffmpeg, imagemagick) | — |
 | `--prefix` | Add /ck: prefix to all slash commands | — |
 | `--skip-setup` | Skip interactive configuration wizard | — |
@@ -718,6 +719,7 @@ Bootstrap a new ClaudeKit project (with interactive version selection)
 | `--opencode` | Install OpenCode CLI package (non-interactive mode) | — |
 | `--gemini` | Install Google Gemini CLI package (non-interactive mode) | — |
 | `--install-skills` | Install skills dependencies (non-interactive mode) | — |
+| `--package-manager <manager>` | Package manager for skills JavaScript dependencies: auto, npm, bun, pnpm, or yarn | — |
 | `--with-sudo` | Include system packages requiring sudo (Linux: ffmpeg, imagemagick) | — |
 | `--prefix` | Add /ck: prefix to all slash commands | — |
 | `--docs-dir <name>` | Custom docs folder name to avoid conflicts with existing folders | `docs` |
@@ -1076,4 +1078,4 @@ Watch GitHub issues and auto-respond with AI analysis
 - `ck watch --interval 60000` — Poll every 60 seconds instead of default 30s
 
 
-<!-- generated: 2026-06-30T16:03:20.133Z -->
+<!-- generated: 2026-07-06T12:47:14.733Z -->

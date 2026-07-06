@@ -52,6 +52,9 @@ export async function handlePostInstall(ctx: InitContext): Promise<InitContext> 
 		// Pass skipConfirm when in non-interactive mode, and withSudo if user requested it
 		await handleSkillsInstallation(skillsDir, {
 			skipConfirm: ctx.isNonInteractive,
+			packageManager: ctx.options.packageManager,
+			projectDir: ctx.resolvedDir,
+			isGlobal: ctx.options.global,
 			withSudo: ctx.options.withSudo,
 		});
 	}

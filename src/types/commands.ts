@@ -37,6 +37,11 @@ export const DEFAULT_FOLDERS: Required<FoldersConfig> = {
 	plans: "plans",
 };
 
+export const SkillsPackageManagerSchema = z
+	.enum(["auto", "npm", "bun", "pnpm", "yarn"])
+	.default("auto");
+export type SkillsPackageManager = z.infer<typeof SkillsPackageManagerSchema>;
+
 // Command options schemas
 export const NewCommandOptionsSchema = z
 	.object({
@@ -48,6 +53,7 @@ export const NewCommandOptionsSchema = z
 		opencode: z.boolean().default(false),
 		gemini: z.boolean().default(false),
 		installSkills: z.boolean().default(false),
+		packageManager: SkillsPackageManagerSchema,
 		withSudo: z.boolean().default(false), // Include system packages requiring sudo (Linux)
 		prefix: z.boolean().default(false),
 		beta: z.boolean().default(false),
@@ -74,6 +80,7 @@ export const UpdateCommandOptionsSchema = z
 		fresh: z.boolean().default(false),
 		force: z.boolean().default(false),
 		installSkills: z.boolean().default(false),
+		packageManager: SkillsPackageManagerSchema,
 		withSudo: z.boolean().default(false), // Include system packages requiring sudo (Linux)
 		prefix: z.boolean().default(false),
 		beta: z.boolean().default(false),

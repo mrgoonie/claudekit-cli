@@ -220,6 +220,14 @@ describe("promptKitUpdate auto-init behavior", () => {
 		expect(capturedSpawnArgs()).toContain("auto");
 	});
 
+	test("interactive mode passes detected package manager to ck init", async () => {
+		const { deps, capturedSpawnArgs } = makeDeps();
+		deps.skillsPackageManager = "bun";
+		await promptKitUpdate(false, false, deps);
+		expect(capturedSpawnArgs()).toContain("--package-manager");
+		expect(capturedSpawnArgs()).toContain("bun");
+	});
+
 	test("autoInitAfterUpdate uses spawn (interactive kit selection)", async () => {
 		loadFullConfigMock.mockResolvedValue({
 			config: { updatePipeline: { autoInitAfterUpdate: true } },

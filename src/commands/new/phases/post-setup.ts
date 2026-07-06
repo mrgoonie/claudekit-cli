@@ -70,6 +70,9 @@ export async function postSetup(
 		// Pass skipConfirm when in non-interactive mode, and withSudo if user requested it
 		await handleSkillsInstallation(skillsDir, {
 			skipConfirm: isNonInteractive,
+			packageManager: validOptions.packageManager,
+			projectDir: resolvedDir,
+			isGlobal: false,
 			withSudo: validOptions.withSudo,
 		});
 	}

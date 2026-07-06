@@ -107,6 +107,16 @@ describe("update-cli", () => {
 			expect(result).toBe("ck init -g --kit engineer --yes --install-mode legacy --install-skills");
 		});
 
+		it("includes package manager when provided", () => {
+			const result = buildInitCommand(false, "engineer", false, true, false, undefined, "bun");
+			expect(result).toBe("ck init --kit engineer --yes --install-skills --package-manager bun");
+		});
+
+		it("omits package manager in auto mode", () => {
+			const result = buildInitCommand(false, "engineer", false, true, false, undefined, "auto");
+			expect(result).toBe("ck init --kit engineer --yes --install-skills");
+		});
+
 		it("does not include --beta flag when beta is false", () => {
 			const result = buildInitCommand(false, "engineer", false);
 			expect(result).toBe("ck init --kit engineer --install-skills");
@@ -634,22 +644,19 @@ describe("update-cli", () => {
 			expect(promptKitUpdate.length).toBeLessThanOrEqual(3);
 		});
 
-		it("all callers in updateCliCommand pass yes through opts", () => {
-			// Structural test: verify the source code passes opts.yes to promptKitUpdateFn
-			// This guards against regression where a new caller forgets to pass yes
+		it("updateCliCommand passes yes and package manager through kit update helper", () => {
+			// Structural test: verify the helper passes opts.yes and skills package-manager policy.
+			// This guards against regressions where a new caller forgets either value.
 			const fs = require("node:fs");
 			const source = fs.readFileSync(
 				require("node:path").resolve(__dirname, "../../commands/update-cli.ts"),
 				"utf-8",
 			);
 
-			// Every call to promptKitUpdateFn should include opts.yes as second arg
-			const promptCalls = source.match(/await promptKitUpdateFn\([^)]+\)/g) || [];
-			expect(promptCalls.length).toBeGreaterThan(0);
-
-			for (const call of promptCalls) {
-				expect(call).toContain("opts.yes");
-			}
+			expect(source).toContain('const skillsPackageManager = pm === "unknown" ? "auto" : pm');
+			expect(source).toContain(
+				"promptKitUpdateFn(targetIsPrerelease, opts.yes, { skillsPackageManager })",
+			);
 		});
 
 		it("promptKitUpdate function accepts yes as second parameter", () => {
@@ -813,7 +820,9 @@ describe("update-cli", () => {
 				"npm install -g claudekit-cli@3.36.1",
 				expect.any(Object),
 			);
-			expect(deps.promptKitUpdateFn).toHaveBeenCalledWith(false, true);
+			expect(deps.promptKitUpdateFn).toHaveBeenCalledWith(false, true, {
+				skillsPackageManager: "npm",
+			});
 		});
 
 		it("uses the dev dist-tag when --dev is explicitly requested", async () => {
@@ -831,7 +840,42 @@ describe("update-cli", () => {
 			expect(deps.execAsyncFn).toHaveBeenCalledWith("npm install -g claudekit-cli@3.36.0-dev.37", {
 				timeout: CLI_UPDATE_INSTALL_TIMEOUT_MS,
 			});
-			expect(deps.promptKitUpdateFn).toHaveBeenCalledWith(true, true);
+			expect(deps.promptKitUpdateFn).toHaveBeenCalledWith(true, true, {
+				skillsPackageManager: "npm",
+			});
+		});
+
+		it("passes detected bun package manager to kit update", async () => {
+			const deps = createDeps({
+				currentVersion: "3.36.0-dev.35",
+				devVersion: "3.36.0-dev.37",
+				latestVersion: "3.36.1",
+				activeVersion: "3.36.0-dev.37",
+			});
+			deps.packageManagerDetector.detect = mock(async () => "bun" as const);
+			deps.packageManagerDetector.getVersion = mock(async () => "1.2.0");
+			deps.packageManagerDetector.getDisplayName = mock(() => "Bun");
+			deps.packageManagerDetector.getUpdateCommand = mock(
+				(_pm, _pkg, version) => `bun add -g claudekit-cli@${version}`,
+			);
+			deps.execAsyncFn = mock(async (command: string) => {
+				if (command.startsWith("bun add -g claudekit-cli@")) {
+					return { stdout: "", stderr: "" };
+				}
+				if (command === "ck --version") {
+					return {
+						stdout: "CLI Version: 3.36.0-dev.37\nGlobal Kit Version: engineer@v2.12.0",
+						stderr: "",
+					};
+				}
+				throw new Error(`Unexpected command in test: ${command}`);
+			});
+
+			await updateCliCommand({ ...baseOptions, dev: true }, deps);
+
+			expect(deps.promptKitUpdateFn).toHaveBeenCalledWith(true, true, {
+				skillsPackageManager: "bun",
+			});
 		});
 
 		it("falls back to latest stable when explicit prerelease channel has no dev dist-tag", async () => {
@@ -850,7 +894,9 @@ describe("update-cli", () => {
 				"npm install -g claudekit-cli@3.36.1",
 				expect.any(Object),
 			);
-			expect(deps.promptKitUpdateFn).toHaveBeenCalledWith(false, true);
+			expect(deps.promptKitUpdateFn).toHaveBeenCalledWith(false, true, {
+				skillsPackageManager: "npm",
+			});
 		});
 	});
 

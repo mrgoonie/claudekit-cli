@@ -8,6 +8,7 @@ import type {
 	GitHubRelease,
 	KitConfig,
 	KitType,
+	SkillsPackageManager,
 	TrackedFile,
 	UpdateCommandOptions,
 } from "@/types";
@@ -30,6 +31,7 @@ export interface ValidatedOptions {
 	docsDir?: string;
 	plansDir?: string;
 	installSkills: boolean;
+	packageManager: SkillsPackageManager;
 	withSudo: boolean;
 	skipSetup: boolean;
 	forceOverwrite: boolean;

@@ -41,6 +41,7 @@ import {
 	type KitType,
 	type Metadata,
 	MetadataSchema,
+	type SkillsPackageManager,
 } from "@/types";
 import type { MigrateScopeConfig } from "@/types/ck-config.js";
 import { pathExists, readFile } from "fs-extra";
@@ -296,6 +297,7 @@ interface BuildInitArgsOptions {
 	yes?: boolean;
 	restoreCkHooks?: boolean;
 	installMode?: InstallModePreference;
+	packageManager?: SkillsPackageManager;
 }
 
 function buildInitArgs(options: BuildInitArgsOptions): string[] {
@@ -308,6 +310,9 @@ function buildInitArgs(options: BuildInitArgsOptions): string[] {
 		args.push("--install-mode", options.installMode);
 	}
 	args.push("--install-skills");
+	if (options.packageManager && options.packageManager !== "auto") {
+		args.push("--package-manager", options.packageManager);
+	}
 	if (options.beta) args.push("--beta");
 	return args;
 }
@@ -323,8 +328,17 @@ export function buildInitCommand(
 	yes?: boolean,
 	restoreCkHooks?: boolean,
 	installMode?: InstallModePreference,
+	packageManager?: SkillsPackageManager,
 ): string {
-	return `ck ${buildInitArgs({ isGlobal, kit, beta, yes, restoreCkHooks, installMode }).join(" ")}`;
+	return `ck ${buildInitArgs({
+		isGlobal,
+		kit,
+		beta,
+		yes,
+		restoreCkHooks,
+		installMode,
+		packageManager,
+	}).join(" ")}`;
 }
 
 export function resolveCkExecutable(platformName: NodeJS.Platform = process.platform): string {
@@ -426,6 +440,7 @@ export interface PromptKitUpdateDeps {
 	hasTrackedPluginSuppliedLegacyFilesFn?: (claudeDir: string) => boolean;
 	shouldRefreshCodexPluginFn?: (options?: CodexPluginStateOptions) => Promise<boolean>;
 	cleanupStaleCodexConfigEntriesFn?: typeof cleanupStaleCodexConfigEntries;
+	skillsPackageManager?: SkillsPackageManager;
 }
 
 async function findMissingHookDependencies(claudeDir: string): Promise<string[]> {
@@ -482,6 +497,7 @@ export async function promptKitUpdate(
 		const detectInstallModeFn = deps?.detectInstallModeFn ?? detectInstallMode;
 		const hasTrackedPluginSuppliedLegacyFilesFn =
 			deps?.hasTrackedPluginSuppliedLegacyFilesFn ?? hasTrackedPluginSuppliedLegacyFiles;
+		const skillsPackageManager = deps?.skillsPackageManager;
 		const shouldRefreshCodexPluginFn =
 			deps?.shouldRefreshCodexPluginFn ??
 			((options?: CodexPluginStateOptions) => shouldRefreshCodexPlugin(undefined, options));
@@ -770,6 +786,7 @@ export async function promptKitUpdate(
 				yes: true,
 				restoreCkHooks: forceKitReinstall,
 				installMode: installModePreference,
+				packageManager: skillsPackageManager,
 			});
 			logger.info(`Running: ck ${args.join(" ")}`);
 			const s = (deps?.spinnerFn ?? spinner)();
@@ -823,6 +840,7 @@ export async function promptKitUpdate(
 				beta: useBeta,
 				restoreCkHooks: forceKitReinstall,
 				installMode: installModePreference,
+				packageManager: skillsPackageManager,
 			});
 
 			const displayCmd = `ck ${args.join(" ")}`;
