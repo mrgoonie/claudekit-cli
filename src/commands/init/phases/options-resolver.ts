@@ -15,6 +15,7 @@ import type { InitContext, ValidatedOptions } from "../types.js";
 export async function resolveOptions(ctx: InitContext): Promise<InitContext> {
 	// Check if --dir was explicitly provided (before schema applies defaults)
 	const explicitDir = ctx.rawOptions.dir !== undefined;
+	const installModeExplicit = ctx.rawOptions.installMode !== undefined;
 
 	// Validate and parse options
 	const parsed = UpdateCommandOptionsSchema.parse(ctx.rawOptions);
@@ -47,6 +48,8 @@ export async function resolveOptions(ctx: InitContext): Promise<InitContext> {
 		archive: parsed.archive,
 		kitPath: parsed.kitPath,
 		installMode: parsed.installMode ?? "auto",
+		installModeExplicit,
+		installModeTransitionRequired: false,
 	};
 
 	// Set global flag for ConfigManager

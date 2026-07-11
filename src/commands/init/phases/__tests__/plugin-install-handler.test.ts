@@ -66,7 +66,7 @@ describe("handlePluginInstall (init Phase 7.5)", () => {
 	): InitContext {
 		return {
 			kitType: over.kitType ?? "engineer",
-			options: { global: over.global ?? true, installMode: over.installMode ?? "auto" },
+			options: { global: over.global ?? true, installMode: over.installMode ?? "legacy" },
 			extractDir,
 			claudeDir,
 		} as unknown as InitContext;
@@ -96,29 +96,59 @@ describe("handlePluginInstall (init Phase 7.5)", () => {
 		expect(called).toBe(false);
 	});
 
-	test("engineer + global: stages source and installs Claude and Codex plugins", async () => {
-		const calls: Array<{ pluginSourceDir: string; claudeDir?: string }> = [];
-		const codexCalls: string[] = [];
+	test("engineer + global defaults to normal copied skills and cleans plugin providers", async () => {
+		let migrated = false;
+		let codexInstalled = false;
+		let claudeCleanups = 0;
+		let codexCleanups = 0;
 		await handlePluginInstall(ctxOf(), {
-			migrate: async (o) => {
-				calls.push({ pluginSourceDir: o.pluginSourceDir, claudeDir: o.claudeDir });
+			migrate: async () => {
+				migrated = true;
 				return okResult;
 			},
-			installCodex: async (o) => {
-				codexCalls.push(o.pluginSourceDir);
+			installCodex: async () => {
+				codexInstalled = true;
 				return okCodexResult;
+			},
+			uninstallClaudePlugin: async () => {
+				claudeCleanups++;
+				return { uninstalled: true, staleCacheRemoved: true, pluginStillInstalled: false };
+			},
+			removeCodexPlugin: async () => {
+				codexCleanups++;
+				return { removed: true, marketplaceRemoved: true, pluginStillInstalled: false };
 			},
 			stageBaseDir: stageBase,
 		});
-		expect(calls).toHaveLength(1);
-		expect(calls[0].claudeDir).toBe(claudeDir);
-		expect(calls[0].pluginSourceDir).toBe(stageBase);
-		expect(codexCalls).toEqual([stageBase]);
-		// staged payload + synthesized marketplace exist
-		expect(existsSync(join(stageBase, ".claude", ".claude-plugin", "plugin.json"))).toBe(true);
-		expect(existsSync(join(stageBase, ".claude", ".codex-plugin", "plugin.json"))).toBe(true);
-		expect(existsSync(join(stageBase, ".claude-plugin", "marketplace.json"))).toBe(true);
-		expect(existsSync(join(stageBase, ".agents", "plugins", "marketplace.json"))).toBe(true);
+		expect(migrated).toBe(false);
+		expect(codexInstalled).toBe(false);
+		expect(claudeCleanups).toBe(1);
+		expect(codexCleanups).toBe(1);
+		expect(existsSync(stageBase)).toBe(false);
+	});
+
+	test("explicit auto is a normal-mode compatibility input", async () => {
+		let pluginInstallAttempted = false;
+		await handlePluginInstall(ctxOf({ installMode: "auto" }), {
+			migrate: async () => {
+				pluginInstallAttempted = true;
+				return okResult;
+			},
+			installCodex: async () => {
+				pluginInstallAttempted = true;
+				return okCodexResult;
+			},
+			uninstallClaudePlugin: async () => ({
+				uninstalled: false,
+				staleCacheRemoved: false,
+				pluginStillInstalled: false,
+			}),
+			removeCodexPlugin: async () => ({ removed: false, marketplaceRemoved: false }),
+			stageBaseDir: stageBase,
+		});
+
+		expect(pluginInstallAttempted).toBe(false);
+		expect(existsSync(stageBase)).toBe(false);
 	});
 
 	test("explicit plugin mode stages source and installs Claude and Codex plugins", async () => {
@@ -133,6 +163,7 @@ describe("handlePluginInstall (init Phase 7.5)", () => {
 				codexCalls.push(o.pluginSourceDir);
 				return okCodexResult;
 			},
+			persistPreference: async () => {},
 			stageBaseDir: stageBase,
 		});
 
@@ -145,9 +176,30 @@ describe("handlePluginInstall (init Phase 7.5)", () => {
 			handlePluginInstall(ctxOf({ installMode: "plugin" }), {
 				migrate: async () => failedInstallResult,
 				installCodex: async () => okCodexResult,
+				persistPreference: async () => {},
 				stageBaseDir: stageBase,
 			}),
 		).rejects.toThrow("Claude plugin install failed");
+	});
+
+	test("explicit plugin mode fails clearly when Claude plugins are unsupported", async () => {
+		const unsupportedResult: MigrateResult = {
+			action: "skipped-cc-unsupported",
+			modeBefore: "legacy",
+			pluginVerified: false,
+			backupDir: null,
+			removedPaths: [],
+			receiptPath: null,
+		};
+
+		await expect(
+			handlePluginInstall(ctxOf({ installMode: "plugin" }), {
+				migrate: async () => unsupportedResult,
+				installCodex: async () => okCodexResult,
+				persistPreference: async () => {},
+				stageBaseDir: stageBase,
+			}),
+		).rejects.toThrow("Claude plugin installation is unavailable");
 	});
 
 	test("explicit plugin mode fails when supported Codex plugin install cannot verify", async () => {
@@ -161,6 +213,7 @@ describe("handlePluginInstall (init Phase 7.5)", () => {
 			handlePluginInstall(ctxOf({ installMode: "plugin" }), {
 				migrate: async () => okResult,
 				installCodex: async () => failedCodexResult,
+				persistPreference: async () => {},
 				stageBaseDir: stageBase,
 			}),
 		).rejects.toThrow("Codex plugin install failed");
@@ -252,6 +305,40 @@ describe("handlePluginInstall (init Phase 7.5)", () => {
 		).rejects.toThrow("Claude plugin cleanup failed");
 
 		expect(codexRemoved).toBe(true);
+		expect(existsSync(stageBase)).toBe(false);
+	});
+
+	test("partial Claude cleanup still attempts Codex and converges on retry", async () => {
+		let attempt = 0;
+		let codexCleanups = 0;
+		const deps = {
+			uninstallClaudePlugin: async (): Promise<UninstallPluginResult> => {
+				attempt++;
+				return attempt === 1
+					? {
+							uninstalled: false,
+							staleCacheRemoved: false,
+							pluginStillInstalled: true,
+							error: "Claude plugin remains",
+						}
+					: { uninstalled: true, staleCacheRemoved: true, pluginStillInstalled: false };
+			},
+			removeCodexPlugin: async (): Promise<RemoveCodexPluginResult> => {
+				codexCleanups++;
+				return {
+					removed: codexCleanups === 1,
+					marketplaceRemoved: true,
+					pluginStillInstalled: false,
+				};
+			},
+			stageBaseDir: stageBase,
+		};
+
+		await expect(handlePluginInstall(ctxOf(), deps)).rejects.toThrow(
+			"Claude plugin cleanup failed",
+		);
+		await expect(handlePluginInstall(ctxOf(), deps)).resolves.toBeDefined();
+		expect(codexCleanups).toBe(2);
 		expect(existsSync(stageBase)).toBe(false);
 	});
 

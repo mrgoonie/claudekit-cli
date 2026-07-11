@@ -248,7 +248,9 @@ export async function handleMerge(ctx: InitContext): Promise<InitContext> {
 		kitType: ctx.kitType,
 		ignoredSkills: merger.getIgnoredSkillDirectories(),
 		installModePreference:
-			ctx.options.global && ctx.kitType === "engineer" ? ctx.options.installMode : undefined,
+			ctx.options.global && ctx.kitType === "engineer" && ctx.options.installMode === "legacy"
+				? "legacy"
+				: undefined,
 	});
 
 	return {

@@ -176,6 +176,17 @@ describe("Types and Schemas", () => {
 			expect(result.dir).toBe(".");
 			expect(result.exclude).toEqual([]);
 			expect(result.packageManager).toBe("auto");
+			expect(result.installMode).toBe("legacy");
+		});
+
+		test("should preserve explicit install mode compatibility inputs", () => {
+			expect(UpdateCommandOptionsSchema.parse({ installMode: "auto" }).installMode).toBe("auto");
+			expect(UpdateCommandOptionsSchema.parse({ installMode: "legacy" }).installMode).toBe(
+				"legacy",
+			);
+			expect(UpdateCommandOptionsSchema.parse({ installMode: "plugin" }).installMode).toBe(
+				"plugin",
+			);
 		});
 
 		test("should validate exclude patterns", () => {

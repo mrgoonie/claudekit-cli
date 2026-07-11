@@ -18,6 +18,7 @@ import {
 	executeSyncMerge,
 	handleConflicts,
 	handleDownload,
+	handleInstallModeSelection,
 	handleMerge,
 	handleMigration,
 	handleOpenCode,
@@ -46,30 +47,41 @@ async function installAdditionalKit(baseCtx: InitContext, kitType: KitType): Pro
 
 	logger.info(`\nInstalling additional kit: ${kit.name}`);
 
+	// Secondary Engineer kits own the same consent boundary as a primary Engineer
+	// selection. Resolve it before release lookup, download, or payload mutation.
+	let resolvedBaseCtx = baseCtx;
+	if (kitType === "engineer" && baseCtx.claudeDir) {
+		resolvedBaseCtx = await handleInstallModeSelection(baseCtx, {
+			kitType,
+			claudeDir: baseCtx.claudeDir,
+		});
+		if (resolvedBaseCtx.cancelled) return resolvedBaseCtx;
+	}
+
 	// Match version strategy from primary kit installation:
 	// - If user selected specific version, try to find same version for this kit
 	// - Otherwise use latest release
 	let release;
-	if (baseCtx.selectedVersion && !baseCtx.selectedVersion.includes("latest")) {
+	if (resolvedBaseCtx.selectedVersion && !resolvedBaseCtx.selectedVersion.includes("latest")) {
 		try {
-			release = await github.getReleaseByTag(kit, baseCtx.selectedVersion);
+			release = await github.getReleaseByTag(kit, resolvedBaseCtx.selectedVersion);
 			logger.success(`Found matching version: ${release.tag_name}`);
 		} catch {
 			// Version not available for this kit, fall back to latest
 			logger.warning(
-				`Version ${baseCtx.selectedVersion} not available for ${kit.name}, using latest`,
+				`Version ${resolvedBaseCtx.selectedVersion} not available for ${kit.name}, using latest`,
 			);
-			release = await github.getLatestRelease(kit, baseCtx.options.beta);
+			release = await github.getLatestRelease(kit, resolvedBaseCtx.options.beta);
 			logger.success(`Found: ${release.tag_name}`);
 		}
 	} else {
-		release = await github.getLatestRelease(kit, baseCtx.options.beta);
+		release = await github.getLatestRelease(kit, resolvedBaseCtx.options.beta);
 		logger.success(`Found: ${release.tag_name}`);
 	}
 
 	// Create context for this kit, reusing shared values from base context
 	let ctx: InitContext = {
-		...baseCtx,
+		...resolvedBaseCtx,
 		kit,
 		kitType,
 		release,
@@ -136,6 +148,8 @@ function createInitContext(rawOptions: UpdateCommandOptions, prompts: PromptsMan
 		sync: false,
 		useGit: false,
 		installMode: "auto",
+		installModeExplicit: false,
+		installModeTransitionRequired: false,
 	};
 
 	return {

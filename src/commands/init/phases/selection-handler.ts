@@ -11,7 +11,10 @@ import { detectAccessibleKits } from "@/domains/github/kit-access-checker.js";
 import { runPreflightChecks } from "@/domains/github/preflight-checker.js";
 import { countMissingHookFileReferencesForClaudeDir } from "@/domains/health-checks/checkers/hook-health-checker.js";
 import { handleFreshInstallation } from "@/domains/installation/fresh-installer.js";
-import { repairLegacyWindowsGlobalKitDir } from "@/domains/installation/global-kit-legacy-repair.js";
+import {
+	getLegacyWindowsGlobalKitDirCandidates,
+	repairLegacyWindowsGlobalKitDir,
+} from "@/domains/installation/global-kit-legacy-repair.js";
 import { versionsMatch } from "@/domains/versioning/checking/version-utils.js";
 import { readManifest } from "@/services/file-operations/manifest/manifest-reader.js";
 import { logger } from "@/shared/logger.js";
@@ -20,6 +23,7 @@ import { AVAILABLE_KITS, type KitType, isValidKitType } from "@/types";
 import { pathExists } from "fs-extra";
 import type { InitContext } from "../types.js";
 import { isSyncContext } from "../types.js";
+import { handleInstallModeSelection } from "./install-mode-selection-handler.js";
 
 /**
  * Select kit, target directory, and version
@@ -46,7 +50,8 @@ function buildRerunInitCommand(kitType: KitType, resolvedDir: string, isGlobal: 
 	return args.join(" ");
 }
 
-export async function handleSelection(ctx: InitContext): Promise<InitContext> {
+export async function handleSelection(inputCtx: InitContext): Promise<InitContext> {
+	let ctx = inputCtx;
 	if (ctx.cancelled) return ctx;
 
 	// Check if sync mode has already set these values
@@ -268,30 +273,6 @@ export async function handleSelection(ctx: InitContext): Promise<InitContext> {
 	}
 
 	const resolvedDir = resolve(targetDir);
-	if (ctx.options.global) {
-		try {
-			const repairResult = await repairLegacyWindowsGlobalKitDir({ targetDir: resolvedDir });
-			if (repairResult.status === "repaired") {
-				logger.success(
-					`Migrated legacy Windows global kit directory from ${repairResult.legacyDir} to ${resolvedDir}`,
-				);
-			} else if (
-				repairResult.reason === "target-exists" ||
-				repairResult.reason === "ambiguous-legacy-dirs"
-			) {
-				logger.warning(
-					`Detected legacy Windows global kit directory but did not auto-migrate it (${repairResult.reason}).`,
-				);
-				logger.info(`Using global kit directory: ${resolvedDir}`);
-			}
-		} catch (err) {
-			// Repair is opportunistic — never abort the install if it fails
-			// (EACCES on locked dir, ENOTEMPTY on race, etc.)
-			logger.warning(
-				`Legacy global kit dir repair failed, continuing: ${err instanceof Error ? err.message : String(err)}`,
-			);
-		}
-	}
 	logger.info(`Target directory: ${resolvedDir}`);
 
 	// HOME directory detection: warn if installing to HOME without --global flag
@@ -320,6 +301,42 @@ export async function handleSelection(ctx: InitContext): Promise<InitContext> {
 			logger.error("Cannot use local installation at HOME directory.");
 			logger.info("Use -g/--global flag or run from a project directory.");
 			return { ...ctx, cancelled: true };
+		}
+	}
+
+	const installPrefix = PathResolver.getPathPrefix(ctx.options.global);
+	const installClaudeDir = installPrefix ? join(resolvedDir, installPrefix) : resolvedDir;
+	ctx = await handleInstallModeSelection(ctx, {
+		kitType,
+		claudeDir: installClaudeDir,
+		legacyCandidateDirs:
+			ctx.options.global && process.platform === "win32"
+				? getLegacyWindowsGlobalKitDirCandidates()
+				: undefined,
+	});
+	if (ctx.cancelled) return ctx;
+
+	// Consent/cancellation must precede this migration because it can move/remove directories.
+	if (ctx.options.global) {
+		try {
+			const repairResult = await repairLegacyWindowsGlobalKitDir({ targetDir: resolvedDir });
+			if (repairResult.status === "repaired") {
+				logger.success(
+					`Migrated legacy Windows global kit directory from ${repairResult.legacyDir} to ${resolvedDir}`,
+				);
+			} else if (
+				repairResult.reason === "target-exists" ||
+				repairResult.reason === "ambiguous-legacy-dirs"
+			) {
+				logger.warning(
+					`Detected legacy Windows global kit directory but did not auto-migrate it (${repairResult.reason}).`,
+				);
+				logger.info(`Using global kit directory: ${resolvedDir}`);
+			}
+		} catch (err) {
+			logger.warning(
+				`Legacy global kit dir repair failed, continuing: ${err instanceof Error ? err.message : String(err)}`,
+			);
 		}
 	}
 
@@ -519,6 +536,9 @@ export async function handleSelection(ctx: InitContext): Promise<InitContext> {
 		!ctx.options.fresh &&
 		!ctx.options.force &&
 		!ctx.options.restoreCkHooks &&
+		!ctx.options.installModeExplicit &&
+		!ctx.options.installModeTransitionRequired &&
+		!(ctx.options.global && kitType === "engineer") &&
 		releaseTag &&
 		!isOfflineMode &&
 		!pendingKits?.length

@@ -16,6 +16,7 @@ import type { KitConfig, KitType } from "@/types";
 
 // Re-export all prompts from submodules
 export { selectKit, selectKits, getDirectory } from "./prompts/kit-prompts.js";
+export { promptEngineerInstallMode } from "./prompts/install-mode-prompts.js";
 export {
 	selectVersion,
 	selectVersionEnhanced,
@@ -37,6 +38,7 @@ import {
 	promptLocalMigration,
 	promptSkillsInstallation,
 } from "./prompts/confirmation-prompts.js";
+import { promptEngineerInstallMode } from "./prompts/install-mode-prompts.js";
 import {
 	promptDirectorySelection,
 	promptFreshConfirmation,
@@ -246,5 +248,9 @@ export class PromptsManager {
 		}
 
 		return selected;
+	}
+
+	async selectEngineerInstallMode(): Promise<"legacy" | "plugin" | "cancel"> {
+		return promptEngineerInstallMode();
 	}
 }

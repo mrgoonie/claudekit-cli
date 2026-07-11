@@ -126,6 +126,38 @@ export async function writeManifest(
 	}
 }
 
+/** Update only the canonical install preference under the metadata lock. */
+export async function updateInstallModePreference(
+	claudeDir: string,
+	preference: Exclude<InstallModePreference, "auto">,
+	kit: KitType = "engineer",
+): Promise<void> {
+	const metadataPath = join(claudeDir, "metadata.json");
+	if (!(await pathExists(metadataPath))) {
+		throw new Error(`Cannot persist ${kit} install preference: metadata.json is missing`);
+	}
+
+	const release = await acquireInstallationStateLock(claudeDir);
+	try {
+		const parsed = MetadataSchema.parse(JSON.parse(await readFile(metadataPath, "utf-8")));
+		const kitMetadata = parsed.kits?.[kit];
+		if (!kitMetadata) {
+			throw new Error(`Cannot persist ${kit} install preference: kit metadata is missing`);
+		}
+
+		const updated = MetadataSchema.parse({
+			...parsed,
+			kits: {
+				...parsed.kits,
+				[kit]: { ...kitMetadata, installModePreference: preference },
+			},
+		});
+		await writeFile(metadataPath, JSON.stringify(updated, null, 2), "utf-8");
+	} finally {
+		await release();
+	}
+}
+
 function normalizeMetadataPath(path: string): string {
 	return path
 		.replace(/\\/g, "/")

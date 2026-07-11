@@ -44,6 +44,10 @@ export interface ValidatedOptions {
 	archive?: string;
 	kitPath?: string;
 	installMode: "auto" | "plugin" | "legacy";
+	/** Whether --install-mode was supplied, before schema parsing applies compatibility defaults. */
+	installModeExplicit: boolean;
+	/** Live install state disagrees with the effective preference and must bypass version skips. */
+	installModeTransitionRequired: boolean;
 }
 
 /**

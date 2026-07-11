@@ -15,6 +15,7 @@ import {
 	type UninstallPluginResult,
 	uninstallEnginePlugin,
 } from "@/domains/installation/plugin/uninstall-plugin.js";
+import { updateInstallModePreference } from "@/services/file-operations/manifest/manifest-updater.js";
 import { logger } from "@/shared/logger.js";
 import { PathResolver } from "@/shared/path-resolver.js";
 
@@ -29,6 +30,8 @@ export interface PluginInstallDeps {
 	uninstallClaudePlugin?: typeof uninstallEnginePlugin;
 	/** Injectable for tests; defaults to the real Codex plugin removal flow. */
 	removeCodexPlugin?: typeof removeCodexPlugin;
+	/** Persist canonical preference after the selected path verifies usable. */
+	persistPreference?: typeof updateInstallModePreference;
 	/** Override the staged-source base dir (tests). */
 	stageBaseDir?: string;
 }
@@ -37,10 +40,9 @@ export interface PluginInstallDeps {
  * Phase 7.5 (#689): install the engineer kit as a Claude Code plugin for GLOBAL
  * (user-scope) installs.
  *
- * Additive and NON-FATAL by design: handleMerge has already copied the kit, so any
- * failure here (no claude binary, older CC, install error) leaves the working
- * legacy copy intact. The migrate flow installs the plugin and removes the legacy
- * skill copies only after a verified install.
+ * handleMerge has already copied the kit, so the selected surface can be verified
+ * before CK-owned state from the other mode is removed. Explicit plugin failures are
+ * surfaced; normal mode removes only verified CK plugin registrations and cache.
  */
 export async function handlePluginInstall(
 	ctx: InitContext,
@@ -55,15 +57,16 @@ export async function handlePluginInstall(
 	const installCodex = deps.installCodex ?? installCodexPlugin;
 	const uninstallClaude = deps.uninstallClaudePlugin ?? uninstallEnginePlugin;
 	const removeCodex = deps.removeCodexPlugin ?? removeCodexPlugin;
+	const persistPreference = deps.persistPreference ?? updateInstallModePreference;
 
-	if (ctx.options.installMode === "legacy") {
+	if (ctx.options.installMode !== "plugin") {
 		let cleanupError: Error | null = null;
 		try {
 			const result = await uninstallClaude({ claudeDir: ctx.claudeDir });
 			logLegacyPluginCleanup(result);
 			if (result.pluginStillInstalled) {
 				cleanupError = new Error(
-					`Claude plugin cleanup failed for legacy install mode: ${
+					`Claude plugin cleanup failed while switching to Normal skills: ${
 						result.error ?? "plugin remains registered"
 					}`,
 				);
@@ -77,7 +80,7 @@ export async function handlePluginInstall(
 			logCodexPluginCleanup(result);
 			if (result.pluginStillInstalled) {
 				cleanupError = new Error(
-					`Codex plugin cleanup failed for legacy install mode: ${
+					`Codex plugin cleanup failed while switching to Normal skills: ${
 						result.error ?? "plugin remains registered"
 					}`,
 				);
@@ -97,6 +100,11 @@ export async function handlePluginInstall(
 		try {
 			const result = await migrate({ pluginSourceDir, claudeDir: ctx.claudeDir });
 			logPluginResult(result);
+			if (result.action === "skipped-cc-unsupported") {
+				throw new Error(
+					"Claude plugin installation is unavailable in this Claude Code version. Choose Normal skills or update Claude Code before opting in to plugin mode.",
+				);
+			}
 			if (ctx.options.installMode === "plugin" && !result.pluginVerified) {
 				throw new Error(`Claude plugin install failed: ${result.error ?? result.action}`);
 			}
@@ -114,6 +122,7 @@ export async function handlePluginInstall(
 			if (ctx.options.installMode === "plugin" && result.action === "install-failed") {
 				throw new Error(`Codex plugin install failed: ${result.error ?? result.action}`);
 			}
+			await persistPreference(ctx.claudeDir, "plugin");
 		} catch (err) {
 			if (ctx.options.installMode === "plugin") {
 				throw err;
@@ -132,9 +141,9 @@ export async function handlePluginInstall(
 
 function logLegacyPluginCleanup(result: UninstallPluginResult): void {
 	if (result.uninstalled || result.staleCacheRemoved) {
-		logger.info("Removed ClaudeKit Engineer plugin state for legacy install mode.");
+		logger.info("Removed ClaudeKit Engineer plugin state for Normal skills mode.");
 	} else {
-		logger.verbose("No ClaudeKit Engineer Claude plugin state found for legacy install mode.");
+		logger.verbose("No ClaudeKit Engineer Claude plugin state found for Normal skills mode.");
 	}
 }
 
@@ -290,8 +299,8 @@ function logCodexPluginResult(result: CodexPluginInstallResult): void {
 
 function logCodexPluginCleanup(result: RemoveCodexPluginResult): void {
 	if (result.removed || result.marketplaceRemoved) {
-		logger.info("Removed ClaudeKit Engineer Codex plugin state for legacy install mode.");
+		logger.info("Removed ClaudeKit Engineer Codex plugin state for Normal skills mode.");
 	} else {
-		logger.verbose("No ClaudeKit Engineer Codex plugin state found for legacy install mode.");
+		logger.verbose("No ClaudeKit Engineer Codex plugin state found for Normal skills mode.");
 	}
 }
