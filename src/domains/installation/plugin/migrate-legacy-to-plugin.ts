@@ -74,7 +74,8 @@ export async function migrateLegacyToPlugin(opts: MigrateOptions): Promise<Migra
 		return base("noop-already-plugin", before.mode, before.plugin.enabled);
 	}
 
-	// Older Claude Code without plugin support: caller should fall back to legacy copy.
+	// Older Claude Code without plugin support: return a precise result so explicit
+	// plugin mode can fail without removing the working copied skills.
 	if (!(await installer.isClaudeAvailable()) || !(await installer.isPluginSupported())) {
 		return base("skipped-cc-unsupported", before.mode, false);
 	}

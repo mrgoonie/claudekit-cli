@@ -61,6 +61,8 @@ function createSyncContext(overrides: {
 			sync: true,
 			useGit: false,
 			installMode: "auto",
+			installModeExplicit: false,
+			installModeTransitionRequired: false,
 		},
 		prompts: overrides.prompts as unknown as InitContext["prompts"],
 		explicitDir: true,

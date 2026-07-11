@@ -1,6 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
-import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
-import { join } from "node:path";
+import { execFile } from "node:child_process";
+import { existsSync } from "node:fs";
+import { cp, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join, resolve } from "node:path";
+import { promisify } from "node:util";
 
 // Import the functions we want to test
 import {
@@ -222,6 +226,26 @@ describe("global-path-transformer", () => {
 			expect(changes).toBe(2);
 		});
 
+		it("projects plugin-root fallbacks to the normal global directory when requested", () => {
+			const input = 'node "${CLAUDE_PLUGIN_ROOT:-.claude}/skills/worktree/scripts/worktree.cjs"';
+			const { transformed, changes } = transformContent(input, {
+				rewritePluginRootFallback: true,
+			});
+
+			expect(transformed).toBe(
+				`node "${expectedPrefix}/.claude/skills/worktree/scripts/worktree.cjs"`,
+			);
+			expect(changes).toBe(1);
+		});
+
+		it("preserves plugin-root fallbacks for explicit plugin payloads", () => {
+			const input = 'node "${CLAUDE_PLUGIN_ROOT:-.claude}/skills/worktree/scripts/worktree.cjs"';
+			const { transformed, changes } = transformContent(input);
+
+			expect(transformed).toBe(input);
+			expect(changes).toBe(0);
+		});
+
 		it("rewrites os.homedir-based global path joins to a custom CLAUDE_CONFIG_DIR target", () => {
 			const input = [
 				"const teamsDir = path.join(os.homedir(), '.claude', 'teams');",
@@ -398,5 +422,89 @@ describe("global-path-transformer", () => {
 			const claudeContent = await readFile(join(testDir, ".claude", "CLAUDE.md"), "utf-8");
 			expect(claudeContent).toContain("/custom/claude-config/skills/install.sh");
 		});
+	});
+});
+
+describe("packaged normal-skill runtime path canary", () => {
+	const execFileAsync = promisify(execFile);
+	let root: string;
+
+	beforeEach(async () => {
+		root = await mkdtemp(join(tmpdir(), "ck-global-skill-canary-"));
+	});
+
+	afterEach(async () => {
+		await rm(root, { recursive: true, force: true });
+	});
+
+	async function stageWorktreeSkill(archiveDir: string) {
+		const destination = join(archiveDir, ".claude", "skills", "worktree");
+		const engineerFixtureCandidates = [
+			resolve(process.cwd(), "../../claudekit-engineer/claude/skills/worktree"),
+			resolve(process.cwd(), "../claudekit-engineer/claude/skills/worktree"),
+		];
+		const engineerFixture = engineerFixtureCandidates.find((candidate) => existsSync(candidate));
+
+		if (engineerFixture) {
+			await cp(engineerFixture, destination, { recursive: true });
+			return;
+		}
+
+		// Archive-compatible fallback keeps this release canary hermetic in standalone CLI checkouts.
+		await mkdir(join(destination, "scripts"), { recursive: true });
+		await writeFile(
+			join(destination, "SKILL.md"),
+			[
+				"# Worktree fixture",
+				"",
+				'Run `node "${CLAUDE_PLUGIN_ROOT:-.claude}/skills/worktree/scripts/worktree.cjs" info --json`.',
+			].join("\n"),
+		);
+		await writeFile(
+			join(destination, "scripts", "worktree.cjs"),
+			'console.log("Git Worktree Manager fixture");\n',
+		);
+	}
+
+	it("projects normal paths to the global target, executes outside project CWD, and preserves plugin paths", async () => {
+		const normalArchive = join(root, "normal-archive");
+		const pluginArchive = join(root, "plugin-archive");
+		const globalClaudeDir = join(root, "home", ".claude");
+		const outsideProject = join(root, "outside-project");
+		await stageWorktreeSkill(normalArchive);
+		await stageWorktreeSkill(pluginArchive);
+		await mkdir(outsideProject, { recursive: true });
+
+		await transformPathsForGlobalInstall(normalArchive, {
+			targetClaudeDir: globalClaudeDir,
+			rewritePluginRootFallback: true,
+		});
+		await transformPathsForGlobalInstall(pluginArchive, {
+			targetClaudeDir: globalClaudeDir,
+			rewritePluginRootFallback: false,
+		});
+
+		const normalSkill = await readFile(
+			join(normalArchive, ".claude", "skills", "worktree", "SKILL.md"),
+			"utf-8",
+		);
+		const pluginSkill = await readFile(
+			join(pluginArchive, ".claude", "skills", "worktree", "SKILL.md"),
+			"utf-8",
+		);
+		expect(normalSkill).toContain(`${globalClaudeDir}/skills/worktree/scripts/worktree.cjs`);
+		expect(normalSkill).not.toContain("CLAUDE_PLUGIN_ROOT");
+		expect(pluginSkill).toContain("${CLAUDE_PLUGIN_ROOT:-.claude}");
+
+		await cp(
+			join(normalArchive, ".claude", "skills", "worktree"),
+			join(globalClaudeDir, "skills", "worktree"),
+			{ recursive: true },
+		);
+		const executable = join(globalClaudeDir, "skills", "worktree", "scripts", "worktree.cjs");
+		const { stdout } = await execFileAsync(process.execPath, [executable, "--help"], {
+			cwd: outsideProject,
+		});
+		expect(stdout).toContain("Git Worktree Manager");
 	});
 });

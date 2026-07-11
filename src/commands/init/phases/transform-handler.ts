@@ -32,6 +32,7 @@ export async function handleTransforms(ctx: InitContext): Promise<InitContext> {
 		const transformResult = await transformPathsForGlobalInstall(ctx.extractDir, {
 			targetClaudeDir: ctx.resolvedDir,
 			verbose: logger.isVerbose(),
+			rewritePluginRootFallback: ctx.options.installMode !== "plugin",
 		});
 		logger.success(
 			`Transformed ${transformResult.totalChanges} path(s) in ${transformResult.filesTransformed} file(s)`,

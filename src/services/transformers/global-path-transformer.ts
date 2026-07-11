@@ -136,13 +136,27 @@ export const ALWAYS_TRANSFORM_FILES = new Set(["CLAUDE.md", "claude.md"]);
  */
 export function transformContent(
 	content: string,
-	options: { targetClaudeDir?: string } = {},
+	options: { targetClaudeDir?: string; rewritePluginRootFallback?: boolean } = {},
 ): { transformed: string; changes: number } {
 	let changes = 0;
 	let transformed = content;
 	const homePrefix = getHomeDirPrefix();
 	const customGlobalClaudeDir = getCustomGlobalClaudeDir(options.targetClaudeDir);
 	const claudePath = getGlobalClaudePath(options.targetClaudeDir);
+
+	// Normal global installs do not set CLAUDE_PLUGIN_ROOT. Projecting its
+	// project-relative fallback keeps executable skill references valid from any CWD.
+	// Explicit plugin installs leave the variable intact so providers resolve the
+	// staged plugin payload instead of the normal copied-skills directory.
+	if (options.rewritePluginRootFallback) {
+		const pluginRootFallbackResult = replaceTracked(
+			transformed,
+			/\$\{CLAUDE_PLUGIN_ROOT:-\.claude\}\//g,
+			claudePath,
+		);
+		transformed = pluginRootFallbackResult.content;
+		changes += pluginRootFallbackResult.changes;
+	}
 
 	// Normalize any legacy %USERPROFILE% content to $HOME — covers settings/scripts
 	// written by older CLI versions or hand-edited by users following outdated docs.
@@ -308,7 +322,11 @@ export function shouldTransformFile(filename: string): boolean {
  */
 export async function transformPathsForGlobalInstall(
 	directory: string,
-	options: { targetClaudeDir?: string; verbose?: boolean } = {},
+	options: {
+		targetClaudeDir?: string;
+		verbose?: boolean;
+		rewritePluginRootFallback?: boolean;
+	} = {},
 ): Promise<{
 	filesTransformed: number;
 	totalChanges: number;
@@ -344,6 +362,7 @@ export async function transformPathsForGlobalInstall(
 					const content = await readFile(fullPath, "utf-8");
 					const { transformed, changes } = transformContent(content, {
 						targetClaudeDir: options.targetClaudeDir,
+						rewritePluginRootFallback: options.rewritePluginRootFallback,
 					});
 
 					if (changes > 0) {
@@ -387,7 +406,7 @@ export async function transformPathsForGlobalInstall(
  */
 export async function transformFile(
 	filePath: string,
-	options: { targetClaudeDir?: string } = {},
+	options: { targetClaudeDir?: string; rewritePluginRootFallback?: boolean } = {},
 ): Promise<{ success: boolean; changes: number }> {
 	try {
 		const content = await readFile(filePath, "utf-8");
