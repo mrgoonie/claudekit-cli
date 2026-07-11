@@ -203,6 +203,7 @@ ck init --kit-path ~/downloads/claudekit-engineer-main/
 **Flags:**
 - `--yes/-y`: Non-interactive mode with sensible defaults (skip all prompts)
 - `--global/-g`: Use platform-specific config (macOS/Linux: ~/.claude, Windows: %USERPROFILE%\.claude)
+- `--install-mode <mode>`: Engineer global mode. Normal skills are recommended; use `plugin` only as an advanced explicit opt-in
 - `--fresh`: Clean reinstall, removes .claude directory (requires "yes" confirmation)
 - `--beta`: Show pre-release versions
 - `--prefix`: Apply /ck: namespace to commands
@@ -220,6 +221,41 @@ ck init --kit-path ~/downloads/claudekit-engineer-main/
 | Version selection | Latest stable release |
 | Google Gemini setup | Skip |
 | Other optional features | Skip |
+
+#### Engineer Global Install Modes
+
+**Normal skills are the recommended and default global Engineer installation.** They are
+copied to `~/.claude/skills/` (or `%USERPROFILE%\.claude\skills\` on Windows), where
+Claude Code discovers them directly.
+
+```bash
+# Recommended: Normal skills
+ck init -g --kit engineer
+
+# Advanced: explicitly opt in to Claude/Codex plugin installation
+ck init -g --kit engineer --install-mode plugin
+```
+
+On a fresh interactive install, omitting `--install-mode` shows both choices with Normal
+skills selected as the recommended default. With `--yes`, omission selects Normal skills
+without prompting. The compatibility inputs `auto` and `legacy` also select Normal skills;
+metadata stores this choice as `legacy` for backward compatibility. Only an explicit
+`plugin` flag or prompt choice records durable plugin consent, which later `ck init` and
+`ck update` runs preserve until you choose Normal skills again.
+
+Normal installation does not automatically install a Codex plugin. Sync the installed
+skills to Codex's native skill layout separately:
+
+```bash
+ck migrate --agent codex
+```
+
+Switching modes removes only ClaudeKit-owned plugin or copied-skill state. ClaudeKit
+backs up managed copied files before replacing them, preserves user-modified files, and
+verifies the selected surface before removing CK-owned plugin registrations or cache.
+
+> Stable `4.5.2` predates the short-lived plugin-default change. This contract reverses
+> only the affected development prereleases; stable users retain the normal-skills behavior.
 
 ### Update CLI
 

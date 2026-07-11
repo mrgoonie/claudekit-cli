@@ -17,8 +17,12 @@ export const initCommandHelp: CommandHelp = {
 			description: "Update local project with latest engineer kit",
 		},
 		{
-			command: "ck init --use-git --release v2.1.0 -y",
-			description: "Non-interactive with git clone (no GitHub API needed)",
+			command: "ck init -g --kit engineer",
+			description: "Install recommended Normal skills to ~/.claude/skills",
+		},
+		{
+			command: "ck init -g --kit engineer --install-mode plugin",
+			description: "Explicitly opt in to advanced Claude/Codex plugin installation",
 		},
 	],
 	optionGroups: [
@@ -40,7 +44,8 @@ export const initCommandHelp: CommandHelp = {
 				},
 				{
 					flags: "--install-mode <mode>",
-					description: "Engineer global install mode: auto, plugin, or legacy (default: auto)",
+					description:
+						"Engineer global mode: plugin (advanced opt-in); auto/legacy use Normal skills (default)",
 				},
 				{
 					flags: "--archive <path>",

@@ -126,7 +126,7 @@ export function registerCommands(cli: ReturnType<typeof cac>): void {
 		.option("--sync", "Sync config files from upstream with interactive hunk-by-hunk merge")
 		.option(
 			"--install-mode <mode>",
-			"Engineer global install mode: auto, plugin, or legacy (default: auto)",
+			"Engineer global mode: plugin (advanced opt-in); auto/legacy use Normal skills (default)",
 		)
 		.option("--use-git", "Use git clone instead of GitHub API (uses SSH/HTTPS credentials)")
 		.option("--archive <path>", "Use local archive file instead of downloading (zip/tar.gz)")

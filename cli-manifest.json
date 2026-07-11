@@ -1,6 +1,6 @@
 {
 	"version": "4.5.2-dev.4",
-	"generatedAt": "2026-07-06T14:23:40.568Z",
+	"generatedAt": "2026-07-11T14:44:20.530Z",
 	"commands": {
 		"agents": {
 			"name": "agents",
@@ -1077,8 +1077,12 @@
 					"description": "Update local project with latest engineer kit"
 				},
 				{
-					"command": "ck init --use-git --release v2.1.0 -y",
-					"description": "Non-interactive with git clone (no GitHub API needed)"
+					"command": "ck init -g --kit engineer",
+					"description": "Install recommended Normal skills to ~/.claude/skills"
+				},
+				{
+					"command": "ck init -g --kit engineer --install-mode plugin",
+					"description": "Explicitly opt in to advanced Claude/Codex plugin installation"
 				}
 			],
 			"optionGroups": [
@@ -1099,7 +1103,7 @@
 						},
 						{
 							"flags": "--install-mode <mode>",
-							"description": "Engineer global install mode: auto, plugin, or legacy (default: auto)"
+							"description": "Engineer global mode: plugin (advanced opt-in); auto/legacy use Normal skills (default)"
 						},
 						{
 							"flags": "--archive <path>",

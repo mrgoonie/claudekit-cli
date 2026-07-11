@@ -124,7 +124,7 @@ describe("help-commands", () => {
 			expect(help.name).toBe("init");
 			expect(help.description).toContain("Initialize");
 			expect(help.usage).toBe("ck init [options]");
-			expect(help.examples).toHaveLength(2);
+			expect(help.examples).toHaveLength(3);
 		});
 
 		test("has expected option groups", () => {

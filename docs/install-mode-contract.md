@@ -2,10 +2,16 @@
 
 ## Purpose
 
-ClaudeKit Engineer can be installed globally as copied files in `~/.claude`, as a
-Claude Code plugin, and as a Codex plugin companion. These surfaces must converge
-from one persisted intent so `ck init`, `ck update`, and `ck doctor` do not leave
-duplicate `/ck:*` skills or stale plugin state active.
+ClaudeKit Engineer supports two global installation choices:
+
+- **Normal skills** (recommended and default): copied into `~/.claude/skills/`.
+- **Plugin** (advanced explicit opt-in): installed through supported Claude Code and
+  Codex plugin surfaces.
+
+`ck init`, `ck update`, and `ck doctor` must converge on the user's persisted intent
+without leaving duplicate `/ck:*` skills or stale plugin state active. Plugin installation
+must never be inferred from an omitted flag, `--yes`, old `auto` metadata, or runtime
+plugin availability.
 
 ## Persisted Preference
 
@@ -15,7 +21,7 @@ The source of truth is:
 {
   "kits": {
     "engineer": {
-      "installModePreference": "auto"
+      "installModePreference": "legacy"
     }
   }
 }
@@ -23,31 +29,28 @@ The source of truth is:
 
 Field owner: `metadata.json.kits.engineer.installModePreference`.
 
-Valid values:
-
-- `auto`: prefer plugins when the runtime supports them, with copied skills as
-  fallback until plugin verification succeeds.
-- `plugin`: require plugin verification for supported runtimes.
-- `legacy`: keep copied skills as the active install and remove owned plugin
-  state.
+Normal skills map to the stored value `legacy`; plugin consent maps to `plugin`.
+`auto` remains a compatibility input and possible historical value, but resolves to
+Normal skills. It is not plugin consent.
 
 Fallbacks:
 
-- During `ck init`, the active `--install-mode auto|plugin|legacy` option is the
-  preference for global Engineer installs.
-- During `ck update`, a missing field falls back to `auto` for global Engineer
-  installs. This preserves backward compatibility while moving old installs
-  toward the safer plugin-preferred default.
+- During `ck init`, omitted `--install-mode`, `auto`, and `legacy` resolve to Normal
+  skills and persist `legacy`.
+- Only `--install-mode plugin` persists `plugin`.
+- During `ck update`, only a stored `plugin` value proves durable plugin consent.
+  Missing, `auto`, invalid, and `legacy` values resolve to Normal skills.
+- `ck init --yes` without an explicit mode always selects Normal skills.
 - Local installs and non-Engineer kits do not own this field.
-- Metadata writes preserve an existing preference unless a global Engineer init
-  explicitly provides a new one.
+- Later init/update runs preserve stored `plugin` consent until the user explicitly
+  selects Normal skills.
 
 ## State Inputs
 
-Claude legacy copy:
+Normal skills:
 
 - `metadata.json.kits.engineer` or legacy root metadata proves a copied install.
-- Tracked file checksums decide which plugin-supplied legacy files can be cleaned.
+- Tracked file checksums decide which plugin-supplied copied files can be cleaned.
 - User-modified files are preserved.
 
 Claude plugin:
@@ -70,28 +73,24 @@ Codex plugin:
 
 ## Convergence Rules
 
-`auto`:
+Normal skills (`auto`, `legacy`, omitted mode, or missing preference):
 
-- Install or refresh the Claude plugin when supported.
-- Keep copied skills until the Claude plugin verifies.
-- After verification, remove only CK-owned plugin-supplied legacy files.
-- Install or refresh the Codex plugin when Codex supports plugins.
-- If plugin work fails, keep the copied install usable and log actionable detail.
-
-`plugin`:
-
-- The Claude plugin must verify when Claude Code supports plugins.
-- The Codex plugin must verify when Codex supports plugins.
-- Unsupported runtimes are skipped; supported-but-failing runtimes are errors.
-- Cleanup copied skills only after plugin verification.
-
-`legacy`:
-
-- Copied skills remain the active install.
+- Keep copied skills in `~/.claude/skills/` as the active Claude Code install.
 - Remove owned Claude plugin registration and stale cache.
-- Remove owned Codex plugin registration and marketplace entry when Codex
-  supports plugins.
-- Do not migrate a legacy-preference install to plugin during `ck update`.
+- Remove owned Codex plugin registration and marketplace entry when Codex supports
+  plugins.
+- Do not infer plugin consent from an existing plugin tree or runtime capability.
+- Codex skill delivery is a separate native migration: `ck migrate --agent codex`.
+
+Plugin:
+
+- Claude Code plugin support is required; explicit plugin mode fails clearly when it is
+  unavailable or cannot verify.
+- The Codex plugin must verify when Codex supports plugins.
+- Codex runtimes without plugin support are skipped; supported-but-failing runtimes are
+  errors.
+- Cleanup copied skills only after plugin verification.
+- Persist `plugin` so later init/update runs retain the explicit choice.
 
 ## Duplicate-State Regression
 
@@ -100,22 +99,21 @@ The known bad state is copied Engineer skills at version N plus an enabled
 
 Repair rules:
 
-- `auto` or `plugin` refreshes the plugin to the current payload, verifies it,
+- Normal mode removes owned plugin state and keeps copied skills.
+- Explicit plugin mode refreshes the plugin to the current payload, verifies it,
   then removes CK-owned copied `agents/` and `skills/` files.
-- `legacy` removes the owned plugin state and keeps copied skills.
-- If verification fails in `auto`, copied skills stay active and stale plugin
-  state is removed or reported.
-- If verification fails in `plugin`, the command fails with a clear error.
+- If verification fails in plugin mode, the command fails with a clear error.
 
 ## Cleanup And Rollback
 
 - No destructive cleanup happens before replacement verification.
-- Legacy copied files are backed up under `.claude/backups/ck-legacy-<timestamp>`
-  before removal.
+- Copied files are backed up under `.claude/backups/ck-legacy-<timestamp>` before
+  removal.
 - Migration writes a receipt recording source mode, target mode, plugin version,
   backup directory, removed paths, and timestamp.
-- Cleanup is limited to CK-owned files or checksum-matching plugin-supplied
-  legacy files.
+- Cleanup is limited to CK-owned files or checksum-matching plugin-supplied copied
+  files.
+- User-modified and unrelated files are preserved.
 - Re-running a converged command is a no-op unless a version/source refresh is
   required.
 
@@ -123,22 +121,32 @@ Repair rules:
 
 `ck init`:
 
-- Names the active target as `legacy install mode`, `Claude Code plugin`, or
-  `Codex plugin`.
-- In `plugin` mode, fails when a supported plugin runtime cannot verify.
-- In `auto` mode, keeps the copied fallback when plugin install fails.
+- Calls the recommended/default choice `Normal skills`, not `legacy`, in prompts and
+  status output.
+- Explains that Normal skills install to `~/.claude/skills/` and Codex synchronization
+  uses `ck migrate --agent codex`.
+- Labels plugin installation as an advanced explicit opt-in.
+- In plugin mode, requires Claude plugin support and fails when a required or supported
+  plugin runtime cannot verify.
+- In non-interactive mode without explicit plugin consent, installs Normal skills.
 
 `ck update`:
 
 - Passes `--kit engineer --install-mode <preference>` to the follow-up init.
-- Preserves `legacy` preference across version updates.
-- Reinstalls global Engineer content when Codex plugin state is missing,
-  disabled, stale-version, or stale-source for `auto` and `plugin`.
+- Preserves explicit stored `plugin` consent across version updates.
+- Resolves missing, `auto`, invalid, and `legacy` preferences to Normal skills.
+- Does not install or repair plugins merely because a runtime supports them.
 
 `ck doctor`:
 
-- Shows persisted preference.
-- Shows Claude install mode, Claude plugin registration, legacy copy state, and
+- Shows persisted preference and labels `legacy` as Normal skills.
+- Shows Claude install mode, Claude plugin registration, copied-skill state, and
   Codex plugin state.
 - Warns when preference and live state disagree.
 - Warns when copied skills and plugin state can both expose CK skills.
+
+## Release Boundary
+
+Stable `4.5.2` predates the short-lived plugin-default behavior. The default reversal
+applies only to affected development prereleases; stable users were already on the
+Normal skills contract.

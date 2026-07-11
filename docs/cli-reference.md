@@ -612,7 +612,7 @@ Initialize or update ClaudeKit project (with interactive version selection)
 | `-y, --yes` | Non-interactive mode with sensible defaults (kit: engineer, dir: ., version: latest) | — |
 | `--use-git` | Use git clone instead of GitHub API (uses SSH/HTTPS credentials) | — |
 | `--sync` | Sync config files from upstream with interactive hunk-by-hunk merge | — |
-| `--install-mode <mode>` | Engineer global install mode: auto, plugin, or legacy (default: auto) | — |
+| `--install-mode <mode>` | Engineer global mode: plugin (advanced opt-in); auto/legacy use Normal skills (default) | — |
 | `--archive <path>` | Use local archive file instead of downloading (zip/tar.gz) | — |
 | `--kit-path <path>` | Use local kit directory instead of downloading | — |
 | `--dir <directory>` | Target directory to initialize/update | `.` |
@@ -640,7 +640,8 @@ Initialize or update ClaudeKit project (with interactive version selection)
 **Examples:**
 
 - `ck init --kit engineer` — Update local project with latest engineer kit
-- `ck init --use-git --release v2.1.0 -y` — Non-interactive with git clone (no GitHub API needed)
+- `ck init -g --kit engineer` — Install recommended Normal skills to ~/.claude/skills
+- `ck init -g --kit engineer --install-mode plugin` — Explicitly opt in to advanced Claude/Codex plugin installation
 
 
 ## ck migrate
@@ -1078,4 +1079,4 @@ Watch GitHub issues and auto-respond with AI analysis
 - `ck watch --interval 60000` — Poll every 60 seconds instead of default 30s
 
 
-<!-- generated: 2026-07-06T12:47:14.733Z -->
+<!-- generated: 2026-07-11T14:44:20.600Z -->
