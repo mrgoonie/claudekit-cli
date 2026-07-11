@@ -9,6 +9,7 @@ import { detectInstallMode } from "@/domains/installation/plugin/install-mode-de
 import {
 	DEFAULT_INSTALL_MODE_PREFERENCE,
 	readInstallModePreferenceFromClaudeDir,
+	resolveEffectiveInstallModePreference,
 } from "@/domains/installation/plugin/install-mode-preference.js";
 import { PathResolver } from "@/shared/path-resolver.js";
 import type { InstallModePreference } from "@/types";
@@ -42,11 +43,15 @@ export class PluginInstallModeChecker implements Checker {
 		const r = detectInstallMode(this.claudeDir);
 		const readPreference =
 			this.deps.readInstallModePreference ?? readInstallModePreferenceFromClaudeDir;
-		const preference = readPreference(r.claudeDir) ?? DEFAULT_INSTALL_MODE_PREFERENCE;
+		const preference = resolveEffectiveInstallModePreference(
+			readPreference(r.claudeDir) ?? DEFAULT_INSTALL_MODE_PREFERENCE,
+		);
 		const codexState = await this.readCodexState(expectedCodexPluginOptions(r.claudeDir));
 
 		const detail: string[] = [];
-		detail.push(`preference: ${preference}`);
+		detail.push(
+			preference === "plugin" ? "preference: plugin" : "preference: legacy (normal skills)",
+		);
 		if (r.plugin.installed) {
 			const bits = [r.plugin.enabled ? "enabled" : "disabled"];
 			if (r.plugin.version) bits.push(r.plugin.version);
@@ -54,35 +59,39 @@ export class PluginInstallModeChecker implements Checker {
 			detail.push(`Claude plugin: ${bits.join(", ")}`);
 		}
 		if (r.legacy.installed) {
-			detail.push(`legacy copy${r.legacy.version ? ` (${r.legacy.version})` : ""}`);
+			detail.push(`normal copied skills${r.legacy.version ? ` (${r.legacy.version})` : ""}`);
 		}
 		detail.push(formatCodexDetail(codexState));
 		const suffix = detail.length > 0 ? ` — ${detail.join("; ")}` : "";
 
 		let status: CheckStatus = "pass";
-		let message = `Install mode: ${r.mode}${suffix}`;
+		const displayedMode = r.mode === "legacy" ? "normal skills" : r.mode;
+		let message = `Install mode: ${displayedMode}${suffix}`;
 
 		if (r.mode === "mixed") {
 			status = "warn";
-			message = `Install mode: mixed (legacy copy + plugin both present). Run \`ck update\` to migrate to plugin-only.${suffix}`;
-		} else if (r.mode === "plugin" && !r.plugin.enabled) {
-			status = "warn";
-			message = `Install mode: plugin, but the plugin is disabled. Run \`claude plugin enable ck\`.${suffix}`;
+			message =
+				preference === "plugin"
+					? `Install mode: mixed (normal copy + plugin both present). Run \`ck init -g --kit engineer --install-mode plugin\` to repair plugin mode.${suffix}`
+					: `Install mode: mixed (normal copy + plugin both present). Run \`ck init -g --kit engineer --install-mode legacy\` to keep normal skills and remove CK-owned plugin state.${suffix}`;
 		} else if (
 			preference === "legacy" &&
 			(r.plugin.installed || r.plugin.staleCache || codexState.installed)
 		) {
 			status = "warn";
-			message = `Install mode: ${r.mode}, but preference is legacy. Run \`ck init -g --kit engineer --install-mode legacy\`.${suffix}`;
+			message = `Install mode: ${displayedMode}, but preference is legacy (normal skills). Run \`ck init -g --kit engineer --install-mode legacy\`.${suffix}`;
+		} else if (r.mode === "plugin" && !r.plugin.enabled) {
+			status = "warn";
+			message = `Install mode: plugin, but the plugin is disabled. Run \`claude plugin enable ck\`.${suffix}`;
 		} else if (
 			preference === "plugin" &&
 			(r.mode === "legacy" || r.mode === "fresh" || !r.plugin.enabled)
 		) {
 			status = "warn";
-			message = `Install mode: ${r.mode}, but preference is plugin. Run \`ck init -g --kit engineer --install-mode plugin\`.${suffix}`;
+			message = `Install mode: ${displayedMode}, but preference is plugin. Run \`ck init -g --kit engineer --install-mode plugin\`.${suffix}`;
 		} else if (codexState.shouldRefresh && preference !== "legacy") {
 			status = "warn";
-			message = `Install mode: ${r.mode}; Codex plugin requires refresh. Run \`ck update\`.${suffix}`;
+			message = `Install mode: ${displayedMode}; Codex plugin requires refresh. Run \`ck update\`.${suffix}`;
 		} else if (r.mode === "fresh") {
 			status = "info";
 			message = `Install mode: fresh (ClaudeKit Engineer not installed). Run \`ck init\` to install.${suffix}`;

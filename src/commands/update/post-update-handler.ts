@@ -19,7 +19,9 @@ import {
 	repairMissingHookFileReferences,
 } from "@/domains/health-checks/checkers/hook-health-checker.js";
 import {
+	type CodexPluginState,
 	type CodexPluginStateOptions,
+	detectCodexPluginState,
 	shouldRefreshCodexPlugin,
 } from "@/domains/installation/plugin/codex-plugin-installer.js";
 import {
@@ -439,6 +441,7 @@ export interface PromptKitUpdateDeps {
 	detectInstallModeFn?: (claudeDir: string) => InstallModeReport;
 	hasTrackedPluginSuppliedLegacyFilesFn?: (claudeDir: string) => boolean;
 	shouldRefreshCodexPluginFn?: (options?: CodexPluginStateOptions) => Promise<boolean>;
+	detectCodexPluginStateFn?: (options?: CodexPluginStateOptions) => Promise<CodexPluginState>;
 	cleanupStaleCodexConfigEntriesFn?: typeof cleanupStaleCodexConfigEntries;
 	skillsPackageManager?: SkillsPackageManager;
 }
@@ -501,6 +504,9 @@ export async function promptKitUpdate(
 		const shouldRefreshCodexPluginFn =
 			deps?.shouldRefreshCodexPluginFn ??
 			((options?: CodexPluginStateOptions) => shouldRefreshCodexPlugin(undefined, options));
+		const detectCodexPluginStateFn =
+			deps?.detectCodexPluginStateFn ??
+			((options?: CodexPluginStateOptions) => detectCodexPluginState(undefined, options));
 		const cleanupStaleCodexConfigEntriesFn =
 			deps?.cleanupStaleCodexConfigEntriesFn ?? cleanupStaleCodexConfigEntries;
 		const setup = await getSetupFn();
@@ -620,9 +626,15 @@ export async function promptKitUpdate(
 				if (selection.isGlobal && selection.kit === "engineer") {
 					const installMode = detectInstallModeFn(selectedClaudeDir);
 					if (installModePreference === "legacy") {
-						if (installMode.plugin.installed || installMode.plugin.staleCache) {
+						const codexPluginState = await detectCodexPluginStateFn();
+						if (
+							installMode.plugin.installed ||
+							installMode.plugin.staleCache ||
+							codexPluginState.installed ||
+							codexPluginState.status === "disabled"
+						) {
 							logger.warning(
-								"Detected plugin state for legacy global Engineer preference; reinstalling legacy mode",
+								"Detected ClaudeKit plugin state while Normal skills are selected; reinstalling Normal skills and removing CK-owned plugin state",
 							);
 							forceKitReinstall = true;
 						}

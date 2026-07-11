@@ -39,7 +39,9 @@ describe("promptKitUpdate version display", () => {
 		hasTrackedPluginSuppliedLegacyFiles?: boolean;
 	}) {
 		const stopCalls: string[] = [];
-		const hasLegacyInstall = opts?.installMode === "legacy" || opts?.installMode === "mixed";
+		const installMode = opts?.installMode ?? "legacy";
+		const hasLegacyInstall = installMode === "legacy" || installMode === "mixed";
+		const hasPluginInstall = installMode === "plugin" || installMode === "mixed";
 		const spawnArgs: string[][] = [];
 		let spawnCalled = false;
 		const deps: PromptKitUpdateDeps = {
@@ -70,12 +72,12 @@ describe("promptKitUpdate version display", () => {
 			loadFullConfigFn: async () => ({ config: { updatePipeline: undefined } }),
 			detectInstallModeFn: () =>
 				({
-					mode: opts?.installMode ?? "plugin",
+					mode: installMode,
 					claudeDir: tempDir,
 					plugin: {
-						installed: true,
-						enabled: true,
-						version: "v1.0.0",
+						installed: hasPluginInstall,
+						enabled: hasPluginInstall,
+						version: hasPluginInstall ? "v1.0.0" : null,
 						marketplace: "claudekit",
 						staleCache: false,
 					},

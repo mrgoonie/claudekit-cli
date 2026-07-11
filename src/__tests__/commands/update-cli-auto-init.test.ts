@@ -182,6 +182,19 @@ describe("promptKitUpdate auto-init behavior", () => {
 			detectInstallModeFn: () => makeInstallModeReport(tempDir, "plugin"),
 			hasTrackedPluginSuppliedLegacyFilesFn: () => false,
 			shouldRefreshCodexPluginFn: async () => false,
+			detectCodexPluginStateFn: async () => ({
+				status: "missing",
+				pluginId: "ck@claudekit",
+				enabled: false,
+				installed: false,
+				installedVersion: null,
+				expectedVersion: null,
+				marketplace: null,
+				expectedMarketplace: "claudekit",
+				source: null,
+				expectedSource: null,
+				shouldRefresh: true,
+			}),
 			cleanupStaleCodexConfigEntriesFn: async () => [],
 		};
 		return {
@@ -213,11 +226,11 @@ describe("promptKitUpdate auto-init behavior", () => {
 		expect(capturedSpawnArgs()).not.toContain("--yes");
 	});
 
-	test("interactive mode passes install mode intent to ck init", async () => {
+	test("interactive update passes the normal install mode when consent is missing", async () => {
 		const { deps, capturedSpawnArgs } = makeDeps();
 		await promptKitUpdate(false, false, deps);
 		expect(capturedSpawnArgs()).toContain("--install-mode");
-		expect(capturedSpawnArgs()).toContain("auto");
+		expect(capturedSpawnArgs()).toContain("legacy");
 	});
 
 	test("interactive mode passes detected package manager to ck init", async () => {
@@ -242,7 +255,7 @@ describe("promptKitUpdate auto-init behavior", () => {
 		expect(execCount()).toBe(0);
 	});
 
-	test("autoInitAfterUpdate does not pass --yes but preserves kit and install mode via spawn", async () => {
+	test("autoInitAfterUpdate does not pass --yes but uses normal mode without consent", async () => {
 		loadFullConfigMock.mockResolvedValue({
 			config: { updatePipeline: { autoInitAfterUpdate: true } },
 		});
@@ -252,7 +265,7 @@ describe("promptKitUpdate auto-init behavior", () => {
 		expect(capturedSpawnArgs()).toContain("--kit");
 		expect(capturedSpawnArgs()).toContain("engineer");
 		expect(capturedSpawnArgs()).toContain("--install-mode");
-		expect(capturedSpawnArgs()).toContain("auto");
+		expect(capturedSpawnArgs()).toContain("legacy");
 		expect(capturedSpawnArgs()).toContain("--install-skills");
 	});
 
@@ -321,12 +334,14 @@ describe("promptKitUpdate auto-init behavior", () => {
 	test("skips init when kit is at latest and autoInitAfterUpdate is disabled (--yes mode)", async () => {
 		const { deps, execCount, spawnCount } = makeDeps();
 		deps.getLatestReleaseTagFn = async () => "v1.0.0";
+		deps.detectInstallModeFn = () => makeInstallModeReport(tempDir, "legacy");
 		await promptKitUpdate(false, true, deps);
 		expect(execCount()).toBe(0);
 		expect(spawnCount()).toBe(0);
 	});
 
 	test("reinstalls latest global engineer kit when Codex plugin is missing (--yes mode)", async () => {
+		await writeMetadata(tempDir, "1.0.0", "plugin");
 		const { deps, execCount, spawnCount, capturedSpawnArgs } = makeDeps();
 		deps.getLatestReleaseTagFn = async () => "v1.0.0";
 		deps.shouldRefreshCodexPluginFn = async () => true;
@@ -341,9 +356,11 @@ describe("promptKitUpdate auto-init behavior", () => {
 		expect(capturedSpawnArgs()).toContain("engineer");
 		expect(capturedSpawnArgs()).toContain("--yes");
 		expect(capturedSpawnArgs()).toContain("--restore-ck-hooks");
+		expect(capturedSpawnArgs()).toContain("plugin");
 	});
 
 	test("cleans Codex config before checking stable plugin source (--yes mode)", async () => {
+		await writeMetadata(tempDir, "1.0.0", "plugin");
 		const { deps, spawnCount, capturedSpawnArgs } = makeDeps();
 		deps.getLatestReleaseTagFn = async () => "v1.0.0";
 		let cleanupRan = false;
@@ -368,10 +385,15 @@ describe("promptKitUpdate auto-init behavior", () => {
 		});
 	});
 
-	test("reinstalls latest legacy global engineer kit to migrate plugin format (--yes mode)", async () => {
+	test("missing preference converges an observed plugin install to normal without Codex refresh", async () => {
 		const { deps, execCount, spawnCount, capturedSpawnArgs } = makeDeps();
 		deps.getLatestReleaseTagFn = async () => "v1.0.0";
-		deps.detectInstallModeFn = () => makeInstallModeReport(tempDir, "legacy");
+		deps.detectInstallModeFn = () => makeInstallModeReport(tempDir, "plugin");
+		let codexRefreshChecks = 0;
+		deps.shouldRefreshCodexPluginFn = async () => {
+			codexRefreshChecks++;
+			return true;
+		};
 
 		await promptKitUpdate(false, true, deps);
 
@@ -383,6 +405,75 @@ describe("promptKitUpdate auto-init behavior", () => {
 		expect(capturedSpawnArgs()).toContain("engineer");
 		expect(capturedSpawnArgs()).toContain("--yes");
 		expect(capturedSpawnArgs()).toContain("--restore-ck-hooks");
+		expect(capturedSpawnArgs()).toContain("--install-mode");
+		expect(capturedSpawnArgs()).toContain("legacy");
+		expect(codexRefreshChecks).toBe(0);
+	});
+
+	test("normal preference converges Codex-only plugin state", async () => {
+		const { deps, spawnCount, capturedSpawnArgs } = makeDeps();
+		deps.getLatestReleaseTagFn = async () => "v1.0.0";
+		deps.detectInstallModeFn = () => makeInstallModeReport(tempDir, "legacy");
+		deps.detectCodexPluginStateFn = async () => ({
+			status: "installed-current",
+			pluginId: "ck@claudekit",
+			enabled: true,
+			installed: true,
+			installedVersion: "1.0.0",
+			expectedVersion: null,
+			marketplace: "claudekit",
+			expectedMarketplace: "claudekit",
+			source: null,
+			expectedSource: null,
+			shouldRefresh: false,
+		});
+
+		await promptKitUpdate(false, true, deps);
+
+		expect(spawnCount()).toBe(1);
+		expect(capturedSpawnArgs()).toContain("--restore-ck-hooks");
+		expect(capturedSpawnArgs()).toContain("legacy");
+	});
+
+	test("historical auto preference converges to normal and skips plugin health probing", async () => {
+		await writeMetadata(tempDir, "1.0.0", "auto");
+		const { deps, spawnCount, capturedSpawnArgs } = makeDeps();
+		deps.getLatestReleaseTagFn = async () => "v1.0.0";
+		deps.detectInstallModeFn = () => makeInstallModeReport(tempDir, "plugin");
+		let codexRefreshChecks = 0;
+		deps.shouldRefreshCodexPluginFn = async () => {
+			codexRefreshChecks++;
+			return true;
+		};
+
+		await promptKitUpdate(false, true, deps);
+
+		expect(spawnCount()).toBe(1);
+		expect(capturedSpawnArgs()).toContain("legacy");
+		expect(codexRefreshChecks).toBe(0);
+	});
+
+	test("malformed preference converges to normal", async () => {
+		await writeFile(
+			join(tempDir, "metadata.json"),
+			JSON.stringify({
+				kits: {
+					engineer: {
+						version: "1.0.0",
+						installedAt: "2025-01-01T00:00:00Z",
+						installModePreference: "unexpected",
+					},
+				},
+			}),
+		);
+		const { deps, spawnCount, capturedSpawnArgs } = makeDeps();
+		deps.getLatestReleaseTagFn = async () => "v1.0.0";
+		deps.detectInstallModeFn = () => makeInstallModeReport(tempDir, "plugin");
+
+		await promptKitUpdate(false, true, deps);
+
+		expect(spawnCount()).toBe(1);
+		expect(capturedSpawnArgs()).toContain("legacy");
 	});
 
 	test("preserves explicit legacy preference and skips same-version plugin migration", async () => {
@@ -448,8 +539,8 @@ describe("promptKitUpdate auto-init behavior", () => {
 		expect(capturedSpawnArgs()).toContain("--restore-ck-hooks");
 	});
 
-	test("skips latest mixed install after plugin-supplied legacy files are cleaned", async () => {
-		const { deps, execCount, spawnCount } = makeDeps();
+	test("normal preference cleans an active mixed install after tracked legacy files are gone", async () => {
+		const { deps, execCount, spawnCount, capturedSpawnArgs } = makeDeps();
 		deps.getLatestReleaseTagFn = async () => "v1.0.0";
 		deps.detectInstallModeFn = () => makeInstallModeReport(tempDir, "mixed");
 		deps.hasTrackedPluginSuppliedLegacyFilesFn = () => false;
@@ -457,7 +548,8 @@ describe("promptKitUpdate auto-init behavior", () => {
 		await promptKitUpdate(false, true, deps);
 
 		expect(execCount()).toBe(0);
-		expect(spawnCount()).toBe(0);
+		expect(spawnCount()).toBe(1);
+		expect(capturedSpawnArgs()).toContain("legacy");
 	});
 
 	test("reinstalls latest kit when installed hooks have missing dependencies (--yes mode)", async () => {
@@ -484,6 +576,7 @@ describe("promptKitUpdate auto-init behavior", () => {
 
 		const { deps, execCount, spawnCount, capturedSpawnArgs } = makeDeps();
 		deps.getLatestReleaseTagFn = async () => "v2.0.0";
+		deps.detectInstallModeFn = () => makeInstallModeReport(tempDir, "legacy");
 		await promptKitUpdate(false, true, deps);
 
 		expect(spawnCount()).toBe(1);
@@ -518,6 +611,7 @@ describe("promptKitUpdate auto-init behavior", () => {
 
 		const { deps, execCount, spawnCount, capturedSpawnArgs } = makeDeps();
 		deps.getLatestReleaseTagFn = async () => "v2.0.0";
+		deps.detectInstallModeFn = () => makeInstallModeReport(tempDir, "legacy");
 		await promptKitUpdate(false, true, deps);
 
 		expect(spawnCount()).toBe(1);

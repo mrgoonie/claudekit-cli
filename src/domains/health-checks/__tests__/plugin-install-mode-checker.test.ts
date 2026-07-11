@@ -81,10 +81,19 @@ describe("PluginInstallModeChecker", () => {
 			},
 		});
 		const r = await single();
-		expect(r.message).toContain("preference: legacy");
+		expect(r.message).toContain("preference: legacy (normal skills)");
 	});
 
-	test("plugin enabled -> pass", async () => {
+	test("persisted plugin consent with enabled plugin -> pass", async () => {
+		await writeMetadata({
+			kits: {
+				engineer: {
+					version: "2.19.0",
+					installedAt: "x",
+					installModePreference: "plugin",
+				},
+			},
+		});
 		await writeSettings({ "ck@claudekit": true });
 		const r = await single();
 		expect(r.status).toBe("pass");
@@ -92,14 +101,36 @@ describe("PluginInstallModeChecker", () => {
 		expect(r.message).toContain("enabled");
 	});
 
-	test("plugin installed but disabled -> warn with enable hint", async () => {
+	test("persisted plugin consent with disabled plugin -> warn with enable hint", async () => {
+		await writeMetadata({
+			kits: {
+				engineer: {
+					version: "2.19.0",
+					installedAt: "x",
+					installModePreference: "plugin",
+				},
+			},
+		});
 		await writeSettings({ "ck@claudekit": false });
 		const r = await single();
 		expect(r.status).toBe("warn");
 		expect(r.message).toContain("claude plugin enable ck");
 	});
 
-	test("mixed -> warn with migrate hint", async () => {
+	test("disabled plugin without consent recommends normal cleanup instead of enablement", async () => {
+		await writeMetadata({
+			kits: { engineer: { version: "2.19.0", installedAt: "x" } },
+		});
+		await writeSettings({ "ck@claudekit": false });
+
+		const r = await single();
+
+		expect(r.status).toBe("warn");
+		expect(r.message).toContain("--install-mode legacy");
+		expect(r.message).not.toContain("claude plugin enable ck");
+	});
+
+	test("mixed without plugin consent -> warn with normal convergence guidance", async () => {
 		await mkdir(join(claudeDir, "skills", "cook"), { recursive: true });
 		await writeFile(join(claudeDir, "skills", "cook", "SKILL.md"), "# cook\n", "utf-8");
 		await writeMetadata({
@@ -115,10 +146,19 @@ describe("PluginInstallModeChecker", () => {
 		const r = await single();
 		expect(r.status).toBe("warn");
 		expect(r.message).toContain("mixed");
-		expect(r.message).toContain("ck update");
+		expect(r.message).toContain("--install-mode legacy");
 	});
 
-	test("warns when Codex plugin is stale while preference is plugin-capable", async () => {
+	test("warns when Codex plugin is stale for persisted plugin consent", async () => {
+		await writeMetadata({
+			kits: {
+				engineer: {
+					version: "2.20.1-beta.7",
+					installedAt: "x",
+					installModePreference: "plugin",
+				},
+			},
+		});
 		await writeSettings({ "ck@claudekit": true });
 
 		const r = await single({
@@ -135,6 +175,28 @@ describe("PluginInstallModeChecker", () => {
 		expect(r.message).toContain("Codex plugin requires refresh");
 		expect(r.message).toContain("Codex plugin: installed-stale-version, 2.20.1-beta.6");
 	});
+
+	test.each([undefined, "auto", "unexpected"])(
+		"plugin state with non-consenting preference %p recommends normal convergence",
+		async (preference) => {
+			await writeMetadata({
+				kits: {
+					engineer: {
+						version: "2.19.0",
+						installedAt: "x",
+						...(preference === undefined ? {} : { installModePreference: preference }),
+					},
+				},
+			});
+			await writeSettings({ "ck@claudekit": true });
+
+			const r = await single();
+
+			expect(r.status).toBe("warn");
+			expect(r.message).toContain("--install-mode legacy");
+			expect(r.message).not.toContain("claude plugin enable ck");
+		},
+	);
 
 	test("passes expected kit version and source to Codex state detection", async () => {
 		await writeSettings({ "ck@claudekit": true });
@@ -185,6 +247,6 @@ describe("PluginInstallModeChecker", () => {
 		});
 
 		expect(r.status).toBe("warn");
-		expect(r.message).toContain("preference is legacy");
+		expect(r.message).toContain("preference is legacy (normal skills)");
 	});
 });

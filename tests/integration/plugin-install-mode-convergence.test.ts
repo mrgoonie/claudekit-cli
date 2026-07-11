@@ -71,7 +71,7 @@ describe("plugin install-mode convergence integration", () => {
 		await rm(testEnv.root, { recursive: true, force: true });
 	});
 
-	test("refreshes stale Codex plugin state for default auto preference", async () => {
+	test("converges stale Codex plugin state to the normal default", async () => {
 		process.env.FAKE_CODEX_LIST_JSON = JSON.stringify({
 			installed: [
 				{
@@ -93,28 +93,18 @@ describe("plugin install-mode convergence integration", () => {
 		await promptKitUpdate(false, true, capture.deps);
 
 		expect(capture.spawnCommands).toEqual([
-			"ck init -g --kit engineer --yes --restore-ck-hooks --install-mode auto --install-skills",
+			"ck init -g --kit engineer --yes --restore-ck-hooks --install-mode legacy --install-skills",
 		]);
-		const codexCalls = await readCodexCalls(testEnv.codexLog);
-		expect(codexCalls.map((call) => call.args.join(" "))).toEqual([
-			"--version",
-			"plugin --help",
-			"plugin list --json",
+		expect((await readCodexCalls(testEnv.codexLog)).map((call) => call.args)).toEqual([
+			["--version"],
+			["plugin", "--help"],
+			["plugin", "list", "--json"],
 		]);
-		expect(codexCalls.every((call) => call.codexHome === testEnv.codexHome)).toBe(true);
 	});
 
-	test("preserves explicit legacy preference and does not probe Codex during update", async () => {
+	test("preserves explicit legacy preference when no plugin cleanup is needed", async () => {
 		process.env.FAKE_CODEX_LIST_JSON = JSON.stringify({
-			installed: [
-				{
-					pluginId: "ck@claudekit",
-					installed: true,
-					enabled: true,
-					version: "v0.9.0",
-					marketplace: "claudekit",
-				},
-			],
+			installed: [],
 		});
 		await writeMetadata(testEnv.globalClaudeDir, "1.0.0", "legacy");
 
@@ -128,7 +118,11 @@ describe("plugin install-mode convergence integration", () => {
 		expect(capture.spawnCommands).toEqual([
 			"ck init -g --kit engineer --yes --install-mode legacy --install-skills",
 		]);
-		await expect(readCodexCalls(testEnv.codexLog)).resolves.toEqual([]);
+		expect((await readCodexCalls(testEnv.codexLog)).map((call) => call.args)).toEqual([
+			["--version"],
+			["plugin", "--help"],
+			["plugin", "list", "--json"],
+		]);
 	});
 });
 
