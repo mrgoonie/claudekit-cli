@@ -81,6 +81,7 @@
 		"get-port": "^7.1.0",
 		"gray-matter": "^4.0.3",
 		"ignore": "^5.3.2",
+		"less-pager-mini": "^1.16.3",
 		"minimatch": "^10.1.1",
 		"open": "^11.0.0",
 		"ora": "^8.0.0",

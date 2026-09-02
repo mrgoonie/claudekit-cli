@@ -6,7 +6,6 @@
  */
 
 import { spawn } from "node:child_process";
-import * as readline from "node:readline";
 import { stripColors } from "./help-colors.js";
 import type { HelpOptions } from "./help-types.js";
 
@@ -106,67 +105,12 @@ async function trySystemPager(content: string): Promise<boolean> {
 }
 
 /**
- * Basic pager using readline for systems without less/more
- * Shows content page by page with "More" prompt
- */
-async function basicPager(content: string): Promise<void> {
-	const lines = content.split("\n");
-	const termHeight = getTerminalHeight();
-	const pageSize = termHeight - 1; // Reserve 1 line for prompt
-
-	let currentLine = 0;
-
-	const rl = readline.createInterface({
-		input: process.stdin,
-		output: process.stdout,
-	});
-
-	// Handle interrupt - use exitCode for proper handle cleanup on Windows
-	// See: https://github.com/nodejs/node/issues/56645
-	rl.on("SIGINT", () => {
-		rl.close();
-		process.exitCode = 0;
-	});
-
-	while (currentLine < lines.length) {
-		// Show page
-		const pageLines = lines.slice(currentLine, currentLine + pageSize);
-		console.log(pageLines.join("\n"));
-
-		currentLine += pageSize;
-
-		if (currentLine >= lines.length) {
-			break; // No more content
-		}
-
-		// Show prompt and wait for user
-		const remaining = lines.length - currentLine;
-		await new Promise<void>((resolve) => {
-			rl.question(`-- More (${remaining} lines) [Enter/q] --`, (answer) => {
-				if (answer.toLowerCase() === "q") {
-					rl.close();
-					// Use exitCode for proper handle cleanup on Windows
-					process.exitCode = 0;
-					resolve();
-					return;
-				}
-				// Clear the prompt line
-				process.stdout.write("\x1B[1A\x1B[2K");
-				resolve();
-			});
-		});
-	}
-
-	rl.close();
-}
-
-/**
  * Display help content with optional paging
  *
  * Strategy:
  * 1. Check if paging is needed
  * 2. Try system pager (less/more)
- * 3. Fallback to basic pager
+ * 3. Fallback to in-process pager
  * 4. Last resort: plain output
  */
 export async function displayHelp(content: string, options: HelpOptions): Promise<void> {
@@ -182,9 +126,10 @@ export async function displayHelp(content: string, options: HelpOptions): Promis
 		return;
 	}
 
-	// Fallback to basic pager
+	// Fallback to in-process pager
 	try {
-		await basicPager(content);
+		const { default: pager } = await import("less-pager-mini");
+		await pager(content, getPagerArgs("less"));
 	} catch {
 		// Last resort: plain output
 		console.log(content);
